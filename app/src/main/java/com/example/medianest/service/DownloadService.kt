@@ -25,13 +25,15 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
+import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -77,19 +79,15 @@ class DownloadService : Service() {
     @Inject lateinit var videoDao: VideoDao
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val activeJobs = mutableMapOf<Long, Job>()
-    private var maxConcurrent = 2
-    private val globalThrottle = Semaphore(maxConcurrent)
+    private val activeJobs = ConcurrentHashMap<Long, Job>()
 
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
-        serviceScope.launch {
-            maxConcurrent = preferences.maxConcurrentDownloads.first()
-        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        startForeground(NOTIFICATION_ID, buildNotification(0, 0))
         when (intent?.action) {
             ACTION_PAUSE -> {
                 val id = intent.getLongExtra(EXTRA_DOWNLOAD_ID, -1)
@@ -103,7 +101,6 @@ class DownloadService : Service() {
                 val id = intent.getLongExtra(EXTRA_DOWNLOAD_ID, -1)
                 if (id != -1L) cancelDownload(id)
             }
-            else -> startForeground(NOTIFICATION_ID, buildNotification(0, 0))
         }
         processQueue()
         return START_STICKY
@@ -111,21 +108,20 @@ class DownloadService : Service() {
 
     private fun processQueue() {
         serviceScope.launch {
-            val queue = repository.getDownloadsByStatus(DownloadStatus.QUEUED).first()
-            val active = repository.getActiveDownloadCount()
-            val limit = maxConcurrent
-            val slots = (limit - active).coerceAtLeast(0)
-            queue.take(slots).forEach { enqueueDownload(it) }
+            preferences.maxConcurrentDownloads.collect { maxConcurrent ->
+                val queue = repository.getDownloadsByStatus(DownloadStatus.QUEUED).first()
+                val active = repository.getActiveDownloadCount()
+                val slots = (maxConcurrent - active).coerceAtLeast(0)
+                queue.take(slots).forEach { enqueueDownload(it) }
+            }
         }
     }
 
     private fun enqueueDownload(download: DownloadEntity) {
         val job = serviceScope.launch {
-            globalThrottle.acquire()
             try {
                 downloadFile(download)
             } finally {
-                globalThrottle.release()
                 processQueue()
             }
         }
@@ -145,6 +141,8 @@ class DownloadService : Service() {
         val maxRetries = 3
 
         while (retries <= maxRetries) {
+            var tmpFile: File? = null
+
             try {
                 val request = Request.Builder().url(currentUrl).build()
                 val response = withContext(Dispatchers.IO) {
@@ -155,7 +153,7 @@ class DownloadService : Service() {
                     if ((response.code == 403 || response.code == 410) && retries < maxRetries) {
                         retries++
                         repository.update(download.copy(retryCount = retries))
-                        val freshInfo = extractor.extractVideo(download.url)
+                        val freshInfo = extractor.extractVideo(download.videoUrl ?: download.url)
                         val matchingStream = freshInfo.streamSources.find {
                             it.format == download.format && it.quality == download.quality
                         }
@@ -172,7 +170,7 @@ class DownloadService : Service() {
                 val mimeType = response.body?.contentType()?.toString() ?: "video/mp4"
                 val ext = mimeType.split("/").lastOrNull()?.split(";")?.first() ?: "mp4"
                 val fileName = "${download.videoId}_${download.quality}.$ext"
-                val tmpFile = File(outputDir, "${fileName}.tmp")
+                tmpFile = File(outputDir, "${fileName}.tmp")
                 val outputFile = File(outputDir, fileName)
 
                 response.body?.byteStream()?.use { input ->
@@ -206,7 +204,9 @@ class DownloadService : Service() {
                             }
                         }
 
-                        tmpFile.renameTo(outputFile)
+                        if (!tmpFile.renameTo(outputFile)) {
+                            throw IOException("Failed to rename temp file to $outputFile")
+                        }
                         repository.markCompleted(download.id, bytesRead)
                         repository.update(download.copy(filePath = outputFile.absolutePath, fileSizeBytes = bytesRead))
                         updateNotification(download.id, bytesRead, contentLength)
@@ -233,6 +233,7 @@ class DownloadService : Service() {
             } catch (e: CancellationException) {
                 return
             } catch (e: Exception) {
+                tmpFile?.delete()
                 if (retries < maxRetries) {
                     retries++
                     repository.update(download.copy(retryCount = retries))
@@ -257,7 +258,9 @@ class DownloadService : Service() {
         activeJobs[id]?.cancel()
         activeJobs.remove(id)
         serviceScope.launch {
-            repository.updateStatus(id, DownloadStatus.PAUSED, 0f)
+            // Do not reset progress to 0, download loop saves it
+            val download = repository.getDownloadById(id) ?: return@launch
+            repository.updateStatus(id, DownloadStatus.PAUSED, download.progress)
             processQueue()
         }
     }

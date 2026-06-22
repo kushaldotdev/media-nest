@@ -7,18 +7,20 @@ import com.example.medianest.data.local.dao.PlaylistDao
 import com.example.medianest.data.local.dao.SubscriptionDao
 import com.example.medianest.data.local.dao.VideoDao
 import com.example.medianest.data.local.dao.VideoFolderDao
+import com.example.medianest.data.local.entity.DownloadEntity
+import com.example.medianest.data.local.entity.DownloadStatus
 import com.example.medianest.data.local.entity.FolderEntity
+import com.example.medianest.data.local.entity.HistoryEntity
 import com.example.medianest.data.local.entity.PlaylistEntity
 import com.example.medianest.data.local.entity.SubscriptionEntity
 import com.example.medianest.data.local.entity.VideoEntity
 import com.example.medianest.data.local.entity.VideoFolderJoin
 import com.example.medianest.data.preferences.DevicePreferences
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -63,21 +65,19 @@ class SyncManager @Inject constructor(
     private val _state = MutableStateFlow<SyncState>(SyncState.Idle)
     val state: StateFlow<SyncState> = _state
 
-    private val scope = CoroutineScope(Dispatchers.IO)
-
-    fun sync() {
-        if (_state.value is SyncState.Syncing) return
+    suspend fun sync(): SyncState {
+        if (_state.value is SyncState.Syncing) return _state.value
         _state.value = SyncState.Syncing
-
-        scope.launch {
-            try {
+        return try {
+            withContext(Dispatchers.IO) {
                 val serverUrl = devicePreferences.serverUrl.first()
                 val apiKey = devicePreferences.apiKey.first()
                 val deviceId = devicePreferences.deviceId.first()
 
                 if (serverUrl.isBlank() || apiKey.isBlank() || deviceId.isBlank()) {
-                    _state.value = SyncState.Error("Sync not configured. Set server URL and API key in Settings.")
-                    return@launch
+                    val err = SyncState.Error("Sync not configured. Set server URL and API key in Settings.")
+                    _state.value = err
+                    return@withContext err
                 }
 
                 val localChanges = collectLocalChanges()
@@ -88,8 +88,9 @@ class SyncManager @Inject constructor(
                     if (pushResult.isFailure) {
                         val err = pushResult.exceptionOrNull()?.message ?: "Unknown error"
                         addLogEntry(SyncLogEntry(System.currentTimeMillis(), "error", null, 0, "Push failed: $err"))
-                        _state.value = SyncState.Error("Push failed: $err")
-                        return@launch
+                        val syncErr = SyncState.Error("Push failed: $err")
+                        _state.value = syncErr
+                        return@withContext syncErr
                     }
                     val accepted = pushResult.getOrThrow().accepted
                     addLogEntry(SyncLogEntry(System.currentTimeMillis(), "push", null,
@@ -105,8 +106,9 @@ class SyncManager @Inject constructor(
                 if (pullResult.isFailure) {
                     val err = pullResult.exceptionOrNull()?.message ?: "Unknown error"
                     addLogEntry(SyncLogEntry(System.currentTimeMillis(), "error", null, 0, "Pull failed: $err"))
-                    _state.value = SyncState.Error("Pull failed: $err")
-                    return@launch
+                    val syncErr = SyncState.Error("Pull failed: $err")
+                    _state.value = syncErr
+                    return@withContext syncErr
                 }
 
                 val pull = pullResult.getOrThrow()
@@ -130,10 +132,14 @@ class SyncManager @Inject constructor(
                 val msg = if (pull.changes.isEmpty()) "Synced (no new changes)" else "Synced ${pull.changes.size} changes"
                 addLogEntry(SyncLogEntry(System.currentTimeMillis(), "pull", null,
                     pull.changes.size, msg))
-                _state.value = SyncState.Success(msg)
-            } catch (e: Exception) {
-                _state.value = SyncState.Error(e.message ?: "Sync failed")
+                val syncSuccess = SyncState.Success(msg)
+                _state.value = syncSuccess
+                syncSuccess
             }
+        } catch (e: Exception) {
+            val syncErr = SyncState.Error(e.message ?: "Sync failed")
+            _state.value = syncErr
+            syncErr
         }
     }
 
@@ -169,20 +175,30 @@ class SyncManager @Inject constructor(
                 "uploadDate" to JsonPrimitive(v.uploadDate ?: ""),
                 "localFilePath" to JsonPrimitive(v.localFilePath),
                 "favorite" to JsonPrimitive(v.favorite),
+                "addedAt" to JsonPrimitive(v.addedAt),
+                "updatedAt" to JsonPrimitive(v.addedAt),
+                "createdAt" to JsonPrimitive(v.addedAt),
                 "syncVersion" to JsonPrimitive(v.syncVersion)
             )))
             }
         }
         downloadDao.getAllDownloadsOnce().forEach { d ->
-            if (!useIncremental || d.downloadedAt > since) {
+            if (!useIncremental || d.updatedAt > since) {
                 changes.add(SyncPushItem("downloads", d.id.toString(), "upsert", mapOf(
                 "id" to JsonPrimitive(d.id), "videoId" to JsonPrimitive(d.videoId),
-                "url" to JsonPrimitive(d.url), "format" to JsonPrimitive(d.format),
+                "url" to JsonPrimitive(d.url), "videoUrl" to JsonPrimitive(d.videoUrl ?: ""), "format" to JsonPrimitive(d.format),
                 "quality" to JsonPrimitive(d.quality), "title" to JsonPrimitive(d.title),
                 "thumbnailUrl" to JsonPrimitive(d.thumbnailUrl ?: ""),
                 "filePath" to JsonPrimitive(d.filePath),
                 "fileSizeBytes" to JsonPrimitive(d.fileSizeBytes),
+                "downloadedAt" to JsonPrimitive(d.downloadedAt),
+                "lastPlayedAt" to JsonPrimitive(d.lastPlayedAt ?: 0L),
                 "status" to JsonPrimitive(d.status.name),
+                "progress" to JsonPrimitive(d.progress),
+                "errorMessage" to JsonPrimitive(d.errorMessage ?: ""),
+                "retryCount" to JsonPrimitive(d.retryCount),
+                "updatedAt" to JsonPrimitive(d.updatedAt),
+                "createdAt" to JsonPrimitive(d.downloadedAt), // Missing fields needed by other tables? 
                 "syncVersion" to JsonPrimitive(d.syncVersion)
             )))
             }
@@ -193,6 +209,8 @@ class SyncManager @Inject constructor(
                 "videoId" to JsonPrimitive(h.videoId),
                 "positionMillis" to JsonPrimitive(h.positionMillis),
                 "playedAt" to JsonPrimitive(h.playedAt),
+                "createdAt" to JsonPrimitive(h.playedAt),
+                "updatedAt" to JsonPrimitive(h.playedAt),
                 "syncVersion" to JsonPrimitive(h.syncVersion)
             )))
             }
@@ -214,6 +232,8 @@ class SyncManager @Inject constructor(
                 "videoId" to JsonPrimitive(j.videoId),
                 "folderId" to JsonPrimitive(j.folderId),
                 "addedAt" to JsonPrimitive(j.addedAt),
+                "createdAt" to JsonPrimitive(j.addedAt),
+                "updatedAt" to JsonPrimitive(j.addedAt),
                 "syncVersion" to JsonPrimitive(j.syncVersion)
             )))
             }
@@ -227,6 +247,8 @@ class SyncManager @Inject constructor(
                 "youtubePlaylistId" to JsonPrimitive(p.youtubePlaylistId),
                 "uploaderName" to JsonPrimitive(p.uploaderName ?: ""),
                 "videoCount" to JsonPrimitive(p.videoCount),
+                "createdAt" to JsonPrimitive(p.createdAt),
+                "updatedAt" to JsonPrimitive(p.updatedAt),
                 "syncVersion" to JsonPrimitive(p.syncVersion)
             )))
             }
@@ -242,6 +264,8 @@ class SyncManager @Inject constructor(
                 "autoDownload" to JsonPrimitive(s.autoDownload),
                 "audioOnly" to JsonPrimitive(s.audioOnly),
                 "lastCheckedAt" to JsonPrimitive(s.lastCheckedAt),
+                "createdAt" to JsonPrimitive(s.createdAt),
+                "updatedAt" to JsonPrimitive(s.updatedAt),
                 "syncVersion" to JsonPrimitive(s.syncVersion)
             )))
             }
@@ -291,6 +315,7 @@ class SyncManager @Inject constructor(
                         uploadDate = jsonString(obj["uploadDate"]).ifBlank { null },
                         localFilePath = jsonString(obj["localFilePath"]),
                         favorite = jsonBoolean(obj["favorite"]),
+                        addedAt = jsonLong(obj["addedAt"], System.currentTimeMillis()),
                         syncVersion = jsonLong(obj["syncVersion"])
                     ))
                 }
@@ -301,6 +326,8 @@ class SyncManager @Inject constructor(
                 folderDao.insert(FolderEntity(
                     id = id, name = jsonString(obj["name"]),
                     parentId = if (parentId == -1L) null else parentId,
+                    createdAt = jsonLong(obj["createdAt"], System.currentTimeMillis()),
+                    updatedAt = jsonLong(obj["updatedAt"], System.currentTimeMillis()),
                     syncVersion = jsonLong(obj["syncVersion"])
                 ))
             }
@@ -309,6 +336,7 @@ class SyncManager @Inject constructor(
                 val folderId = obj["folderId"]?.let { it.jsonPrimitive.longOrNull } ?: return
                 videoFolderDao.addVideoToFolder(VideoFolderJoin(
                     videoId = videoId, folderId = folderId,
+                    addedAt = jsonLong(obj["addedAt"], System.currentTimeMillis()),
                     syncVersion = jsonLong(obj["syncVersion"])
                 ))
             }
@@ -322,6 +350,8 @@ class SyncManager @Inject constructor(
                     youtubePlaylistId = jsonString(obj["youtubePlaylistId"]),
                     uploaderName = jsonString(obj["uploaderName"]).ifBlank { null },
                     videoCount = jsonInt(obj["videoCount"]),
+                    createdAt = jsonLong(obj["createdAt"], System.currentTimeMillis()),
+                    updatedAt = jsonLong(obj["updatedAt"], System.currentTimeMillis()),
                     syncVersion = jsonLong(obj["syncVersion"])
                 ))
             }
@@ -334,6 +364,47 @@ class SyncManager @Inject constructor(
                     uploaderName = jsonString(obj["uploaderName"]).ifBlank { null },
                     autoDownload = jsonBoolean(obj["autoDownload"]),
                     audioOnly = jsonBoolean(obj["audioOnly"]),
+                    lastCheckedAt = jsonLong(obj["lastCheckedAt"]),
+                    createdAt = jsonLong(obj["createdAt"], System.currentTimeMillis()),
+                    updatedAt = jsonLong(obj["updatedAt"], System.currentTimeMillis()),
+                    syncVersion = jsonLong(obj["syncVersion"])
+                ))
+            }
+            "downloads" -> {
+                val downloadId = jsonLong(obj["id"], 0L)
+                val videoId = jsonString(obj["videoId"])
+                if (videoId.isBlank()) return
+                val entity = DownloadEntity(
+                    id = downloadId,
+                    videoId = videoId,
+                    url = jsonString(obj["url"]),
+                    videoUrl = jsonString(obj["videoUrl"]).ifBlank { null },
+                    format = jsonString(obj["format"]),
+                    quality = jsonString(obj["quality"]),
+                    title = jsonString(obj["title"]),
+                    thumbnailUrl = jsonString(obj["thumbnailUrl"]).ifBlank { null },
+                    filePath = jsonString(obj["filePath"]),
+                    fileSizeBytes = jsonLong(obj["fileSizeBytes"]),
+                    downloadedAt = jsonLong(obj["downloadedAt"], System.currentTimeMillis()),
+                    lastPlayedAt = jsonLong(obj["lastPlayedAt"]).let { if (it == 0L) null else it },
+                    status = try { DownloadStatus.valueOf(jsonString(obj["status"], "QUEUED")) } catch (_: Exception) { DownloadStatus.QUEUED },
+                    progress = (obj["progress"] as? JsonPrimitive)?.let { it.content.toFloatOrNull() } ?: 0f,
+                    errorMessage = jsonString(obj["errorMessage"]).ifBlank { null },
+                    retryCount = jsonInt(obj["retryCount"]),
+                    updatedAt = jsonLong(obj["updatedAt"], System.currentTimeMillis()),
+                    syncVersion = jsonLong(obj["syncVersion"])
+                )
+                try { downloadDao.insert(entity) } catch (_: Exception) {
+                    downloadDao.update(entity.copy(updatedAt = entity.updatedAt))
+                }
+            }
+            "playback_history" -> {
+                val hVideoId = jsonString(obj["videoId"])
+                if (hVideoId.isBlank()) return
+                historyDao.upsert(HistoryEntity(
+                    videoId = hVideoId,
+                    positionMillis = jsonLong(obj["positionMillis"]),
+                    playedAt = jsonLong(obj["playedAt"], System.currentTimeMillis()),
                     syncVersion = jsonLong(obj["syncVersion"])
                 ))
             }

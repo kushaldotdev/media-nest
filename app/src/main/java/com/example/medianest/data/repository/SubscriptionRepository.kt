@@ -21,14 +21,19 @@ class SubscriptionRepository @Inject constructor(
 ) {
     fun getAllSubscriptions(): Flow<List<SubscriptionEntity>> = subscriptionDao.getAllSubscriptions()
 
+    suspend fun getAllSubscriptionsOnce(): List<SubscriptionEntity> = subscriptionDao.getAllSubscriptionsOnce()
+
     fun getChannels(): Flow<List<SubscriptionEntity>> = subscriptionDao.getByType("channel")
 
     fun getPlaylistSubscriptions(): Flow<List<SubscriptionEntity>> = subscriptionDao.getByType("playlist")
 
     suspend fun getById(id: Long): SubscriptionEntity? = subscriptionDao.getById(id)
 
+    suspend fun getBySource(sourceType: String, sourceId: String): SubscriptionEntity? =
+        subscriptionDao.getBySource(sourceType, sourceId)
+
     suspend fun isSubscribed(sourceType: String, sourceId: String): Boolean =
-        subscriptionDao.getBySource(sourceType, sourceId) != null
+        getBySource(sourceType, sourceId) != null
 
     suspend fun subscribe(
         sourceType: String,

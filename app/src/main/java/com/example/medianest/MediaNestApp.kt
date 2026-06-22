@@ -3,13 +3,24 @@ package com.example.medianest
 import android.app.Application
 import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.hilt.work.HiltWorkerFactory
+import androidx.work.Configuration
 import com.example.medianest.extraction.DownloaderProvider
+import com.example.medianest.worker.WorkScheduler
 import dagger.hilt.android.HiltAndroidApp
 import org.schabi.newpipe.extractor.NewPipe
 import timber.log.Timber
+import javax.inject.Inject
 
 @HiltAndroidApp
-class MediaNestApp : Application() {
+class MediaNestApp : Application(), Configuration.Provider {
+    @Inject lateinit var hiltWorkerFactory: HiltWorkerFactory
+
+    override val workManagerConfiguration: Configuration
+        get() = Configuration.Builder()
+            .setWorkerFactory(hiltWorkerFactory)
+            .build()
+
     override fun onCreate() {
         super.onCreate()
         NewPipe.init(DownloaderProvider.getDownloader())
@@ -21,5 +32,7 @@ class MediaNestApp : Application() {
             .setName("Downloads")
             .build()
         NotificationManagerCompat.from(this).createNotificationChannel(downloadChannel)
+
+        WorkScheduler.scheduleSubscriptionCheck(this)
     }
 }

@@ -44,9 +44,13 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
             )
         }
         composable(BottomNavItem.Home.route) {
+            val homeViewModel: HomeViewModel = hiltViewModel()
             HomeScreen(
                 onVideoSelected = { videoId ->
                     navController.navigate("videoDetail/$videoId")
+                },
+                onSubscribe = { sourceType, sourceId, name, thumbnailUrl ->
+                    homeViewModel.subscribe(sourceType, sourceId, name, thumbnailUrl)
                 }
             )
         }

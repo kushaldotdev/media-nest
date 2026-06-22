@@ -14,12 +14,12 @@ import com.example.medianest.extraction.YouTubeExtractor
 import com.example.medianest.service.DownloadService
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
-import kotlinx.coroutines.flow.first
+import javax.inject.Inject
 
 @HiltWorker
 class SubscriptionWorker @AssistedInject constructor(
-    @Assisted appContext: Context,
-    @Assisted workerParams: WorkerParameters,
+    @Assisted private val appContext: Context,
+    @Assisted private val workerParams: WorkerParameters,
     private val subscriptionRepository: SubscriptionRepository,
     private val downloadRepository: DownloadRepository,
     private val youTubeExtractor: YouTubeExtractor,
@@ -27,7 +27,7 @@ class SubscriptionWorker @AssistedInject constructor(
 ) : CoroutineWorker(appContext, workerParams) {
 
     override suspend fun doWork(): Result {
-        val subscriptions = subscriptionRepository.getAllSubscriptions().first()
+        val subscriptions = subscriptionRepository.getAllSubscriptionsOnce()
 
         for (sub in subscriptions) {
             try {
@@ -49,6 +49,7 @@ class SubscriptionWorker @AssistedInject constructor(
                                     val entity = DownloadEntity(
                                         videoId = video.id,
                                         url = best.url,
+                                        videoUrl = url,
                                         format = best.format,
                                         quality = best.quality,
                                         status = DownloadStatus.QUEUED,

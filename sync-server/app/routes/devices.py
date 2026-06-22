@@ -1,6 +1,6 @@
 import secrets
 import time
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Header
 from ..database import get_connection
 from ..schemas import RegisterRequest, RegisterResponse
 
@@ -20,9 +20,9 @@ def register(req: RegisterRequest):
     return RegisterResponse(device_id=device_id, api_key=api_key)
 
 @router.delete("/{device_id}")
-def delete_device(device_id: str, api_key: str):
+def delete_device(device_id: str, x_api_key: str = Header(...)):
     conn = get_connection()
-    cur = conn.execute("DELETE FROM devices WHERE device_id = ? AND api_key = ?", (device_id, api_key))
+    cur = conn.execute("DELETE FROM devices WHERE device_id = ? AND api_key = ?", (device_id, x_api_key))
     conn.commit()
     if cur.rowcount == 0:
         raise HTTPException(404, "Device not found or wrong API key")

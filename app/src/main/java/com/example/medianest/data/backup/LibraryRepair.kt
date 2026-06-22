@@ -14,6 +14,7 @@ import javax.inject.Singleton
 data class RepairResult(
     val filesFound: Int = 0,
     val pathsFixed: Int = 0,
+    val pathsCleared: Int = 0,
     val orphansRemoved: Int = 0,
     val errors: List<String> = emptyList()
 )
@@ -42,13 +43,14 @@ class LibraryRepair @Inject constructor(
 
             val filesFound = mediaFiles.size
             var pathsFixed = 0
+            var pathsCleared = 0
 
             // Fix video entities
             try {
                 val videos = videoDao.getAllVideos().first()
                 for (video in videos) {
                     val matchingFile = mediaFiles.entries.find { (name, _) ->
-                        name.startsWith(video.id)
+                        name.startsWith("${video.id}_")
                     }?.value
                     if (matchingFile != null) {
                         if (video.localFilePath != matchingFile.absolutePath) {
@@ -57,7 +59,7 @@ class LibraryRepair @Inject constructor(
                         }
                     } else if (video.localFilePath.isNotEmpty()) {
                         videoDao.update(video.copy(localFilePath = ""))
-                        pathsFixed++
+                        pathsCleared++
                     }
                 }
             } catch (e: Exception) {
@@ -95,6 +97,7 @@ class LibraryRepair @Inject constructor(
             RepairResult(
                 filesFound = filesFound,
                 pathsFixed = pathsFixed,
+                pathsCleared = pathsCleared,
                 orphansRemoved = orphansRemoved,
                 errors = errors
             )

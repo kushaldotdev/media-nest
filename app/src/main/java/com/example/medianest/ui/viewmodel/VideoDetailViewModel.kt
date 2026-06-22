@@ -12,7 +12,6 @@ import com.example.medianest.data.repository.DownloadRepository
 import com.example.medianest.service.DownloadService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
-import com.example.medianest.data.local.dao.SubscriptionDao
 import com.example.medianest.data.local.dao.VideoDao
 import com.example.medianest.data.repository.SubscriptionRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,8 +24,7 @@ class VideoDetailViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val downloadRepository: DownloadRepository,
     private val videoDao: VideoDao,
-    private val subscriptionRepository: SubscriptionRepository,
-    private val subscriptionDao: SubscriptionDao
+    private val subscriptionRepository: SubscriptionRepository
 ) : ViewModel() {
     private var currentVideoId: String = ""
 
@@ -57,7 +55,7 @@ class VideoDetailViewModel @Inject constructor(
         if (currentChannelId.isEmpty()) return
         viewModelScope.launch {
             if (_isSubscribed.value) {
-                val sub = subscriptionDao.getBySource("channel", currentChannelId)
+                val sub = subscriptionRepository.getBySource("channel", currentChannelId)
                 if (sub != null) subscriptionRepository.unsubscribe(sub.id)
                 _isSubscribed.value = false
             } else {

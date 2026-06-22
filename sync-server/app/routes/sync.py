@@ -19,23 +19,29 @@ def push(req: SyncPushRequest, x_api_key: str = Header(...)):
     conn = get_connection()
     now = int(time.time() * 1000)
 
-    cur = conn.execute("SELECT COALESCE(MAX(version), 0) FROM changes WHERE device_id = ?", (req.device_id,))
-    version = (cur.fetchone()[0] or 0) + 1
+    conn.execute("BEGIN EXCLUSIVE")
+    try:
+        cur = conn.execute("SELECT COALESCE(MAX(version), 0) FROM changes WHERE device_id = ?", (req.device_id,))
+        version = (cur.fetchone()[0] or 0) + 1
 
-    accepted = 0
-    for item in req.changes:
-        try:
-            conn.execute(
-                "INSERT INTO changes (device_id, table_name, row_id, operation, payload, version, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (req.device_id, item.table, item.row_id, item.operation, json.dumps(item.payload), version, now),
-            )
-            accepted += 1
-            version += 1
-        except Exception:
-            continue
+        accepted = 0
+        for item in req.changes:
+            try:
+                conn.execute(
+                    "INSERT INTO changes (device_id, table_name, row_id, operation, payload, version, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (req.device_id, item.table, item.row_id, item.operation, json.dumps(item.payload), version, now),
+                )
+                accepted += 1
+                version += 1
+            except Exception:
+                continue
 
-    conn.execute("UPDATE devices SET last_sync_at = ?, updated_at = ? WHERE device_id = ?", (now, now, req.device_id))
-    conn.commit()
+        conn.execute("UPDATE devices SET last_sync_at = ?, updated_at = ? WHERE device_id = ?", (now, now, req.device_id))
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+
     return SyncPushResponse(accepted=accepted)
 
 @router.get("/pull", response_model=SyncPullResponse)

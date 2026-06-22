@@ -29,6 +29,7 @@ data class DownloadEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val videoId: String,
     val url: String,
+    val videoUrl: String? = null,
     val format: String,
     val quality: String,
     val title: String = "",
@@ -41,5 +42,6 @@ data class DownloadEntity(
     val progress: Float = 0f,
     val errorMessage: String? = null,
     val retryCount: Int = 0,
+    val updatedAt: Long = System.currentTimeMillis(),
     val syncVersion: Long = 0
 )

@@ -75,7 +75,7 @@ class ExportImportViewModel @Inject constructor(
         }
     }
 
-    fun triggerSync() { syncManager.sync() }
+    fun triggerSync() { viewModelScope.launch { syncManager.sync() } }
     fun resetSyncState() { syncManager.resetState() }
 
     fun exportToFile(outputStream: FileOutputStream) {

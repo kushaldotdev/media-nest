@@ -33,4 +33,7 @@ class VideoRepository @Inject constructor(
         youTubeExtractor.extractChannel(url)
 
     suspend fun deleteVideo(video: VideoEntity) = videoDao.delete(video)
+
+    suspend fun setFavorite(videoId: String, favorite: Boolean) =
+        videoDao.setFavorite(videoId, favorite)
 }

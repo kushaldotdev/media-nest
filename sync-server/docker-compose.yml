@@ -9,7 +9,6 @@ services:
       - "8000:8000"
     environment:
       - DATABASE_PATH=/app/data/sync.db
-      - SYNC_API_KEY=changeme-in-production
     volumes:
       - sync-data:/app/data
 

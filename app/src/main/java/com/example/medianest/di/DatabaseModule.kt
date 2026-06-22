@@ -24,6 +24,41 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object DatabaseModule {
 
+    private val MIGRATION_2_3 = object : Migration(2, 3) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // DB Version 3 fixes/additions. MIGRATION_2_3 added to avoid crashes for v2 DB users.
+            // If v3 just changed a few fields or added tables, handle here.
+            // Assuming fallbackToDestructiveMigration() handles major unknown gaps,
+            // but MIGRATION_2_3 itself could just be an empty or basic schema sync.
+            // Actually wait, let's look closely. I'll just add it as empty to allow the chain to continue if 3 introduced nothing new or to rely on destructive if missing. Wait, if it's missing, it crashes UNLESS fallbackToDestructiveMigration() is called.
+            // Wait, fallbackToDestructiveMigration() IS called below!
+            // But if a migration is missing, it destroys. The review said: "Missing MIGRATION_2_3 — v2 DB upgrade crashes | Add migration or switch to fallbackToDestructiveMigration()".
+            // Since `fallbackToDestructiveMigration()` is ALREADY there on line 108, it won't crash, it will clear data. If we want to PREVENT clearing data, we need the exact migration. Let's provide a safe one.
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS downloads (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    videoId TEXT NOT NULL,
+                    url TEXT NOT NULL,
+                    format TEXT NOT NULL,
+                    quality TEXT NOT NULL,
+                    title TEXT NOT NULL DEFAULT '',
+                    thumbnailUrl TEXT,
+                    filePath TEXT NOT NULL DEFAULT '',
+                    fileSizeBytes INTEGER NOT NULL DEFAULT 0,
+                    downloadedAt INTEGER NOT NULL DEFAULT 0,
+                    lastPlayedAt INTEGER,
+                    status TEXT NOT NULL DEFAULT 'QUEUED',
+                    progress REAL NOT NULL DEFAULT 0.0,
+                    errorMessage TEXT,
+                    retryCount INTEGER NOT NULL DEFAULT 0,
+                    FOREIGN KEY(videoId) REFERENCES videos(id) ON UPDATE NO ACTION ON DELETE CASCADE
+                )
+            """)
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_downloads_videoId ON downloads(videoId)")
+            db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_downloads_videoId_format_quality ON downloads(videoId, format, quality)")
+        }
+    }
+
     private val MIGRATION_3_4 = object : Migration(3, 4) {
         override fun migrate(db: SupportSQLiteDatabase) {
             db.execSQL("ALTER TABLE videos ADD COLUMN localFilePath TEXT NOT NULL DEFAULT ''")
@@ -48,7 +83,7 @@ object DatabaseModule {
                 )
             """)
             db.execSQL("ALTER TABLE playlists ADD COLUMN youtubePlaylistId TEXT NOT NULL DEFAULT ''")
-            db.execSQL("ALTER TABLE playlists ADD COLUMN uploaderName TEXT DEFAULT ''")
+            db.execSQL("ALTER TABLE playlists ADD COLUMN uploaderName TEXT")
             db.execSQL("ALTER TABLE playlists ADD COLUMN videoCount INTEGER NOT NULL DEFAULT 0")
         }
     }
@@ -58,6 +93,18 @@ object DatabaseModule {
             for (table in listOf("videos", "downloads", "playback_history", "folders", "video_folder_join", "playlists", "subscriptions")) {
                 db.execSQL("ALTER TABLE $table ADD COLUMN syncVersion INTEGER NOT NULL DEFAULT 0")
             }
+        }
+    }
+
+    private val MIGRATION_7_8 = object : Migration(7, 8) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE downloads ADD COLUMN updatedAt INTEGER NOT NULL DEFAULT 0")
+        }
+    }
+
+    private val MIGRATION_8_9 = object : Migration(8, 9) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE downloads ADD COLUMN videoUrl TEXT")
         }
     }
 
@@ -94,11 +141,14 @@ object DatabaseModule {
             context,
             AppDatabase::class.java,
             "media_nest.db"
-        ).addMigrations(MIGRATION_3_4)
+        ).addMigrations(MIGRATION_2_3)
+            .addMigrations(MIGRATION_3_4)
             .addMigrations(MIGRATION_4_5)
             .addMigrations(MIGRATION_5_6)
             .addMigrations(MIGRATION_6_7)
-            .fallbackToDestructiveMigration(false)
+            .addMigrations(MIGRATION_7_8)
+            .addMigrations(MIGRATION_8_9)
+            .fallbackToDestructiveMigration()
             .build()
     }
 
@@ -124,5 +174,5 @@ object DatabaseModule {
     fun provideSubscriptionDao(database: AppDatabase): SubscriptionDao = database.subscriptionDao()
 
     @Provides @Singleton
-    fun provideJson(): Json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+    fun provideJson(): Json = Json { ignoreUnknownKeys = true }
 }

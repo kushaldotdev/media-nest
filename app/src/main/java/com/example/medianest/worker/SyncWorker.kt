@@ -5,18 +5,23 @@ import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.example.medianest.data.sync.SyncManager
-import dagger.assisted.Assisted
-import dagger.assisted.AssistedInject
+import javax.inject.Inject
+
+import com.example.medianest.data.sync.SyncState
 
 @HiltWorker
-class SyncWorker @AssistedInject constructor(
-    @Assisted context: Context,
-    @Assisted params: WorkerParameters,
+class SyncWorker @Inject constructor(
+    private val context: Context,
+    private val params: WorkerParameters,
     private val syncManager: SyncManager
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
-        syncManager.sync()
-        return Result.success()
+        return try {
+            val state = syncManager.sync()
+            if (state is SyncState.Error) Result.retry() else Result.success()
+        } catch (e: Exception) {
+            Result.retry()
+        }
     }
 }
