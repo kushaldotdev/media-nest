@@ -13,11 +13,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -105,7 +110,8 @@ fun HomeScreen(
                 viewModel.cacheResult(state.video)
                 VideoResultCard(
                     video = state.video,
-                    onSelectQuality = { onVideoSelected(state.video.videoId) }
+                    onSelectQuality = { onVideoSelected(state.video.videoId) },
+                    onFavoriteToggle = { videoId, fav -> viewModel.toggleFavorite(videoId, fav) }
                 )
             }
             is HomeUiState.PlaylistResult -> {
@@ -139,7 +145,8 @@ fun HomeScreen(
 @Composable
 fun VideoResultCard(
     video: ExtractedVideoInfo,
-    onSelectQuality: () -> Unit
+    onSelectQuality: () -> Unit,
+    onFavoriteToggle: ((String, Boolean) -> Unit)? = null
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(12.dp)) {
@@ -157,11 +164,32 @@ fun VideoResultCard(
             val seconds = video.durationSeconds % 60
             Text("${minutes}:%02d".format(seconds))
             Spacer(Modifier.height(8.dp))
-            Button(
-                onClick = onSelectQuality,
-                modifier = Modifier.fillMaxWidth()
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Select Quality")
+                Button(
+                    onClick = onSelectQuality,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text("Select Quality")
+                }
+                if (onFavoriteToggle != null) {
+                    var isFavorited by remember { mutableStateOf(false) }
+                    IconToggleButton(
+                        checked = isFavorited,
+                        onCheckedChange = { checked ->
+                            isFavorited = checked
+                            onFavoriteToggle(video.videoId, checked)
+                        }
+                    ) {
+                        Icon(
+                            imageVector = if (isFavorited) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                            contentDescription = "Toggle favorite"
+                        )
+                    }
+                }
             }
         }
     }

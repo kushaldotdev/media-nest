@@ -1,6 +1,9 @@
 package com.example.medianest.ui.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
@@ -54,8 +57,12 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
             val videoInfo = remember { HomeViewModel.lastResultCache[videoId] }
             if (videoInfo != null) {
                 val detailViewModel: com.example.medianest.ui.viewmodel.VideoDetailViewModel = hiltViewModel()
+                LaunchedEffect(videoId) { detailViewModel.loadFavorite(videoId) }
+                val isFavorite by detailViewModel.isFavorite.collectAsState()
                 VideoDetailScreen(
                     videoInfo = videoInfo,
+                    isFavorite = isFavorite,
+                    onToggleFavorite = { detailViewModel.toggleFavorite() },
                     onPlay = { stream ->
                         val streamIndex = videoInfo.streamSources.indexOf(stream)
                         navController.navigate("player/$videoId?streamIndex=$streamIndex")
@@ -87,7 +94,13 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
                 onBack = { navController.popBackStack() }
             )
         }
-        composable(BottomNavItem.Library.route) { LibraryScreen() }
+        composable(BottomNavItem.Library.route) {
+            LibraryScreen(
+                onVideoClick = { videoId ->
+                    navController.navigate("videoDetail/$videoId")
+                }
+            )
+        }
         composable(BottomNavItem.Settings.route) { SettingsScreen() }
     }
 }

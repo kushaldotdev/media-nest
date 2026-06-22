@@ -26,6 +26,18 @@ interface VideoDao {
     @Update
     suspend fun update(video: VideoEntity)
 
+    @Query("SELECT * FROM videos WHERE title LIKE '%' || :query || '%' OR channelName LIKE '%' || :query || '%' ORDER BY addedAt DESC")
+    fun searchVideos(query: String): Flow<List<VideoEntity>>
+
+    @Query("SELECT * FROM videos WHERE favorite = 1 ORDER BY addedAt DESC")
+    fun getFavoriteVideos(): Flow<List<VideoEntity>>
+
+    @Query("SELECT * FROM videos ORDER BY addedAt DESC")
+    fun getAllVideosSortedByDate(): Flow<List<VideoEntity>>
+
+    @Query("UPDATE videos SET favorite = :favorite WHERE id = :videoId")
+    suspend fun setFavorite(videoId: String, favorite: Boolean)
+
     @Delete
     suspend fun delete(video: VideoEntity)
 }

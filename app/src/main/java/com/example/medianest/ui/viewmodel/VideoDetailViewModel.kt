@@ -12,14 +12,38 @@ import com.example.medianest.data.repository.DownloadRepository
 import com.example.medianest.service.DownloadService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import com.example.medianest.data.local.dao.VideoDao
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 @HiltViewModel
 class VideoDetailViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val downloadRepository: DownloadRepository
+    private val downloadRepository: DownloadRepository,
+    private val videoDao: VideoDao
 ) : ViewModel() {
+    private var currentVideoId: String = ""
+
+    private val _isFavorite = MutableStateFlow(false)
+    val isFavorite: StateFlow<Boolean> = _isFavorite
+
+    fun loadFavorite(videoId: String) {
+        currentVideoId = videoId
+        viewModelScope.launch {
+            val video = videoDao.getVideoById(videoId)
+            _isFavorite.value = video?.favorite ?: false
+        }
+    }
+
+    fun toggleFavorite() {
+        viewModelScope.launch {
+            val newValue = !_isFavorite.value
+            videoDao.setFavorite(currentVideoId, newValue)
+            _isFavorite.value = newValue
+        }
+    }
 
     fun enqueueDownload(videoInfo: ExtractedVideoInfo, stream: StreamSource) {
         viewModelScope.launch {

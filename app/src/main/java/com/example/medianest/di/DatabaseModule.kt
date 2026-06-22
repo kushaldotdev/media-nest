@@ -6,7 +6,9 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.medianest.data.local.AppDatabase
 import com.example.medianest.data.local.dao.VideoDao
+import com.example.medianest.data.local.dao.VideoFolderDao
 import com.example.medianest.data.local.dao.DownloadDao
+import com.example.medianest.data.local.dao.FolderDao
 import com.example.medianest.data.local.dao.HistoryDao
 import com.example.medianest.data.local.dao.PlaylistDao
 import dagger.Module
@@ -26,6 +28,32 @@ object DatabaseModule {
         }
     }
 
+    private val MIGRATION_4_5 = object : Migration(4, 5) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE videos ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS folders (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    name TEXT NOT NULL,
+                    parentId INTEGER REFERENCES folders(id) ON DELETE SET NULL,
+                    createdAt INTEGER NOT NULL,
+                    updatedAt INTEGER NOT NULL
+                )
+            """)
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_folders_parentId ON folders(parentId)")
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS video_folder_join (
+                    videoId TEXT NOT NULL REFERENCES videos(id) ON DELETE CASCADE,
+                    folderId INTEGER NOT NULL REFERENCES folders(id) ON DELETE CASCADE,
+                    addedAt INTEGER NOT NULL,
+                    PRIMARY KEY (videoId, folderId)
+                )
+            """)
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_vfj_videoId ON video_folder_join(videoId)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_vfj_folderId ON video_folder_join(folderId)")
+        }
+    }
+
     @Provides
     @Singleton
     fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase {
@@ -34,6 +62,7 @@ object DatabaseModule {
             AppDatabase::class.java,
             "media_nest.db"
         ).addMigrations(MIGRATION_3_4)
+            .addMigrations(MIGRATION_4_5)
             .fallbackToDestructiveMigration(false)
             .build()
     }
@@ -49,4 +78,10 @@ object DatabaseModule {
 
     @Provides
     fun providePlaylistDao(database: AppDatabase): PlaylistDao = database.playlistDao()
+
+    @Provides
+    fun provideFolderDao(database: AppDatabase): FolderDao = database.folderDao()
+
+    @Provides
+    fun provideVideoFolderDao(database: AppDatabase): VideoFolderDao = database.videoFolderDao()
 }

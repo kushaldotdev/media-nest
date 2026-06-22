@@ -16,6 +16,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -32,7 +36,9 @@ fun VideoDetailScreen(
     videoInfo: ExtractedVideoInfo,
     onPlay: (StreamSource) -> Unit,
     onDownload: (StreamSource) -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onToggleFavorite: () -> Unit = {},
+    isFavorite: Boolean = false
 ) {
     Scaffold(
         topBar = {
@@ -40,6 +46,18 @@ fun VideoDetailScreen(
                 title = { Text(videoInfo.title, maxLines = 1) },
                 navigationIcon = {
                     TextButton(onClick = onBack) { Text("Back") }
+                },
+                actions = {
+                    IconToggleButton(
+                        checked = isFavorite,
+                        onCheckedChange = { onToggleFavorite() }
+                    ) {
+                        Icon(
+                            Icons.Default.Favorite,
+                            contentDescription = "Favorite",
+                            tint = if (isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             )
         }

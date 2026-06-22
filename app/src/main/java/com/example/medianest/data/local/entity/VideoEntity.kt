@@ -14,5 +14,6 @@ data class VideoEntity(
     val description: String? = null,
     val uploadDate: String? = null,
     val localFilePath: String = "",
+    val favorite: Boolean = false,
     val addedAt: Long = System.currentTimeMillis()
 )
