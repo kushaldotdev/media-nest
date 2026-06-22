@@ -67,104 +67,108 @@ fun PlayerScreen(
             )
         }
     ) { padding ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            if (state.isAudioOnly) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    contentAlignment = Alignment.Center
-                ) {
-                    AsyncImage(
-                        model = state.thumbnailUrl,
-                        contentDescription = state.title,
-                        modifier = Modifier
-                            .fillMaxWidth(0.6f)
-                            .aspectRatio(1f)
-                    )
-                }
-            } else {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                ) {
-                    AndroidView(
-                        factory = { ctx ->
-                            val surfaceView = android.view.SurfaceView(ctx)
-                            viewModel.player.setVideoSurfaceView(surfaceView)
-                            surfaceView
-                        },
-                        modifier = Modifier.fillMaxSize()
-                    )
+            Column(
+                modifier = Modifier.fillMaxSize()
+            ) {
+                if (state.isAudioOnly) {
                     Box(
                         modifier = Modifier
-                            .fillMaxSize()
-                            .clickable { viewModel.togglePlayPause() }
-                    )
-                }
-            }
-
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
-            ) {
-                Slider(
-                    value = state.positionMs.toFloat(),
-                    onValueChange = { viewModel.seekTo(it.toLong()) },
-                    valueRange = 0f..maxOf(state.durationMs, 1L).toFloat(),
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(formatDuration(state.positionMs))
-                    Text(formatDuration(state.durationMs))
-                }
-
-                Spacer(Modifier.height(8.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceEvenly,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    IconButton(onClick = { }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
-                    }
-                    IconButton(
-                        onClick = { viewModel.togglePlayPause() },
-                        modifier = Modifier.size(64.dp)
+                            .fillMaxWidth()
+                            .weight(1f),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            if (state.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = if (state.isPlaying) "Pause" else "Play",
+                        AsyncImage(
+                            model = state.thumbnailUrl,
+                            contentDescription = state.title,
+                            modifier = Modifier
+                                .fillMaxWidth(0.6f)
+                                .aspectRatio(1f)
+                        )
+                    }
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                    ) {
+                        AndroidView(
+                            factory = { ctx ->
+                                val surfaceView = android.view.SurfaceView(ctx)
+                                viewModel.player.setVideoSurfaceView(surfaceView)
+                                surfaceView
+                            },
                             modifier = Modifier.fillMaxSize()
                         )
-                    }
-                    IconButton(onClick = { }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clickable { viewModel.togglePlayPause() }
+                        )
                     }
                 }
 
-                Spacer(Modifier.height(8.dp))
-                Text("Speed", style = MaterialTheme.typography.labelMedium)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
                 ) {
-                    listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f).forEach { speed ->
-                        FilterChip(
-                            selected = state.currentSpeed == speed,
-                            onClick = { viewModel.setSpeed(speed) },
-                            label = { Text("${speed}x") }
-                        )
+                    Slider(
+                        value = state.positionMs.toFloat(),
+                        onValueChange = { viewModel.seekTo(it.toLong()) },
+                        valueRange = 0f..maxOf(state.durationMs, 1L).toFloat(),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(formatDuration(state.positionMs))
+                        Text(formatDuration(state.durationMs))
+                    }
+
+                    Spacer(Modifier.height(8.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(onClick = { }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                        }
+                        IconButton(
+                            onClick = { viewModel.togglePlayPause() },
+                            modifier = Modifier.size(64.dp)
+                        ) {
+                            Icon(
+                                if (state.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                contentDescription = if (state.isPlaying) "Pause" else "Play",
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                        IconButton(onClick = { }) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                        }
+                    }
+
+                    Spacer(Modifier.height(8.dp))
+                    Text("Speed", style = MaterialTheme.typography.labelMedium)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f).forEach { speed ->
+                            FilterChip(
+                                selected = state.currentSpeed == speed,
+                                onClick = { viewModel.setSpeed(speed) },
+                                label = { Text("${speed}x") }
+                            )
+                        }
                     }
                 }
             }

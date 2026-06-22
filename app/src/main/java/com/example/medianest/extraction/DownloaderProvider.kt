@@ -14,9 +14,14 @@ object DownloaderProvider {
             request.headers()?.forEach { (k, v) -> connection.setRequestProperty(k, v.joinToString()) }
             connection.connect()
 
-            val body = connection.inputStream?.readBytes()?.toString(Charsets.UTF_8) ?: ""
+            val responseCode = connection.responseCode
+            val body = if (responseCode in 200..299) {
+                connection.inputStream?.readBytes()?.toString(Charsets.UTF_8) ?: ""
+            } else {
+                connection.errorStream?.readBytes()?.toString(Charsets.UTF_8) ?: ""
+            }
             return Response(
-                connection.responseCode,
+                responseCode,
                 connection.responseMessage ?: "",
                 connection.headerFields
                     ?.mapKeys { it.key ?: "" }

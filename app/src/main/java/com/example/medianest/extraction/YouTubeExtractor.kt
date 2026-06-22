@@ -25,6 +25,23 @@ class YouTubeExtractor @Inject constructor() {
         NewPipe.getService(SERVICE_ID)
     }
 
+    private fun extractChannelIdFromUrl(url: String?): String? {
+        if (url.isNullOrBlank()) return null
+        return runCatching {
+            service.getChannelLHFactory().fromUrl(url).id
+        }.getOrNull() ?: url
+    }
+
+    private fun extractVideoIdFromUrl(url: String?): String {
+        if (url == null) return ""
+        return runCatching {
+            android.net.Uri.parse(url).getQueryParameter("v")
+                ?: url.substringAfterLast("/")
+                    .substringBefore("?")
+                    .substringBefore("&")
+        }.getOrDefault(url)
+    }
+
     suspend fun extractVideo(url: String): ExtractedVideoInfo = withContext(Dispatchers.IO) {
         val info = NewPipeStreamInfo.getInfo(service, url)
 
@@ -63,7 +80,7 @@ class YouTubeExtractor @Inject constructor() {
                 streams.add(
                     StreamSource(
                         url = stream.content,
-                        format = "video_only",
+                        format = "video",
                         quality = stream.getResolution(),
                         mimeType = stream.format?.mimeType ?: "video/mp4",
                         contentLength = 0
@@ -76,7 +93,7 @@ class YouTubeExtractor @Inject constructor() {
             videoId = info.id,
             title = info.name ?: "",
             channelName = info.uploaderName ?: "Unknown",
-            channelId = info.uploaderUrl ?: "",
+            channelId = extractChannelIdFromUrl(info.uploaderUrl) ?: "",
             durationSeconds = info.duration,
             thumbnailUrl = info.thumbnails?.firstOrNull()?.url ?: "",
             description = info.description?.content?.take(1000),
@@ -91,10 +108,10 @@ class YouTubeExtractor @Inject constructor() {
         val videos = info.relatedItems?.mapNotNull { item ->
             runCatching {
                 ExtractedVideoInfo(
-                    videoId = item.url,
+                    videoId = extractVideoIdFromUrl(item.url),
                     title = item.name ?: "Unknown",
                     channelName = item.uploaderName ?: "Unknown",
-                    channelId = item.uploaderUrl ?: "",
+                    channelId = extractChannelIdFromUrl(item.uploaderUrl) ?: "",
                     durationSeconds = item.duration,
                     thumbnailUrl = item.thumbnails?.firstOrNull()?.url ?: "",
                     description = null,
@@ -115,13 +132,33 @@ class YouTubeExtractor @Inject constructor() {
     suspend fun extractChannel(url: String): ModelChannelInfo = withContext(Dispatchers.IO) {
         val info = NewPipeChannelInfo.getInfo(service, url)
 
+        val uploads = runCatching {
+            service.getFeedExtractor(url)?.let { feed ->
+                feed.fetchPage()
+                feed.initialPage.items?.mapNotNull { item ->
+                    runCatching {
+                        ExtractedVideoInfo(
+                            videoId = extractVideoIdFromUrl(item.url),
+                            title = item.name ?: "Unknown",
+                            channelName = info.name ?: "Unknown",
+                            channelId = extractChannelIdFromUrl(info.url) ?: "",
+                            durationSeconds = item.duration,
+                            thumbnailUrl = item.thumbnails?.firstOrNull()?.url ?: "",
+                            description = null,
+                            uploadDate = null
+                        )
+                    }.getOrNull()
+                } ?: emptyList()
+            } ?: emptyList()
+        }.getOrDefault(emptyList())
+
         ModelChannelInfo(
             channelId = info.id,
             name = info.name ?: "Unknown",
             avatarUrl = info.avatars?.firstOrNull()?.url ?: "",
             subscriberCount = info.subscriberCount,
             description = info.description?.take(500),
-            uploads = emptyList()
+            uploads = uploads
         )
     }
 }

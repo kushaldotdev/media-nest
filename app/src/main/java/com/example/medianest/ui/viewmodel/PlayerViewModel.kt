@@ -120,6 +120,7 @@ class PlayerViewModel @Inject constructor(
                 .build()
             player.setMediaItem(mediaItem)
             player.seekTo(startPosition)
+            _uiState.value = _uiState.value.copy(positionMs = startPosition)
             player.prepare()
             player.play()
         }
@@ -143,7 +144,9 @@ class PlayerViewModel @Inject constructor(
         positionTrackingJob?.cancel()
         positionTrackingJob = viewModelScope.launch {
             while (true) {
-                delay(5_000)
+                delay(1_000)
+                val pos = player.currentPosition
+                _uiState.value = _uiState.value.copy(positionMs = pos)
                 savePosition()
             }
         }
@@ -194,6 +197,7 @@ class PlayerViewModel @Inject constructor(
 
     override fun onCleared() {
         super.onCleared()
+        PlayerResolver.player = null
         player.release()
     }
 }
