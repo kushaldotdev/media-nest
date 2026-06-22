@@ -69,7 +69,7 @@ class SyncManager @Inject constructor(
         if (_state.value is SyncState.Syncing) return _state.value
         _state.value = SyncState.Syncing
         return try {
-            withContext(Dispatchers.IO) {
+            val state = withContext(Dispatchers.IO) {
                 val serverUrl = devicePreferences.serverUrl.first()
                 val apiKey = devicePreferences.apiKey.first()
                 val deviceId = devicePreferences.deviceId.first()
@@ -136,6 +136,7 @@ class SyncManager @Inject constructor(
                 _state.value = syncSuccess
                 syncSuccess
             }
+            state
         } catch (e: Exception) {
             val syncErr = SyncState.Error(e.message ?: "Sync failed")
             _state.value = syncErr
@@ -203,7 +204,7 @@ class SyncManager @Inject constructor(
             )))
             }
         }
-        historyDao.getAllHistory().first().forEach { h ->
+        historyDao.getAllHistoryOnce().forEach { h ->
             if (!useIncremental || h.playedAt > since) {
                 changes.add(SyncPushItem("playback_history", h.videoId, "upsert", mapOf(
                 "videoId" to JsonPrimitive(h.videoId),
@@ -238,7 +239,7 @@ class SyncManager @Inject constructor(
             )))
             }
         }
-        playlistDao.getAllPlaylists().first().forEach { p ->
+        playlistDao.getAllPlaylistsOnce().forEach { p ->
             if (!useIncremental || p.updatedAt > since) {
                 changes.add(SyncPushItem("playlists", p.id.toString(), "upsert", mapOf(
                 "id" to JsonPrimitive(p.id), "name" to JsonPrimitive(p.name),
@@ -253,7 +254,7 @@ class SyncManager @Inject constructor(
             )))
             }
         }
-        subscriptionDao.getAllSubscriptions().first().forEach { s ->
+        subscriptionDao.getAllSubscriptionsOnce().forEach { s ->
             if (!useIncremental || s.updatedAt > since) {
                 changes.add(SyncPushItem("subscriptions", s.sourceId, "upsert", mapOf(
                 "id" to JsonPrimitive(s.id), "sourceId" to JsonPrimitive(s.sourceId),

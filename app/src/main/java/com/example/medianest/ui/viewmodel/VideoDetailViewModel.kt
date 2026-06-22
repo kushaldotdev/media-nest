@@ -23,7 +23,7 @@ import javax.inject.Inject
 class VideoDetailViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val downloadRepository: DownloadRepository,
-    private val videoDao: VideoDao,
+    private val videoRepository: com.example.medianest.data.repository.VideoRepository,
     private val subscriptionRepository: SubscriptionRepository
 ) : ViewModel() {
     private var currentVideoId: String = ""
@@ -68,7 +68,7 @@ class VideoDetailViewModel @Inject constructor(
     fun loadFavorite(videoId: String) {
         currentVideoId = videoId
         viewModelScope.launch {
-            val video = videoDao.getVideoById(videoId)
+            val video = videoRepository.getVideoById(videoId)
             _isFavorite.value = video?.favorite ?: false
         }
     }
@@ -76,7 +76,7 @@ class VideoDetailViewModel @Inject constructor(
     fun toggleFavorite() {
         viewModelScope.launch {
             val newValue = !_isFavorite.value
-            videoDao.setFavorite(currentVideoId, newValue)
+            videoRepository.setFavorite(currentVideoId, newValue)
             _isFavorite.value = newValue
         }
     }
