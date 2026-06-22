@@ -10,8 +10,10 @@ import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.example.medianest.MainActivity
+import com.example.medianest.data.local.dao.VideoDao
 import com.example.medianest.data.local.entity.DownloadEntity
 import com.example.medianest.data.local.entity.DownloadStatus
+import com.example.medianest.data.local.entity.VideoEntity
 import com.example.medianest.data.preferences.DownloadPreferences
 import com.example.medianest.data.repository.DownloadRepository
 import com.example.medianest.extraction.YouTubeExtractor
@@ -72,6 +74,7 @@ class DownloadService : Service() {
     @Inject lateinit var preferences: DownloadPreferences
     @Inject lateinit var extractor: YouTubeExtractor
     @Inject lateinit var okHttpClient: OkHttpClient
+    @Inject lateinit var videoDao: VideoDao
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val activeJobs = mutableMapOf<Long, Job>()
@@ -207,6 +210,23 @@ class DownloadService : Service() {
                         repository.markCompleted(download.id, bytesRead)
                         repository.update(download.copy(filePath = outputFile.absolutePath, fileSizeBytes = bytesRead))
                         updateNotification(download.id, bytesRead, contentLength)
+
+                        // Persist video metadata for offline playback
+                        val existing = videoDao.getVideoById(download.videoId)
+                        if (existing == null) {
+                            videoDao.insert(
+                                VideoEntity(
+                                    id = download.videoId,
+                                    title = download.title.ifEmpty { download.quality },
+                                    channelName = "",
+                                    durationSeconds = 0,
+                                    thumbnailUrl = download.thumbnailUrl,
+                                    localFilePath = outputFile.absolutePath
+                                )
+                            )
+                        } else {
+                            videoDao.update(existing.copy(localFilePath = outputFile.absolutePath))
+                        }
                     }
                 }
                 return

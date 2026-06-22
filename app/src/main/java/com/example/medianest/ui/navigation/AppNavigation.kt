@@ -69,7 +69,24 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
                 navController.popBackStack()
             }
         }
-        composable(BottomNavItem.Downloads.route) { DownloadsScreen() }
+        composable(BottomNavItem.Downloads.route) {
+            DownloadsScreen(
+                onPlayDownload = { download ->
+                    navController.navigate("downloads/player/${download.videoId}")
+                }
+            )
+        }
+        composable(
+            route = "downloads/player/{videoId}",
+            arguments = listOf(navArgument("videoId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val videoId = backStackEntry.arguments?.getString("videoId") ?: return@composable
+            PlayerScreen(
+                videoId = videoId,
+                streamIndex = 0,
+                onBack = { navController.popBackStack() }
+            )
+        }
         composable(BottomNavItem.Library.route) { LibraryScreen() }
         composable(BottomNavItem.Settings.route) { SettingsScreen() }
     }

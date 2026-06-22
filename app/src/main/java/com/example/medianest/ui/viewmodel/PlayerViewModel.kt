@@ -13,6 +13,7 @@ import com.example.medianest.data.local.entity.HistoryEntity
 import com.example.medianest.data.model.ExtractedVideoInfo
 import com.example.medianest.data.model.StreamSource
 import com.example.medianest.data.preferences.PlaybackPreferences
+import com.example.medianest.data.repository.DownloadRepository
 import com.example.medianest.service.PlayerResolver
 import com.example.medianest.ui.viewmodel.HomeViewModel.Companion.lastResultCache
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -41,7 +42,8 @@ data class PlayerUiState(
 class PlayerViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val historyDao: HistoryDao,
-    private val playbackPreferences: PlaybackPreferences
+    private val playbackPreferences: PlaybackPreferences,
+    private val downloadRepository: DownloadRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(PlayerUiState())
@@ -73,40 +75,46 @@ class PlayerViewModel @Inject constructor(
     fun initialize(videoId: String, streamIndex: Int) {
         currentVideoId = videoId
         currentStreamIndex = streamIndex
-        val info = lastResultCache[videoId] ?: run {
-            _uiState.value = _uiState.value.copy(error = "Video info not found in cache")
-            return
-        }
+        val info = lastResultCache[videoId]
         videoInfo = info
-        val streams = info.streamSources
-        if (streamIndex >= streams.size) {
-            _uiState.value = _uiState.value.copy(error = "Stream not found")
-            return
-        }
-        val stream = streams[streamIndex]
-
-        _uiState.value = _uiState.value.copy(
-            title = info.title,
-            channelName = info.channelName,
-            thumbnailUrl = info.thumbnailUrl,
-            isAudioOnly = stream.format != "video",
-            durationMs = info.durationSeconds * 1000
-        )
 
         viewModelScope.launch {
             val speed = playbackPreferences.playbackSpeed.first()
             player.setPlaybackSpeed(speed)
             _uiState.value = _uiState.value.copy(currentSpeed = speed)
 
+            val localDownloads = downloadRepository.getLocalDownloadsForVideo(videoId)
+            val localFile = localDownloads.firstOrNull { it.filePath.isNotEmpty() }
+            val uri = if (localFile != null) {
+                android.net.Uri.fromFile(java.io.File(localFile.filePath)).toString()
+            } else if (info != null && streamIndex < info.streamSources.size) {
+                info.streamSources[streamIndex].url
+            } else {
+                _uiState.value = _uiState.value.copy(error = "No playable source found")
+                return@launch
+            }
+
+            val title = info?.title ?: localFile?.title ?: "Unknown"
+            val channel = info?.channelName ?: ""
+            val thumbnail = info?.thumbnailUrl ?: localFile?.thumbnailUrl
+
+            _uiState.value = _uiState.value.copy(
+                title = title,
+                channelName = channel,
+                thumbnailUrl = thumbnail,
+                isAudioOnly = localFile?.format == "audio" || localFile?.format == "audio_extracted",
+                durationMs = if (localFile != null) 0L else (info?.durationSeconds ?: 0L) * 1000
+            )
+
             val lastPlayback = historyDao.getLatestPlayback(videoId)
             val startPosition = lastPlayback?.positionMillis ?: 0L
 
             val mediaItem = MediaItem.Builder()
-                .setUri(stream.url)
+                .setUri(uri)
                 .setMediaMetadata(
                     MediaMetadata.Builder()
-                        .setTitle(info.title)
-                        .setArtist(info.channelName)
+                        .setTitle(title)
+                        .setArtist(channel)
                         .build()
                 )
                 .build()

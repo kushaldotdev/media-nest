@@ -15,10 +15,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -43,6 +45,7 @@ import com.example.medianest.ui.viewmodel.DownloadsViewModel
 
 @Composable
 fun DownloadsScreen(
+    onPlayDownload: (DownloadEntity) -> Unit,
     viewModel: DownloadsViewModel = hiltViewModel()
 ) {
     val downloads by viewModel.downloads.collectAsStateWithLifecycle()
@@ -83,7 +86,11 @@ fun DownloadsScreen(
         } else {
             LazyColumn {
                 items(downloads, key = { it.id }) { download ->
-                    DownloadItem(download = download, viewModel = viewModel)
+                    DownloadItem(
+                        download = download,
+                        onPlayDownload = onPlayDownload,
+                        viewModel = viewModel
+                    )
                 }
             }
         }
@@ -91,7 +98,13 @@ fun DownloadsScreen(
 }
 
 @Composable
-private fun DownloadItem(download: DownloadEntity, viewModel: DownloadsViewModel) {
+private fun DownloadItem(
+    download: DownloadEntity,
+    onPlayDownload: (DownloadEntity) -> Unit,
+    viewModel: DownloadsViewModel
+) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
     Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
         Row(
             modifier = Modifier.padding(12.dp).fillMaxWidth(),
@@ -145,8 +158,28 @@ private fun DownloadItem(download: DownloadEntity, viewModel: DownloadsViewModel
                     }
                 }
                 DownloadStatus.COMPLETED -> {
-                    IconButton(onClick = { viewModel.cancelDownload(download.id) }) {
-                        Icon(Icons.Default.Delete, contentDescription = "Delete")
+                    Row {
+                        if (download.filePath.isNotEmpty()) {
+                            IconButton(onClick = { onPlayDownload(download) }) {
+                                Icon(Icons.Default.PlayArrow, contentDescription = "Play")
+                            }
+                        }
+                        if (download.format.startsWith("video")) {
+                            val isExtracting = uiState.extractingVideoId == download.videoId
+                            IconButton(
+                                onClick = { viewModel.extractAudio(download) },
+                                enabled = !isExtracting
+                            ) {
+                                if (isExtracting) {
+                                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                                } else {
+                                    Icon(Icons.Default.MusicNote, contentDescription = "Extract Audio")
+                                }
+                            }
+                        }
+                        IconButton(onClick = { viewModel.cancelDownload(download.id) }) {
+                            Icon(Icons.Default.Delete, contentDescription = "Delete")
+                        }
                     }
                 }
                 else -> {}

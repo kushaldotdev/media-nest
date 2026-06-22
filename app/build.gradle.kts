@@ -95,6 +95,9 @@ dependencies {
     // NewPipeExtractor
     implementation(libs.com.github.teamnewpipe.newpipeextractor)
 
+    // ffmpeg-kit
+    implementation(libs.ffmpeg.kit.full)
+
     // OkHttp
     implementation(libs.okhttp)
 

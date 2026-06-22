@@ -39,4 +39,10 @@ class DownloadRepository @Inject constructor(
 
     suspend fun markCompleted(id: Long, fileSize: Long) =
         downloadDao.markCompleted(id, fileSize)
+
+    suspend fun getLocalDownloadsForVideo(videoId: String): List<DownloadEntity> =
+        downloadDao.getCompletedDownloadsForVideo(videoId)
+
+    suspend fun getAudioExtraction(videoId: String): DownloadEntity? =
+        downloadDao.getAudioExtraction(videoId)
 }

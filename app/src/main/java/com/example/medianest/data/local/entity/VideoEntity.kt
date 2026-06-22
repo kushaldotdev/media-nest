@@ -13,5 +13,6 @@ data class VideoEntity(
     val thumbnailUrl: String? = null,
     val description: String? = null,
     val uploadDate: String? = null,
+    val localFilePath: String = "",
     val addedAt: Long = System.currentTimeMillis()
 )

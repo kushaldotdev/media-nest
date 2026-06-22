@@ -50,4 +50,10 @@ interface DownloadDao {
 
     @Query("UPDATE downloads SET status = 'COMPLETED', progress = 1.0, fileSizeBytes = :fileSize WHERE id = :id")
     suspend fun markCompleted(id: Long, fileSize: Long)
+
+    @Query("SELECT * FROM downloads WHERE videoId = :videoId AND status = 'COMPLETED'")
+    suspend fun getCompletedDownloadsForVideo(videoId: String): List<DownloadEntity>
+
+    @Query("SELECT * FROM downloads WHERE videoId = :videoId AND format = 'audio_extracted'")
+    suspend fun getAudioExtraction(videoId: String): DownloadEntity?
 }

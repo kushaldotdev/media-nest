@@ -2,6 +2,8 @@ package com.example.medianest.di
 
 import android.content.Context
 import androidx.room.Room
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.medianest.data.local.AppDatabase
 import com.example.medianest.data.local.dao.VideoDao
 import com.example.medianest.data.local.dao.DownloadDao
@@ -18,6 +20,12 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object DatabaseModule {
 
+    private val MIGRATION_3_4 = object : Migration(3, 4) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE videos ADD COLUMN localFilePath TEXT NOT NULL DEFAULT ''")
+        }
+    }
+
     @Provides
     @Singleton
     fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase {
@@ -25,7 +33,8 @@ object DatabaseModule {
             context,
             AppDatabase::class.java,
             "media_nest.db"
-        ).fallbackToDestructiveMigration(false)
+        ).addMigrations(MIGRATION_3_4)
+            .fallbackToDestructiveMigration(false)
             .build()
     }
 
