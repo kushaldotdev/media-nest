@@ -5,14 +5,15 @@ import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.example.medianest.data.sync.SyncManager
-import javax.inject.Inject
+import dagger.assisted.Assisted
+import dagger.assisted.AssistedInject
 
 import com.example.medianest.data.sync.SyncState
 
 @HiltWorker
-class SyncWorker @Inject constructor(
-    private val context: Context,
-    private val params: WorkerParameters,
+class SyncWorker @AssistedInject constructor(
+    @Assisted private val context: Context,
+    @Assisted private val params: WorkerParameters,
     private val syncManager: SyncManager
 ) : CoroutineWorker(context, params) {
 

@@ -80,17 +80,29 @@ class LibraryRepair @Inject constructor(
             }
             progress(0.8f)
 
+            val registeredPaths = mutableSetOf<String>()
+            try {
+                videoDao.getAllVideos().first().forEach { video ->
+                    if (video.localFilePath.isNotEmpty()) {
+                        registeredPaths.add(File(video.localFilePath).absolutePath)
+                    }
+                }
+            } catch (_: Exception) {}
+            try {
+                downloadDao.getAllDownloads().first().forEach { download ->
+                    if (download.filePath.isNotEmpty()) {
+                        registeredPaths.add(File(download.filePath).absolutePath)
+                    }
+                }
+            } catch (_: Exception) {}
+
             // Remove orphan media files (no matching video)
             var orphansRemoved = 0
-            for ((name, file) in mediaFiles) {
-                val videoId = name.substringBefore("_")
-                try {
-                    val video = videoDao.getVideoById(videoId)
-                    if (video == null) {
-                        file.delete()
-                        orphansRemoved++
-                    }
-                } catch (_: Exception) { }
+            for ((_, file) in mediaFiles) {
+                if (file.absolutePath !in registeredPaths) {
+                    file.delete()
+                    orphansRemoved++
+                }
             }
             progress(1.0f)
 

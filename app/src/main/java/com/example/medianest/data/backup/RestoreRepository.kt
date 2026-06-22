@@ -47,33 +47,37 @@ class RestoreRepository @Inject constructor(
 ) {
     suspend fun restoreFromZip(inputStream: InputStream, progress: (Float) -> Unit) {
         withContext(Dispatchers.IO) {
-            val zip = ZipInputStream(inputStream)
             var databaseJson: String? = null
             var preferencesJson: String? = null
             
             val videoDir = File(context.filesDir, "MediaNest/video").also { it.mkdirs() }
             val audioDir = File(context.filesDir, "MediaNest/audio").also { it.mkdirs() }
 
-            var entry = zip.nextEntry
-            while (entry != null) {
-                when {
-                    entry.name == "database.json" -> {
-                        databaseJson = zip.readBytes().toString(Charsets.UTF_8)
-                    }
-                    entry.name == "preferences.json" -> {
-                        preferencesJson = zip.readBytes().toString(Charsets.UTF_8)
-                    }
-                    entry.name.startsWith("media/") -> {
-                        val name = entry.name.removePrefix("media/")
-                        val target = if (name.contains("_audio")) audioDir else videoDir
-                        val file = File(target, name)
-                        file.outputStream().use { fos ->
-                            zip.copyTo(fos)
+            ZipInputStream(inputStream).use { zip ->
+                var entry = zip.nextEntry
+                while (entry != null) {
+                    when {
+                        entry.name == "database.json" -> {
+                            databaseJson = zip.readBytes().toString(Charsets.UTF_8)
+                        }
+                        entry.name == "preferences.json" -> {
+                            preferencesJson = zip.readBytes().toString(Charsets.UTF_8)
+                        }
+                        entry.name.startsWith("media/") -> {
+                            val name = entry.name.removePrefix("media/")
+                            val target = if (name.contains("_audio")) audioDir else videoDir
+                            val file = File(target, name)
+                            if (!file.canonicalPath.startsWith(target.canonicalPath + File.separator)) {
+                                throw SecurityException("Zip Slip detected: entry path is outside destination directory")
+                            }
+                            file.outputStream().use { fos ->
+                                zip.copyTo(fos)
+                            }
                         }
                     }
+                    zip.closeEntry()
+                    entry = zip.nextEntry
                 }
-                zip.closeEntry()
-                entry = zip.nextEntry
             }
             progress(0.2f)
 
@@ -83,6 +87,7 @@ class RestoreRepository @Inject constructor(
                 progress(0.3f)
 
                 database.withTransaction {
+                    database.clearAllTables()
                     for (video in data.videos) {
                         videoDao.insert(video.toEntity())
                     }

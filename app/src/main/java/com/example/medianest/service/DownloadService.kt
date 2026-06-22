@@ -108,12 +108,11 @@ class DownloadService : Service() {
 
     private fun processQueue() {
         serviceScope.launch {
-            preferences.maxConcurrentDownloads.collect { maxConcurrent ->
-                val queue = repository.getDownloadsByStatus(DownloadStatus.QUEUED).first()
-                val active = repository.getActiveDownloadCount()
-                val slots = (maxConcurrent - active).coerceAtLeast(0)
-                queue.take(slots).forEach { enqueueDownload(it) }
-            }
+            val maxConcurrent = preferences.maxConcurrentDownloads.first()
+            val queue = repository.getDownloadsByStatus(DownloadStatus.QUEUED).first()
+            val active = repository.getActiveDownloadCount()
+            val slots = (maxConcurrent - active).coerceAtLeast(0)
+            queue.take(slots).forEach { enqueueDownload(it) }
         }
     }
 

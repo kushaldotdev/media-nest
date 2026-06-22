@@ -66,6 +66,7 @@ fun LibraryScreen(
     val favoriteVideos by viewModel.favoriteVideos.collectAsStateWithLifecycle()
     val folderVideos by viewModel.folderVideos.collectAsStateWithLifecycle()
     val rootFolders by viewModel.rootFolders.collectAsStateWithLifecycle()
+    val childFolders by viewModel.childFolders.collectAsStateWithLifecycle()
 
     Scaffold(
         topBar = {
@@ -116,10 +117,11 @@ fun LibraryScreen(
                 LibraryTab.FOLDERS -> {
                     FolderContent(
                         folders = rootFolders,
+                        childFolders = childFolders,
                         folderVideos = folderVideos,
                         selectedFolder = uiState.selectedFolder,
                         onFolderClick = { viewModel.selectFolder(it) },
-                        onCreateFolder = { viewModel.createFolder(it) },
+                        onCreateFolder = { name -> viewModel.createFolder(name, uiState.selectedFolder?.id) },
                         onDeleteFolder = { viewModel.deleteFolder(it) },
                         onNavigateBack = { viewModel.navigateBackFromFolder() },
                         onVideoClick = onVideoClick,
@@ -202,6 +204,7 @@ private fun VideoCard(
 @Composable
 private fun FolderContent(
     folders: List<FolderEntity>,
+    childFolders: List<FolderEntity>,
     folderVideos: List<VideoEntity>,
     selectedFolder: FolderEntity?,
     onFolderClick: (FolderEntity) -> Unit,
@@ -221,7 +224,7 @@ private fun FolderContent(
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (selectedFolder != null) {
-                TextButton(onClick = onNavigateBack) { Text("< All folders") }
+                TextButton(onClick = onNavigateBack) { Text("< Back") }
                 Text(selectedFolder.name, style = MaterialTheme.typography.titleMedium)
             } else {
                 Text("Folders", style = MaterialTheme.typography.titleMedium)
@@ -244,19 +247,33 @@ private fun FolderContent(
                 }
             }
         } else {
-            if (folderVideos.isEmpty()) {
+            if (childFolders.isEmpty() && folderVideos.isEmpty()) {
                 Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                     Text("Folder is empty", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             } else {
-                LazyVerticalGrid(
-                    columns = GridCells.Adaptive(160.dp),
-                    modifier = Modifier.weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(folderVideos, key = { it.id }) { video ->
-                        VideoCard(video = video, onClick = { onVideoClick(video.id) }, onFavoriteToggle = { onFavoriteToggle(video) })
+                Column(modifier = Modifier.weight(1f)) {
+                    if (childFolders.isNotEmpty()) {
+                        Text("Subfolders", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(vertical = 4.dp))
+                        LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
+                            items(childFolders, key = { it.id }) { folder ->
+                                FolderRow(folder = folder, onClick = { onFolderClick(folder) }, onDelete = { onDeleteFolder(folder) })
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+                    if (folderVideos.isNotEmpty()) {
+                        Text("Videos", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(vertical = 4.dp))
+                        LazyVerticalGrid(
+                            columns = GridCells.Adaptive(160.dp),
+                            modifier = Modifier.weight(1f),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            items(folderVideos, key = { it.id }) { video ->
+                                VideoCard(video = video, onClick = { onVideoClick(video.id) }, onFavoriteToggle = { onFavoriteToggle(video) })
+                            }
+                        }
                     }
                 }
             }

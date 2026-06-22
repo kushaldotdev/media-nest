@@ -70,6 +70,16 @@ class LibraryViewModel @Inject constructor(
     val rootFolders: StateFlow<List<FolderEntity>> = folderDao.getRootFolders()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val childFolders: StateFlow<List<FolderEntity>> = _uiState.flatMapLatest { state ->
+        val folder = state.selectedFolder
+        if (folder != null) {
+            folderDao.getChildFolders(folder.id)
+        } else {
+            flowOf(emptyList())
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     fun setSearchQuery(query: String) {
         _searchQuery.value = query
         _uiState.value = _uiState.value.copy(searchQuery = query)
@@ -84,7 +94,15 @@ class LibraryViewModel @Inject constructor(
     }
 
     fun navigateBackFromFolder() {
-        _uiState.value = _uiState.value.copy(selectedFolder = null)
+        val currentFolder = _uiState.value.selectedFolder
+        if (currentFolder?.parentId != null) {
+            viewModelScope.launch {
+                val parent = folderDao.getFolderById(currentFolder.parentId)
+                _uiState.value = _uiState.value.copy(selectedFolder = parent)
+            }
+        } else {
+            _uiState.value = _uiState.value.copy(selectedFolder = null)
+        }
     }
 
     fun toggleFavorite(videoId: String, current: Boolean) {

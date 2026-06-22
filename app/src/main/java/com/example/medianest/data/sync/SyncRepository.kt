@@ -3,6 +3,7 @@ package com.example.medianest.data.sync
 import com.example.medianest.data.preferences.DevicePreferences
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.IOException
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
@@ -37,9 +38,13 @@ class SyncRepository @Inject constructor(
                     .url("$serverUrl/device/register")
                     .post(body)
                     .build()
-                val response = client.newCall(request).execute()
-                val responseBody = response.body?.string() ?: throw Exception("Empty response")
-                json.decodeFromString<RegisterResponse>(responseBody)
+                client.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) {
+                        throw IOException("HTTP ${response.code}")
+                    }
+                    val responseBody = response.body?.string() ?: throw IOException("Empty response")
+                    json.decodeFromString<RegisterResponse>(responseBody)
+                }
             }
         }
 
@@ -52,9 +57,13 @@ class SyncRepository @Inject constructor(
                     .post(body)
                     .header("X-API-Key", apiKey)
                     .build()
-                val response = client.newCall(request).execute()
-                val responseBody = response.body?.string() ?: throw Exception("Empty response")
-                json.decodeFromString<SyncPushResponse>(responseBody)
+                client.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) {
+                        throw IOException("HTTP ${response.code}")
+                    }
+                    val responseBody = response.body?.string() ?: throw IOException("Empty response")
+                    json.decodeFromString<SyncPushResponse>(responseBody)
+                }
             }
         }
 
@@ -66,9 +75,13 @@ class SyncRepository @Inject constructor(
                     .get()
                     .header("X-API-Key", apiKey)
                     .build()
-                val response = client.newCall(request).execute()
-                val responseBody = response.body?.string() ?: throw Exception("Empty response")
-                json.decodeFromString<SyncPullResponse>(responseBody)
+                client.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) {
+                        throw IOException("HTTP ${response.code}")
+                    }
+                    val responseBody = response.body?.string() ?: throw IOException("Empty response")
+                    json.decodeFromString<SyncPullResponse>(responseBody)
+                }
             }
         }
 }

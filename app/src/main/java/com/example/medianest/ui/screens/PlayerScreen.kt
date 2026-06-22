@@ -50,6 +50,7 @@ fun PlayerScreen(
     onBack: () -> Unit
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val player by viewModel.player.collectAsStateWithLifecycle()
 
     LaunchedEffect(videoId, streamIndex) {
         viewModel.initialize(videoId, streamIndex)
@@ -98,9 +99,13 @@ fun PlayerScreen(
                     ) {
                         AndroidView(
                             factory = { ctx ->
-                                val surfaceView = android.view.SurfaceView(ctx)
-                                viewModel.player.setVideoSurfaceView(surfaceView)
-                                surfaceView
+                                android.view.SurfaceView(ctx)
+                            },
+                            update = { surfaceView ->
+                                player?.setVideoSurfaceView(surfaceView)
+                            },
+                            onRelease = { surfaceView ->
+                                player?.clearVideoSurfaceView(surfaceView)
                             },
                             modifier = Modifier.fillMaxSize()
                         )

@@ -2,6 +2,7 @@ package com.example.medianest.worker
 
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import androidx.hilt.work.HiltWorker
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
@@ -40,7 +41,7 @@ class SubscriptionWorker @AssistedInject constructor(
                             val streams = if (sub.audioOnly) {
                                 info.streamSources.filter { it.format == "audio" }
                             } else {
-                                info.streamSources.filter { it.format == "video" || it.format == "video_only" }
+                                info.streamSources.filter { it.format == "video" }
                             }
                             val best = streams.maxByOrNull { parseQuality(it.quality) }
                             if (best != null) {
@@ -57,9 +58,15 @@ class SubscriptionWorker @AssistedInject constructor(
                                         thumbnailUrl = video.thumbnailUrl
                                     )
                                     downloadRepository.insert(entity)
-                                    applicationContext.startForegroundService(
-                                        Intent(applicationContext, DownloadService::class.java)
-                                    )
+                                    try {
+                                        applicationContext.startForegroundService(
+                                            Intent(applicationContext, DownloadService::class.java)
+                                        )
+                                    } catch (e: Exception) {
+                                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && e is android.app.ForegroundServiceStartNotAllowedException) {
+                                            // Handle gracefully
+                                        }
+                                    }
                                 }
                             }
                         } catch (_: Exception) {

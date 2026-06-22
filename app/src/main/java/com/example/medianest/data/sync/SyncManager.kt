@@ -174,7 +174,7 @@ class SyncManager @Inject constructor(
                 "thumbnailUrl" to JsonPrimitive(v.thumbnailUrl ?: ""),
                 "description" to JsonPrimitive(v.description ?: ""),
                 "uploadDate" to JsonPrimitive(v.uploadDate ?: ""),
-                "localFilePath" to JsonPrimitive(v.localFilePath),
+                "localFilePath" to JsonPrimitive(""), // Clear absolute path on push
                 "favorite" to JsonPrimitive(v.favorite),
                 "addedAt" to JsonPrimitive(v.addedAt),
                 "updatedAt" to JsonPrimitive(v.addedAt),
@@ -190,7 +190,7 @@ class SyncManager @Inject constructor(
                 "url" to JsonPrimitive(d.url), "videoUrl" to JsonPrimitive(d.videoUrl ?: ""), "format" to JsonPrimitive(d.format),
                 "quality" to JsonPrimitive(d.quality), "title" to JsonPrimitive(d.title),
                 "thumbnailUrl" to JsonPrimitive(d.thumbnailUrl ?: ""),
-                "filePath" to JsonPrimitive(d.filePath),
+                "filePath" to JsonPrimitive(""), // Clear absolute path on push
                 "fileSizeBytes" to JsonPrimitive(d.fileSizeBytes),
                 "downloadedAt" to JsonPrimitive(d.downloadedAt),
                 "lastPlayedAt" to JsonPrimitive(d.lastPlayedAt ?: 0L),
@@ -276,12 +276,17 @@ class SyncManager @Inject constructor(
 
     private suspend fun applyRemoteChanges(changes: List<Map<String, JsonElement?>>) {
         for (change in changes) {
-            val table = (change["table_name"] as? JsonPrimitive)?.content ?: continue
-            val operation = (change["operation"] as? JsonPrimitive)?.content ?: continue
-            val payloadEl = change["payload"] as? JsonElement ?: continue
-            when (operation) {
-                "upsert" -> applyUpsert(table, payloadEl)
-                "delete" -> applyDelete(table, payloadEl)
+            try {
+                val table = (change["table_name"] as? JsonPrimitive)?.content ?: continue
+                val operation = (change["operation"] as? JsonPrimitive)?.content ?: continue
+                val payloadEl = change["payload"] as? JsonElement ?: continue
+                when (operation) {
+                    "upsert" -> applyUpsert(table, payloadEl)
+                    "delete" -> applyDelete(table, payloadEl)
+                }
+            } catch (e: Exception) {
+                // Prevent a single DB constraint error from permanently blocking the sync loop
+                addLogEntry(SyncLogEntry(System.currentTimeMillis(), "error", null, 0, "Failed to apply change: ${e.message}"))
             }
         }
     }
@@ -304,20 +309,43 @@ class SyncManager @Inject constructor(
             "videos" -> {
                 val id = jsonString(obj["id"])
                 if (id.isBlank()) return
-                if (videoDao.getVideoById(id) == null) {
+                val existing = videoDao.getVideoById(id)
+                val favorite = jsonBoolean(obj["favorite"])
+                val title = jsonString(obj["title"])
+                val channelName = jsonString(obj["channelName"])
+                val channelId = jsonString(obj["channelId"]).ifBlank { null }
+                val durationSeconds = jsonLong(obj["durationSeconds"])
+                val thumbnailUrl = jsonString(obj["thumbnailUrl"]).ifBlank { null }
+                val description = jsonString(obj["description"]).ifBlank { null }
+                val uploadDate = jsonString(obj["uploadDate"]).ifBlank { null }
+                val syncVersion = jsonLong(obj["syncVersion"])
+                
+                if (existing == null) {
                     videoDao.insert(VideoEntity(
                         id = id,
-                        title = jsonString(obj["title"]),
-                        channelName = jsonString(obj["channelName"]),
-                        channelId = jsonString(obj["channelId"]).ifBlank { null },
-                        durationSeconds = jsonLong(obj["durationSeconds"]),
-                        thumbnailUrl = jsonString(obj["thumbnailUrl"]).ifBlank { null },
-                        description = jsonString(obj["description"]).ifBlank { null },
-                        uploadDate = jsonString(obj["uploadDate"]).ifBlank { null },
-                        localFilePath = jsonString(obj["localFilePath"]),
-                        favorite = jsonBoolean(obj["favorite"]),
+                        title = title,
+                        channelName = channelName,
+                        channelId = channelId,
+                        durationSeconds = durationSeconds,
+                        thumbnailUrl = thumbnailUrl,
+                        description = description,
+                        uploadDate = uploadDate,
+                        localFilePath = "", // Clear absolute path on pull
+                        favorite = favorite,
                         addedAt = jsonLong(obj["addedAt"], System.currentTimeMillis()),
-                        syncVersion = jsonLong(obj["syncVersion"])
+                        syncVersion = syncVersion
+                    ))
+                } else {
+                    videoDao.update(existing.copy(
+                        title = title,
+                        channelName = channelName,
+                        channelId = channelId,
+                        durationSeconds = durationSeconds,
+                        thumbnailUrl = thumbnailUrl,
+                        description = description,
+                        uploadDate = uploadDate,
+                        favorite = favorite,
+                        syncVersion = syncVersion
                     ))
                 }
             }
@@ -375,8 +403,10 @@ class SyncManager @Inject constructor(
                 val downloadId = jsonLong(obj["id"], 0L)
                 val videoId = jsonString(obj["videoId"])
                 if (videoId.isBlank()) return
+                val existing = downloadDao.getDownloadById(downloadId)
+                    ?: downloadDao.getDownload(videoId, jsonString(obj["format"]), jsonString(obj["quality"]))
                 val entity = DownloadEntity(
-                    id = downloadId,
+                    id = existing?.id ?: downloadId,
                     videoId = videoId,
                     url = jsonString(obj["url"]),
                     videoUrl = jsonString(obj["videoUrl"]).ifBlank { null },
@@ -384,7 +414,7 @@ class SyncManager @Inject constructor(
                     quality = jsonString(obj["quality"]),
                     title = jsonString(obj["title"]),
                     thumbnailUrl = jsonString(obj["thumbnailUrl"]).ifBlank { null },
-                    filePath = jsonString(obj["filePath"]),
+                    filePath = existing?.filePath ?: "", // Clear/ignore absolute path on pull (preserve if exists locally)
                     fileSizeBytes = jsonLong(obj["fileSizeBytes"]),
                     downloadedAt = jsonLong(obj["downloadedAt"], System.currentTimeMillis()),
                     lastPlayedAt = jsonLong(obj["lastPlayedAt"]).let { if (it == 0L) null else it },
@@ -395,8 +425,10 @@ class SyncManager @Inject constructor(
                     updatedAt = jsonLong(obj["updatedAt"], System.currentTimeMillis()),
                     syncVersion = jsonLong(obj["syncVersion"])
                 )
-                try { downloadDao.insert(entity) } catch (_: Exception) {
-                    downloadDao.update(entity.copy(updatedAt = entity.updatedAt))
+                if (existing == null) {
+                    downloadDao.insert(entity)
+                } else {
+                    downloadDao.update(entity)
                 }
             }
             "playback_history" -> {
