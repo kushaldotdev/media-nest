@@ -1,4 +1,4 @@
-````markdown
+
 # MediaNest — Personal Offline Media Library
 ## Android-First Offline YouTube Media Manager
 
@@ -1043,4 +1043,3 @@ The product should feel like:
 
 NOT:
 # a public streaming platform.
-````
