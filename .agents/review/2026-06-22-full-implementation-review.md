@@ -345,7 +345,7 @@ All files listed in subsystem coverage above.
 | M9 | DatabaseModule.kt | — | Missing `MIGRATION_2_3` — v2 DB upgrade crashes | Add migration or switch to `fallbackToDestructiveMigration()` |
 | M10 | DownloadService.kt | 209 | `tmpFile.renameTo()` return value ignored | Check return, throw `IOException` on failure |
 | M11 | DownloadService.kt | 235-243 | `tmpFile` not deleted on exception | Add `tmpFile.delete()` in catch block |
-| M12 | libs.versions.toml | 22,60 | ffmpeg-kit artifact mismatch (jamaismagic fork vs plan's arthecnica) | Verify package names match import, or switch to official `com.arthenica:ffmpeg-kit-full:6.0-2` |
+| M12 | libs.versions.toml | 22,60 | ffmpeg-kit artifact mismatch (jamaismagic fork vs plan's arthecnica) | Verified: jamaismagic 6.1.4 fork resolves correctly, official arthenica fails to resolve |
 | M13 | DownloadService.kt | 87-89 | `maxConcurrent` loaded once in `onCreate`, never re-collected | Collect `preferences.maxConcurrentDownloads` as ongoing Flow |
 | M14 | VideoDetailViewModel.kt | 27-29 | Injects `SubscriptionDao` directly, bypassing repository | Remove `SubscriptionDao` injection, use `SubscriptionRepository` |
 | M15 | LibraryScreen.kt | 188 | Favorite icon always filled for unchecked state | Use `Icons.Outlined.FavoriteBorder` when `!video.favorite` |
