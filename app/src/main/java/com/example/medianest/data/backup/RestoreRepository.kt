@@ -1,6 +1,8 @@
 package com.example.medianest.data.backup
 
 import android.content.Context
+import androidx.room.withTransaction
+import com.example.medianest.data.local.AppDatabase
 import com.example.medianest.data.local.dao.DownloadDao
 import com.example.medianest.data.local.dao.FolderDao
 import com.example.medianest.data.local.dao.HistoryDao
@@ -32,6 +34,7 @@ import javax.inject.Singleton
 class RestoreRepository @Inject constructor(
     @ApplicationContext private val context: Context,
     private val json: Json,
+    private val database: AppDatabase,
     private val videoDao: VideoDao,
     private val downloadDao: DownloadDao,
     private val historyDao: HistoryDao,
@@ -79,38 +82,40 @@ class RestoreRepository @Inject constructor(
                 val data = json.decodeFromString<BackupData>(databaseJson)
                 progress(0.3f)
 
-                for (video in data.videos) {
-                    videoDao.insert(video.toEntity())
-                }
-                progress(0.4f)
+                database.withTransaction {
+                    for (video in data.videos) {
+                        videoDao.insert(video.toEntity())
+                    }
+                    progress(0.4f)
 
-                for (download in data.downloads) {
-                    downloadDao.insert(download.toEntity())
-                }
-                progress(0.5f)
+                    for (download in data.downloads) {
+                        downloadDao.insert(download.toEntity())
+                    }
+                    progress(0.5f)
 
-                for (hist in data.history) {
-                    historyDao.upsert(hist.toEntity())
-                }
-                progress(0.55f)
+                    for (hist in data.history) {
+                        historyDao.upsert(hist.toEntity())
+                    }
+                    progress(0.55f)
 
-                for (folder in data.folders) {
-                    folderDao.insert(folder.toEntity())
-                }
-                progress(0.6f)
+                    for (folder in data.folders) {
+                        folderDao.insert(folder.toEntity())
+                    }
+                    progress(0.6f)
 
-                for (join in data.videoFolderJoins) {
-                    videoFolderDao.addVideoToFolder(join.toEntity())
-                }
-                progress(0.65f)
+                    for (join in data.videoFolderJoins) {
+                        videoFolderDao.addVideoToFolder(join.toEntity())
+                    }
+                    progress(0.65f)
 
-                for (playlist in data.playlists) {
-                    playlistDao.insert(playlist.toEntity())
-                }
-                progress(0.7f)
+                    for (playlist in data.playlists) {
+                        playlistDao.insert(playlist.toEntity())
+                    }
+                    progress(0.7f)
 
-                for (sub in data.subscriptions) {
-                    subscriptionDao.insert(sub.toEntity())
+                    for (sub in data.subscriptions) {
+                        subscriptionDao.insert(sub.toEntity())
+                    }
                 }
                 progress(0.75f)
             }
