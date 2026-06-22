@@ -89,6 +89,9 @@ dependencies {
     implementation(libs.androidx.media3.ui)
     implementation(libs.androidx.media3.session)
 
+    // Media3 / HLS
+    implementation(libs.androidx.media3.exoplayer.hls)
+
     // NewPipeExtractor
     implementation(libs.com.github.teamnewpipe.newpipeextractor)
 

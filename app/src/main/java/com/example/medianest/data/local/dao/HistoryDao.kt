@@ -1,8 +1,8 @@
 package com.example.medianest.data.local.dao
 
 import androidx.room.Dao
-import androidx.room.Insert
 import androidx.room.Query
+import androidx.room.Upsert
 import com.example.medianest.data.local.entity.HistoryEntity
 import kotlinx.coroutines.flow.Flow
 
@@ -14,8 +14,8 @@ interface HistoryDao {
     @Query("SELECT * FROM playback_history WHERE videoId = :videoId ORDER BY playedAt DESC LIMIT 1")
     suspend fun getLatestPlayback(videoId: String): HistoryEntity?
 
-    @Insert
-    suspend fun insert(history: HistoryEntity)
+    @Upsert
+    suspend fun upsert(history: HistoryEntity)
 
     @Query("DELETE FROM playback_history WHERE playedAt < :beforeTimestamp")
     suspend fun deleteOldEntries(beforeTimestamp: Long)

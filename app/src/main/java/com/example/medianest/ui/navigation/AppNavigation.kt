@@ -11,6 +11,7 @@ import androidx.navigation.navArgument
 import com.example.medianest.ui.screens.DownloadsScreen
 import com.example.medianest.ui.screens.HomeScreen
 import com.example.medianest.ui.screens.LibraryScreen
+import com.example.medianest.ui.screens.PlayerScreen
 import com.example.medianest.ui.screens.SettingsScreen
 import com.example.medianest.ui.screens.VideoDetailScreen
 import com.example.medianest.ui.viewmodel.HomeViewModel
@@ -22,6 +23,21 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
         startDestination = BottomNavItem.Home.route,
         modifier = modifier
     ) {
+        composable(
+            route = "player/{videoId}?streamIndex={streamIndex}",
+            arguments = listOf(
+                navArgument("videoId") { type = NavType.StringType },
+                navArgument("streamIndex") { type = NavType.IntType; defaultValue = 0 }
+            )
+        ) { backStackEntry ->
+            val videoId = backStackEntry.arguments?.getString("videoId") ?: return@composable
+            val streamIndex = backStackEntry.arguments?.getInt("streamIndex") ?: 0
+            PlayerScreen(
+                videoId = videoId,
+                streamIndex = streamIndex,
+                onBack = { navController.popBackStack() }
+            )
+        }
         composable(BottomNavItem.Home.route) {
             HomeScreen(
                 onVideoSelected = { videoId ->
@@ -38,7 +54,10 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
             if (videoInfo != null) {
                 VideoDetailScreen(
                     videoInfo = videoInfo,
-                    onPlay = { /* Phase 3 — playback */ },
+                    onPlay = { stream ->
+                        val streamIndex = videoInfo.streamSources.indexOf(stream)
+                        navController.navigate("player/$videoId?streamIndex=$streamIndex")
+                    },
                     onBack = { navController.popBackStack() }
                 )
             } else {

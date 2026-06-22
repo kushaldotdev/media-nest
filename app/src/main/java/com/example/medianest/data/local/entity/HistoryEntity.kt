@@ -18,8 +18,7 @@ import androidx.room.PrimaryKey
     indices = [Index("videoId")]
 )
 data class HistoryEntity(
-    @PrimaryKey(autoGenerate = true) val id: Long = 0,
-    val videoId: String,
+    @PrimaryKey val videoId: String,
     val positionMillis: Long = 0,
     val playedAt: Long = System.currentTimeMillis()
 )

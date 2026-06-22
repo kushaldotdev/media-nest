@@ -25,7 +25,8 @@ object DatabaseModule {
             context,
             AppDatabase::class.java,
             "media_nest.db"
-        ).build()
+        ).fallbackToDestructiveMigration(false)
+            .build()
     }
 
     @Provides

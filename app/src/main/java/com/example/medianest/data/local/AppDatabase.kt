@@ -18,7 +18,7 @@ import com.example.medianest.data.local.entity.PlaylistEntity
         HistoryEntity::class,
         PlaylistEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
