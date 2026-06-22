@@ -23,7 +23,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -252,26 +252,38 @@ private fun FolderContent(
                     Text("Folder is empty", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             } else {
-                Column(modifier = Modifier.weight(1f)) {
+                LazyColumn(modifier = Modifier.weight(1f)) {
                     if (childFolders.isNotEmpty()) {
-                        Text("Subfolders", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(vertical = 4.dp))
-                        LazyColumn(modifier = Modifier.weight(1f, fill = false)) {
-                            items(childFolders, key = { it.id }) { folder ->
-                                FolderRow(folder = folder, onClick = { onFolderClick(folder) }, onDelete = { onDeleteFolder(folder) })
-                            }
+                        item {
+                            Text("Subfolders", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(vertical = 4.dp))
                         }
-                        Spacer(modifier = Modifier.height(8.dp))
+                        items(childFolders, key = { "subfolder_${it.id}" }) { folder ->
+                            FolderRow(folder = folder, onClick = { onFolderClick(folder) }, onDelete = { onDeleteFolder(folder) })
+                        }
+                        item {
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
                     }
                     if (folderVideos.isNotEmpty()) {
-                        Text("Videos", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(vertical = 4.dp))
-                        LazyVerticalGrid(
-                            columns = GridCells.Adaptive(160.dp),
-                            modifier = Modifier.weight(1f),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            items(folderVideos, key = { it.id }) { video ->
-                                VideoCard(video = video, onClick = { onVideoClick(video.id) }, onFavoriteToggle = { onFavoriteToggle(video) })
+                        item {
+                            Text("Videos", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(vertical = 4.dp))
+                        }
+                        val columns = 2
+                        val chunkedVideos = folderVideos.chunked(columns)
+                        items(chunkedVideos) { rowVideos ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                for (video in rowVideos) {
+                                    Box(modifier = Modifier.weight(1f)) {
+                                        VideoCard(video = video, onClick = { onVideoClick(video.id) }, onFavoriteToggle = { onFavoriteToggle(video) })
+                                    }
+                                }
+                                val emptySlots = columns - rowVideos.size
+                                for (i in 0 until emptySlots) {
+                                    Spacer(modifier = Modifier.weight(1f))
+                                }
                             }
                         }
                     }
@@ -323,7 +335,7 @@ private fun FolderRow(folder: FolderEntity, onClick: () -> Unit, onDelete: () ->
             Spacer(Modifier.width(8.dp))
             Text(folder.name, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
             IconButton(onClick = onDelete) {
-                Icon(Icons.Default.FolderOpen, contentDescription = "Delete folder")
+                Icon(Icons.Default.Delete, contentDescription = "Delete folder")
             }
         }
     }

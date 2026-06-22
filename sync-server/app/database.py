@@ -40,5 +40,10 @@ def init_db():
             ON changes(device_id, version);
         CREATE INDEX IF NOT EXISTS idx_changes_table_row
             ON changes(table_name, row_id);
+
+        CREATE TRIGGER IF NOT EXISTS trg_changes_version AFTER INSERT ON changes
+        BEGIN
+            UPDATE changes SET version = new.id WHERE id = new.id;
+        END;
     """)
     conn.commit()

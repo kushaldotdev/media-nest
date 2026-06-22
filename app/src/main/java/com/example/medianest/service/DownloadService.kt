@@ -52,7 +52,11 @@ class DownloadService : Service() {
                 action = ACTION_PAUSE
                 putExtra(EXTRA_DOWNLOAD_ID, downloadId)
             }
-            context.startForegroundService(intent)
+            try {
+                context.startForegroundService(intent)
+            } catch (e: Exception) {
+                android.util.Log.e("DownloadService", "Failed to start pause command", e)
+            }
         }
 
         fun resume(context: Context, downloadId: Long) {
@@ -60,7 +64,11 @@ class DownloadService : Service() {
                 action = ACTION_RESUME
                 putExtra(EXTRA_DOWNLOAD_ID, downloadId)
             }
-            context.startForegroundService(intent)
+            try {
+                context.startForegroundService(intent)
+            } catch (e: Exception) {
+                android.util.Log.e("DownloadService", "Failed to start resume command", e)
+            }
         }
 
         fun cancel(context: Context, downloadId: Long) {
@@ -68,7 +76,11 @@ class DownloadService : Service() {
                 action = ACTION_CANCEL
                 putExtra(EXTRA_DOWNLOAD_ID, downloadId)
             }
-            context.startForegroundService(intent)
+            try {
+                context.startForegroundService(intent)
+            } catch (e: Exception) {
+                android.util.Log.e("DownloadService", "Failed to start cancel command", e)
+            }
         }
     }
 
@@ -80,6 +92,7 @@ class DownloadService : Service() {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val activeJobs = ConcurrentHashMap<Long, Job>()
+    private val pauseFlags = ConcurrentHashMap<Long, Boolean>()
 
     override fun onCreate() {
         super.onCreate()
@@ -87,7 +100,16 @@ class DownloadService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        startForeground(NOTIFICATION_ID, buildNotification(0, 0))
+        try {
+            startForeground(NOTIFICATION_ID, buildNotification(0, 0))
+        } catch (e: Exception) {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S
+                && e.javaClass.name == "android.app.ForegroundServiceStartNotAllowedException") {
+                stopSelf()
+                return START_NOT_STICKY
+            }
+            throw e
+        }
         when (intent?.action) {
             ACTION_PAUSE -> {
                 val id = intent.getLongExtra(EXTRA_DOWNLOAD_ID, -1)
@@ -112,15 +134,24 @@ class DownloadService : Service() {
             val queue = repository.getDownloadsByStatus(DownloadStatus.QUEUED).first()
             val active = repository.getActiveDownloadCount()
             val slots = (maxConcurrent - active).coerceAtLeast(0)
+
+            if (queue.isEmpty() && active == 0 && activeJobs.isEmpty()) {
+                stopForeground(STOP_FOREGROUND_REMOVE)
+                stopSelf()
+                return@launch
+            }
             queue.take(slots).forEach { enqueueDownload(it) }
         }
     }
 
     private fun enqueueDownload(download: DownloadEntity) {
+        pauseFlags.remove(download.id)
         val job = serviceScope.launch {
             try {
                 downloadFile(download)
             } finally {
+                activeJobs.remove(download.id)
+                pauseFlags.remove(download.id)
                 processQueue()
             }
         }
@@ -135,20 +166,31 @@ class DownloadService : Service() {
         val outputDir = File(filesDir, "MediaNest/$dir")
         outputDir.mkdirs()
 
+        val tmpFile = File(outputDir, "${download.videoId}_${download.quality}.tmp")
         var currentUrl = download.url
         var retries = 0
         val maxRetries = 3
 
         while (retries <= maxRetries) {
-            var tmpFile: File? = null
-
             try {
-                val request = Request.Builder().url(currentUrl).build()
+                val existingBytes = if (tmpFile.exists()) tmpFile.length() else 0L
+
+                val requestBuilder = Request.Builder().url(currentUrl)
+                if (existingBytes > 0) {
+                    requestBuilder.header("Range", "bytes=$existingBytes-")
+                }
+                val request = requestBuilder.build()
+
                 val response = withContext(Dispatchers.IO) {
                     okHttpClient.newCall(request).execute()
                 }
 
                 if (!response.isSuccessful) {
+                    if (response.code == 416) {
+                        tmpFile.delete()
+                        retries++
+                        continue
+                    }
                     if ((response.code == 403 || response.code == 410) && retries < maxRetries) {
                         retries++
                         repository.update(download.copy(retryCount = retries))
@@ -165,23 +207,31 @@ class DownloadService : Service() {
                     return
                 }
 
-                val contentLength = response.body?.contentLength() ?: -1L
+                val isRange = response.code == 206
+                val actualExistingBytes = if (isRange) existingBytes else 0L
+                if (!isRange && tmpFile.exists()) {
+                    tmpFile.delete()
+                }
+
+                val responseLength = response.body?.contentLength() ?: -1L
+                val totalLength = if (responseLength > 0) actualExistingBytes + responseLength else -1L
+
                 val mimeType = response.body?.contentType()?.toString() ?: "video/mp4"
                 val ext = mimeType.split("/").lastOrNull()?.split(";")?.first() ?: "mp4"
                 val fileName = "${download.videoId}_${download.quality}.$ext"
-                tmpFile = File(outputDir, "${fileName}.tmp")
                 val outputFile = File(outputDir, fileName)
 
                 response.body?.byteStream()?.use { input ->
-                    FileOutputStream(tmpFile).use { output ->
+                    FileOutputStream(tmpFile, isRange).use { output ->
                         val buffer = ByteArray(8192)
-                        var bytesRead: Long = 0
+                        var bytesRead: Long = actualExistingBytes
                         var lastProgressUpdate = 0L
 
                         while (true) {
                             if (isPaused(download.id)) {
                                 repository.updateStatus(download.id, DownloadStatus.PAUSED,
-                                    if (contentLength > 0) bytesRead.toFloat() / contentLength else 0f)
+                                    if (totalLength > 0) bytesRead.toFloat() / totalLength else 0f)
+                                activeJobs.remove(download.id)
                                 return
                             }
                             if (isCancelled(download.id)) {
@@ -195,20 +245,24 @@ class DownloadService : Service() {
                             output.write(buffer, 0, read)
                             bytesRead += read
 
-                            if (contentLength > 0 && bytesRead - lastProgressUpdate > 65536) {
-                                val progress = bytesRead.toFloat() / contentLength
+                            if (totalLength > 0 && bytesRead - lastProgressUpdate > 65536) {
+                                val progress = bytesRead.toFloat() / totalLength
                                 repository.updateStatus(download.id, DownloadStatus.DOWNLOADING, progress)
-                                updateNotification(download.id, bytesRead, contentLength)
+                                updateNotification(download.id, bytesRead, totalLength)
                                 lastProgressUpdate = bytesRead
                             }
                         }
 
                         if (!tmpFile.renameTo(outputFile)) {
-                            throw IOException("Failed to rename temp file to $outputFile")
+                            try {
+                                tmpFile.copyTo(outputFile, overwrite = true)
+                                tmpFile.delete()
+                            } catch (e: Exception) {
+                                throw IOException("Failed to rename temp file to $outputFile: ${e.message}")
+                            }
                         }
-                        repository.markCompleted(download.id, bytesRead)
-                        repository.update(download.copy(filePath = outputFile.absolutePath, fileSizeBytes = bytesRead))
-                        updateNotification(download.id, bytesRead, contentLength)
+                        repository.markCompleted(download.id, bytesRead, outputFile.absolutePath)
+                        updateNotification(download.id, bytesRead, totalLength)
 
                         // Persist video metadata for offline playback
                         val existing = videoDao.getVideoById(download.videoId)
@@ -232,114 +286,113 @@ class DownloadService : Service() {
             } catch (e: CancellationException) {
                 return
             } catch (e: Exception) {
-                tmpFile?.delete()
                 if (retries < maxRetries) {
                     retries++
                     repository.update(download.copy(retryCount = retries))
                     continue
                 }
+                tmpFile.delete()
                 repository.markFailed(download.id, e.message ?: "Download failed", retries)
                 return
             }
         }
     }
-
-    private suspend fun isPaused(id: Long): Boolean {
-        val entity = repository.getDownloadById(id) ?: return false
-        return entity.status == DownloadStatus.PAUSED
-    }
-
-    private fun isCancelled(id: Long): Boolean {
-        return !activeJobs.containsKey(id)
-    }
-
-    private fun pauseDownload(id: Long) {
-        activeJobs[id]?.cancel()
-        activeJobs.remove(id)
-        serviceScope.launch {
-            // Do not reset progress to 0, download loop saves it
-            val download = repository.getDownloadById(id) ?: return@launch
-            repository.updateStatus(id, DownloadStatus.PAUSED, download.progress)
-            processQueue()
-        }
-    }
-
-    private fun resumeDownload(id: Long) {
-        serviceScope.launch {
-            val download = repository.getDownloadById(id) ?: return@launch
-            if (download.status == DownloadStatus.PAUSED) {
-                repository.updateStatus(id, DownloadStatus.QUEUED, download.progress)
-                processQueue()
-            }
-        }
-    }
-
-    private fun cancelDownload(id: Long) {
-        activeJobs[id]?.cancel()
-        activeJobs.remove(id)
-        serviceScope.launch {
-            val download = repository.getDownloadById(id) ?: return@launch
-            if (download.filePath.isNotEmpty()) {
-                File(download.filePath).delete()
-            }
-            repository.delete(download)
-        }
-    }
-
-    private fun createNotificationChannel() {
-        val channel = NotificationChannelCompat.Builder(CHANNEL_ID, NotificationManagerCompat.IMPORTANCE_LOW)
-            .setName("Downloads")
-            .build()
-        NotificationManagerCompat.from(this).createNotificationChannel(channel)
-    }
-
-    private fun buildNotification(progress: Int, max: Int): Notification {
-        return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Downloading...")
-            .setContentText("$progress / $max files")
-            .setSmallIcon(android.R.drawable.stat_sys_download)
-            .setOngoing(true)
-            .setProgress(max, progress, false)
-            .setContentIntent(
-                PendingIntent.getActivity(
-                    this, 0,
-                    Intent(this, MainActivity::class.java).apply {
-                        flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
-                    },
-                    PendingIntent.FLAG_IMMUTABLE
-                )
-            )
-            .build()
-    }
-
-    private fun updateNotification(downloadId: Long, bytesDownloaded: Long = 0, totalBytes: Long = 0) {
-        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Downloading...")
-            .setSmallIcon(android.R.drawable.stat_sys_download)
-            .setOngoing(true)
-            .apply {
-                if (totalBytes > 0) {
-                    setProgress(totalBytes.toInt(), bytesDownloaded.toInt(), false)
-                    setContentText("${bytesDownloaded / 1024}KB / ${totalBytes / 1024}KB")
-                } else {
-                    setProgress(0, 0, true)
-                }
-            }
-            .setContentIntent(
-                PendingIntent.getActivity(
-                    this, 0,
-                    Intent(this, MainActivity::class.java),
-                    PendingIntent.FLAG_IMMUTABLE
-                )
-            )
-            .build()
-        NotificationManagerCompat.from(this).notify(NOTIFICATION_ID, notification)
-    }
-
-    override fun onBind(intent: Intent?): IBinder? = null
-
-    override fun onDestroy() {
-        serviceScope.cancel()
-        super.onDestroy()
-    }
-}
+ 
+     private fun isPaused(id: Long): Boolean = pauseFlags[id] == true
+ 
+     private fun isCancelled(id: Long): Boolean {
+         return !activeJobs.containsKey(id)
+     }
+ 
+     private fun pauseDownload(id: Long) {
+         pauseFlags[id] = true
+         serviceScope.launch {
+             val download = repository.getDownloadById(id) ?: return@launch
+             repository.updateStatus(id, DownloadStatus.PAUSED, download.progress)
+             processQueue()
+         }
+     }
+ 
+     private fun resumeDownload(id: Long) {
+         pauseFlags.remove(id)
+         serviceScope.launch {
+             val download = repository.getDownloadById(id) ?: return@launch
+             if (download.status == DownloadStatus.PAUSED) {
+                 repository.updateStatus(id, DownloadStatus.QUEUED, download.progress)
+                 processQueue()
+             }
+         }
+     }
+ 
+     private fun cancelDownload(id: Long) {
+         pauseFlags.remove(id)
+         activeJobs[id]?.cancel()
+         activeJobs.remove(id)
+         serviceScope.launch {
+             val download = repository.getDownloadById(id) ?: return@launch
+             if (download.filePath.isNotEmpty()) {
+                 File(download.filePath).delete()
+             }
+             repository.delete(download)
+             processQueue()
+         }
+     }
+ 
+     private fun createNotificationChannel() {
+         val channel = NotificationChannelCompat.Builder(CHANNEL_ID, NotificationManagerCompat.IMPORTANCE_LOW)
+             .setName("Downloads")
+             .build()
+         NotificationManagerCompat.from(this).createNotificationChannel(channel)
+     }
+ 
+     private fun buildNotification(progress: Int, max: Int): Notification {
+         return NotificationCompat.Builder(this, CHANNEL_ID)
+             .setContentTitle("Downloading...")
+             .setContentText("$progress / $max files")
+             .setSmallIcon(android.R.drawable.stat_sys_download)
+             .setOngoing(true)
+             .setProgress(max, progress, false)
+             .setContentIntent(
+                 PendingIntent.getActivity(
+                     this, 0,
+                     Intent(this, MainActivity::class.java).apply {
+                         flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
+                     },
+                     PendingIntent.FLAG_IMMUTABLE
+                 )
+             )
+             .build()
+     }
+ 
+     private fun updateNotification(downloadId: Long, bytesDownloaded: Long = 0, totalBytes: Long = 0) {
+         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+             .setContentTitle("Downloading...")
+             .setSmallIcon(android.R.drawable.stat_sys_download)
+             .setOngoing(true)
+             .apply {
+                 if (totalBytes > 0) {
+                     val pct = ((bytesDownloaded * 100) / totalBytes).toInt()
+                     setProgress(100, pct, false)
+                     setContentText("${bytesDownloaded / 1024}KB / ${totalBytes / 1024}KB")
+                 } else {
+                     setProgress(0, 0, true)
+                 }
+             }
+             .setContentIntent(
+                 PendingIntent.getActivity(
+                     this, 0,
+                     Intent(this, MainActivity::class.java),
+                     PendingIntent.FLAG_IMMUTABLE
+                 )
+             )
+             .build()
+         NotificationManagerCompat.from(this).notify(NOTIFICATION_ID, notification)
+     }
+ 
+     override fun onBind(intent: Intent?): IBinder? = null
+ 
+     override fun onDestroy() {
+         serviceScope.cancel()
+         super.onDestroy()
+     }
+ }

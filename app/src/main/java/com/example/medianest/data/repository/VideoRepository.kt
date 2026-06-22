@@ -36,4 +36,6 @@ class VideoRepository @Inject constructor(
 
     suspend fun setFavorite(videoId: String, favorite: Boolean) =
         videoDao.setFavorite(videoId, favorite)
+
+    suspend fun insertVideo(video: VideoEntity) = videoDao.insert(video)
 }

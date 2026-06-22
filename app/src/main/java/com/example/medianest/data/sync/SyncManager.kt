@@ -162,11 +162,9 @@ class SyncManager @Inject constructor(
     private suspend fun collectLocalChanges(): List<SyncPushItem> {
         val since = devicePreferences.lastSyncAt.first()
         val changes = mutableListOf<SyncPushItem>()
-        val useIncremental = since > 0
 
-        videoDao.getAllVideos().first().forEach { v ->
-            if (!useIncremental || v.addedAt > since) {
-                changes.add(SyncPushItem("videos", v.id, "upsert", mapOf(
+        videoDao.getVideosSince(since).forEach { v ->
+            changes.add(SyncPushItem("videos", v.id, "upsert", mapOf(
                 "id" to JsonPrimitive(v.id), "title" to JsonPrimitive(v.title),
                 "channelName" to JsonPrimitive(v.channelName),
                 "channelId" to JsonPrimitive(v.channelId ?: ""),
@@ -174,23 +172,21 @@ class SyncManager @Inject constructor(
                 "thumbnailUrl" to JsonPrimitive(v.thumbnailUrl ?: ""),
                 "description" to JsonPrimitive(v.description ?: ""),
                 "uploadDate" to JsonPrimitive(v.uploadDate ?: ""),
-                "localFilePath" to JsonPrimitive(""), // Clear absolute path on push
+                "localFilePath" to JsonPrimitive(""),
                 "favorite" to JsonPrimitive(v.favorite),
                 "addedAt" to JsonPrimitive(v.addedAt),
                 "updatedAt" to JsonPrimitive(v.addedAt),
                 "createdAt" to JsonPrimitive(v.addedAt),
                 "syncVersion" to JsonPrimitive(v.syncVersion)
             )))
-            }
         }
-        downloadDao.getAllDownloadsOnce().forEach { d ->
-            if (!useIncremental || d.updatedAt > since) {
-                changes.add(SyncPushItem("downloads", d.id.toString(), "upsert", mapOf(
+        downloadDao.getDownloadsSince(since).forEach { d ->
+            changes.add(SyncPushItem("downloads", d.id.toString(), "upsert", mapOf(
                 "id" to JsonPrimitive(d.id), "videoId" to JsonPrimitive(d.videoId),
                 "url" to JsonPrimitive(d.url), "videoUrl" to JsonPrimitive(d.videoUrl ?: ""), "format" to JsonPrimitive(d.format),
                 "quality" to JsonPrimitive(d.quality), "title" to JsonPrimitive(d.title),
                 "thumbnailUrl" to JsonPrimitive(d.thumbnailUrl ?: ""),
-                "filePath" to JsonPrimitive(""), // Clear absolute path on push
+                "filePath" to JsonPrimitive(""),
                 "fileSizeBytes" to JsonPrimitive(d.fileSizeBytes),
                 "downloadedAt" to JsonPrimitive(d.downloadedAt),
                 "lastPlayedAt" to JsonPrimitive(d.lastPlayedAt ?: 0L),
@@ -199,14 +195,12 @@ class SyncManager @Inject constructor(
                 "errorMessage" to JsonPrimitive(d.errorMessage ?: ""),
                 "retryCount" to JsonPrimitive(d.retryCount),
                 "updatedAt" to JsonPrimitive(d.updatedAt),
-                "createdAt" to JsonPrimitive(d.downloadedAt), // Missing fields needed by other tables? 
+                "createdAt" to JsonPrimitive(d.downloadedAt),
                 "syncVersion" to JsonPrimitive(d.syncVersion)
             )))
-            }
         }
-        historyDao.getAllHistoryOnce().forEach { h ->
-            if (!useIncremental || h.playedAt > since) {
-                changes.add(SyncPushItem("playback_history", h.videoId, "upsert", mapOf(
+        historyDao.getHistorySince(since).forEach { h ->
+            changes.add(SyncPushItem("playback_history", h.videoId, "upsert", mapOf(
                 "videoId" to JsonPrimitive(h.videoId),
                 "positionMillis" to JsonPrimitive(h.positionMillis),
                 "playedAt" to JsonPrimitive(h.playedAt),
@@ -214,22 +208,18 @@ class SyncManager @Inject constructor(
                 "updatedAt" to JsonPrimitive(h.playedAt),
                 "syncVersion" to JsonPrimitive(h.syncVersion)
             )))
-            }
         }
-        folderDao.getAllFolders().first().forEach { f ->
-            if (!useIncremental || f.updatedAt > since) {
-                changes.add(SyncPushItem("folders", f.id.toString(), "upsert", mapOf(
+        folderDao.getFoldersSince(since).forEach { f ->
+            changes.add(SyncPushItem("folders", f.id.toString(), "upsert", mapOf(
                 "id" to JsonPrimitive(f.id), "name" to JsonPrimitive(f.name),
                 "parentId" to JsonPrimitive(f.parentId ?: -1L),
                 "createdAt" to JsonPrimitive(f.createdAt),
                 "updatedAt" to JsonPrimitive(f.updatedAt),
                 "syncVersion" to JsonPrimitive(f.syncVersion)
             )))
-            }
         }
-        videoFolderDao.getAllJoins().forEach { j ->
-            if (!useIncremental || j.addedAt > since) {
-                changes.add(SyncPushItem("video_folder_join", "${j.videoId}_${j.folderId}", "upsert", mapOf(
+        videoFolderDao.getJoinsSince(since).forEach { j ->
+            changes.add(SyncPushItem("video_folder_join", "${j.videoId}_${j.folderId}", "upsert", mapOf(
                 "videoId" to JsonPrimitive(j.videoId),
                 "folderId" to JsonPrimitive(j.folderId),
                 "addedAt" to JsonPrimitive(j.addedAt),
@@ -237,11 +227,9 @@ class SyncManager @Inject constructor(
                 "updatedAt" to JsonPrimitive(j.addedAt),
                 "syncVersion" to JsonPrimitive(j.syncVersion)
             )))
-            }
         }
-        playlistDao.getAllPlaylistsOnce().forEach { p ->
-            if (!useIncremental || p.updatedAt > since) {
-                changes.add(SyncPushItem("playlists", p.id.toString(), "upsert", mapOf(
+        playlistDao.getPlaylistsSince(since).forEach { p ->
+            changes.add(SyncPushItem("playlists", p.id.toString(), "upsert", mapOf(
                 "id" to JsonPrimitive(p.id), "name" to JsonPrimitive(p.name),
                 "description" to JsonPrimitive(p.description ?: ""),
                 "thumbnailUrl" to JsonPrimitive(p.thumbnailUrl ?: ""),
@@ -252,11 +240,9 @@ class SyncManager @Inject constructor(
                 "updatedAt" to JsonPrimitive(p.updatedAt),
                 "syncVersion" to JsonPrimitive(p.syncVersion)
             )))
-            }
         }
-        subscriptionDao.getAllSubscriptionsOnce().forEach { s ->
-            if (!useIncremental || s.updatedAt > since) {
-                changes.add(SyncPushItem("subscriptions", s.sourceId, "upsert", mapOf(
+        subscriptionDao.getSubscriptionsSince(since).forEach { s ->
+            changes.add(SyncPushItem("subscriptions", s.sourceId, "upsert", mapOf(
                 "id" to JsonPrimitive(s.id), "sourceId" to JsonPrimitive(s.sourceId),
                 "sourceType" to JsonPrimitive(s.sourceType),
                 "name" to JsonPrimitive(s.name),
@@ -269,7 +255,6 @@ class SyncManager @Inject constructor(
                 "updatedAt" to JsonPrimitive(s.updatedAt),
                 "syncVersion" to JsonPrimitive(s.syncVersion)
             )))
-            }
         }
         return changes
     }

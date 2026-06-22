@@ -3,11 +3,14 @@ import time
 from fastapi import APIRouter, HTTPException, Header
 from ..database import get_connection
 from ..schemas import RegisterRequest, RegisterResponse
+from ..config import MASTER_API_KEY
 
 router = APIRouter()
 
 @router.post("/register", response_model=RegisterResponse)
-def register(req: RegisterRequest):
+def register(req: RegisterRequest, x_master_key: str = Header(...)):
+    if not MASTER_API_KEY or x_master_key != MASTER_API_KEY:
+        raise HTTPException(403, "Invalid master key")
     conn = get_connection()
     device_id = secrets.token_hex(16)
     api_key = secrets.token_hex(32)

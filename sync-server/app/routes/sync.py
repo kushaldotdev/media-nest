@@ -24,6 +24,8 @@ def push(req: SyncPushRequest, x_api_key: str = Header(...)):
         accepted = 0
         for item in req.changes:
             try:
+                # The 'version' column in changes table is set to 0. 
+                # Monotonic sequence versioning actually uses the autoincrement 'id' column.
                 conn.execute(
                     "INSERT INTO changes (device_id, table_name, row_id, operation, payload, version, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
                     (req.device_id, item.table, item.row_id, item.operation, json.dumps(item.payload), 0, now),
@@ -48,6 +50,8 @@ def pull(device_id: str, after_version: int = 0, limit: int = 100, x_api_key: st
     conn = get_connection()
     conn.execute("BEGIN IMMEDIATE")
     try:
+        # Note: 'after_version' is compared against the 'id' column (autoincrementing primary key)
+        # because the 'id' column functions as the global monotonic version tracker.
         cur = conn.execute(
             "SELECT * FROM changes WHERE device_id != ? AND id > ? ORDER BY id ASC LIMIT ?",
             (device_id, after_version, limit + 1),
@@ -59,6 +63,7 @@ def pull(device_id: str, after_version: int = 0, limit: int = 100, x_api_key: st
 
         for item in items:
             item["payload"] = json.loads(item["payload"])
+            # Map the autoincrement 'id' to the version field returned to clients.
             item["version"] = item["id"]
 
         now = int(time.time() * 1000)

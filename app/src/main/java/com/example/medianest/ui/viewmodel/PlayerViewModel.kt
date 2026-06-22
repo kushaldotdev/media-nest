@@ -69,6 +69,12 @@ class PlayerViewModel @Inject constructor(
             if (isPlaying) startPositionTracking() else stopPositionTracking()
         }
         override fun onPlaybackStateChanged(state: Int) {
+            if (state == Player.STATE_READY) {
+                val duration = _player.value?.duration ?: 0L
+                if (duration > 0) {
+                    _uiState.value = _uiState.value.copy(durationMs = duration)
+                }
+            }
             if (state == Player.STATE_ENDED) saveFinalPosition()
         }
         override fun onPlayerError(error: PlaybackException) {
@@ -97,9 +103,10 @@ class PlayerViewModel @Inject constructor(
     }
 
     fun initialize(videoId: String, streamIndex: Int) {
+        if (currentVideoId == videoId && currentStreamIndex == streamIndex) return
         currentVideoId = videoId
         currentStreamIndex = streamIndex
-        val info = lastResultCache[videoId]
+        val info = lastResultCache.get(videoId)
         videoInfo = info
 
         val action = {

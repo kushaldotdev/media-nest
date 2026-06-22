@@ -15,7 +15,6 @@ import com.example.medianest.extraction.YouTubeExtractor
 import com.example.medianest.service.DownloadService
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
-import javax.inject.Inject
 
 @HiltWorker
 class SubscriptionWorker @AssistedInject constructor(

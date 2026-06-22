@@ -43,4 +43,7 @@ interface SubscriptionDao {
 
     @Query("DELETE FROM subscriptions WHERE sourceId = :sourceId")
     suspend fun deleteBySourceId(sourceId: String)
+
+    @Query("SELECT * FROM subscriptions WHERE updatedAt > :since")
+    suspend fun getSubscriptionsSince(since: Long): List<SubscriptionEntity>
 }

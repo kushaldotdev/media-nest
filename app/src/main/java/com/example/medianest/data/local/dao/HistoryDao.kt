@@ -22,4 +22,7 @@ interface HistoryDao {
 
     @Query("DELETE FROM playback_history WHERE playedAt < :beforeTimestamp")
     suspend fun deleteOldEntries(beforeTimestamp: Long)
+
+    @Query("SELECT * FROM playback_history WHERE playedAt > :since")
+    suspend fun getHistorySince(since: Long): List<HistoryEntity>
 }

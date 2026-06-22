@@ -17,6 +17,8 @@ import com.example.medianest.ui.navigation.AppNavigation
 import com.example.medianest.ui.navigation.BottomNavItem
 import com.example.medianest.ui.theme.MediaNestTheme
 
+import com.example.medianest.ui.navigation.NavigationRoutes
+
 @Composable
 fun MainScreen() {
     MediaNestTheme {
@@ -25,7 +27,7 @@ fun MainScreen() {
         val currentDestination = navBackStackEntry?.destination
 
         val showBottomBar = navBackStackEntry?.destination?.route?.let { route ->
-            !route.startsWith("player/")
+            route != NavigationRoutes.PLAYER_ONLINE && route != NavigationRoutes.PLAYER_OFFLINE
         } ?: true
 
         Scaffold(
@@ -35,6 +37,7 @@ fun MainScreen() {
                         listOf(
                             BottomNavItem.Home,
                             BottomNavItem.Downloads,
+                            BottomNavItem.Subscriptions,
                             BottomNavItem.Library,
                             BottomNavItem.Settings
                         ).forEach { item ->

@@ -13,6 +13,7 @@ import com.example.medianest.service.DownloadService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import com.example.medianest.data.local.dao.VideoDao
+import com.example.medianest.data.mapper.toVideoEntity
 import com.example.medianest.data.repository.SubscriptionRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -86,9 +87,15 @@ class VideoDetailViewModel @Inject constructor(
             val existing = downloadRepository.getDownload(videoInfo.videoId, stream.format, stream.quality)
             if (existing != null) return@launch
 
+            val video = videoRepository.getVideoById(videoInfo.videoId)
+            if (video == null) {
+                videoRepository.insertVideo(videoInfo.toVideoEntity())
+            }
+
             val entity = DownloadEntity(
                 videoId = videoInfo.videoId,
                 url = stream.url,
+                videoUrl = "https://www.youtube.com/watch?v=${videoInfo.videoId}",
                 format = stream.format,
                 quality = stream.quality,
                 status = DownloadStatus.QUEUED,

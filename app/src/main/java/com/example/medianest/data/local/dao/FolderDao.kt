@@ -37,4 +37,7 @@ interface FolderDao {
 
     @Query("DELETE FROM folders WHERE id = :folderId")
     suspend fun deleteById(folderId: Long)
+
+    @Query("SELECT * FROM folders WHERE updatedAt > :since")
+    suspend fun getFoldersSince(since: Long): List<FolderEntity>
 }

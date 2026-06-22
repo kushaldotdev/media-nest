@@ -43,4 +43,7 @@ interface VideoDao {
 
     @Query("DELETE FROM videos WHERE id = :videoId")
     suspend fun deleteById(videoId: String)
+
+    @Query("SELECT * FROM videos WHERE addedAt > :since")
+    suspend fun getVideosSince(since: Long): List<VideoEntity>
 }

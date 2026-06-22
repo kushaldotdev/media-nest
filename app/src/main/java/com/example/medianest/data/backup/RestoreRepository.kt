@@ -159,12 +159,22 @@ class RestoreRepository @Inject constructor(
         id = id, title = title, channelName = channelName, channelId = channelId,
         durationSeconds = durationSeconds, thumbnailUrl = thumbnailUrl,
         description = description, uploadDate = uploadDate,
-        localFilePath = localFilePath, favorite = favorite, addedAt = addedAt
+        localFilePath = if (localFilePath.isNotEmpty()) {
+            val filename = File(localFilePath).name
+            val subfolder = if (filename.contains("_audio")) "audio" else "video"
+            File(context.filesDir, "MediaNest/$subfolder/$filename").absolutePath
+        } else "",
+        favorite = favorite, addedAt = addedAt
     )
 
     private fun BackupDownload.toEntity() = DownloadEntity(
         id = id, videoId = videoId, url = url, format = format, quality = quality,
-        title = title, thumbnailUrl = thumbnailUrl, filePath = filePath,
+        title = title, thumbnailUrl = thumbnailUrl,
+        filePath = if (filePath.isNotEmpty()) {
+            val filename = File(filePath).name
+            val subfolder = if (filename.contains("_audio") || format == "audio" || format == "audio_extracted") "audio" else "video"
+            File(context.filesDir, "MediaNest/$subfolder/$filename").absolutePath
+        } else "",
         fileSizeBytes = fileSizeBytes, downloadedAt = downloadedAt,
         lastPlayedAt = lastPlayedAt,
         status = try { DownloadStatus.valueOf(status) } catch (_: Exception) { DownloadStatus.COMPLETED },

@@ -164,7 +164,7 @@ private fun DownloadItem(
                                 Icon(Icons.Default.PlayArrow, contentDescription = "Play")
                             }
                         }
-                        if (download.format.startsWith("video")) {
+                        if (download.format != "audio" && download.format != "audio_extracted") {
                             val isExtracting = uiState.extractingVideoId == download.videoId
                             IconButton(
                                 onClick = { viewModel.extractAudio(download) },

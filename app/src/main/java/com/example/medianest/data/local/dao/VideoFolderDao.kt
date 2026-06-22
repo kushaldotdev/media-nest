@@ -34,4 +34,7 @@ interface VideoFolderDao {
 
     @Query("SELECT * FROM video_folder_join")
     suspend fun getAllJoins(): List<VideoFolderJoin>
+
+    @Query("SELECT * FROM video_folder_join WHERE addedAt > :since")
+    suspend fun getJoinsSince(since: Long): List<VideoFolderJoin>
 }

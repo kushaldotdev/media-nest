@@ -41,7 +41,7 @@ class AudioExtractor @Inject constructor(
         if (ReturnCode.isSuccess(returnCode)) {
             ExtractionResult(outputFile.absolutePath, true)
         } else {
-            val logs = session.allLogsAsString
+            val logs = session.allLogsAsString ?: "ffmpeg extraction failed"
             ExtractionResult("", false, logs.ifEmpty { "ffmpeg extraction failed" })
         }
     }

@@ -29,7 +29,7 @@ class HomeViewModel @Inject constructor(
 ) : ViewModel() {
 
     companion object {
-        val lastResultCache = mutableMapOf<String, ExtractedVideoInfo>()
+        val lastResultCache = android.util.LruCache<String, ExtractedVideoInfo>(50)
     }
 
     private val _uiState = MutableStateFlow<HomeUiState>(HomeUiState.Idle)
@@ -48,11 +48,11 @@ class HomeViewModel @Inject constructor(
                     "youtube.com/playlist" in url || "list=" in url -> {
                         val playlist = repository.extractPlaylist(url)
                         if (playlist.videos.isNotEmpty()) {
-                            _uiState.value = HomeUiState.PlaylistResult(playlist)
-                            return@launch
+                            HomeUiState.PlaylistResult(playlist)
+                        } else {
+                            val video = repository.searchAndSave(url)
+                            HomeUiState.Success(video)
                         }
-                        val video = repository.searchAndSave(url)
-                        HomeUiState.Success(video)
                     }
                     "/channel/" in url || "/c/" in url || "/@" in url -> {
                         val channel = repository.extractChannel(url)
@@ -72,10 +72,10 @@ class HomeViewModel @Inject constructor(
     }
 
     fun cacheResult(video: ExtractedVideoInfo) {
-        lastResultCache[video.videoId] = video
+        lastResultCache.put(video.videoId, video)
     }
 
-    fun getCachedResult(videoId: String): ExtractedVideoInfo? = lastResultCache[videoId]
+    fun getCachedResult(videoId: String): ExtractedVideoInfo? = lastResultCache.get(videoId)
 
     fun toggleFavorite(videoId: String, favorite: Boolean) {
         viewModelScope.launch {

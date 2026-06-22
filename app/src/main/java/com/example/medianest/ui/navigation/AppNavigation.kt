@@ -21,6 +21,13 @@ import com.example.medianest.ui.screens.VideoDetailScreen
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.medianest.ui.viewmodel.HomeViewModel
 
+object NavigationRoutes {
+    const val PLAYER_ONLINE = "player/{videoId}?streamIndex={streamIndex}"
+    const val PLAYER_OFFLINE = "downloads/player/{videoId}"
+    const val VIDEO_DETAIL = "videoDetail/{videoId}"
+}
+
+
 @Composable
 fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifier) {
     NavHost(
@@ -29,7 +36,7 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
         modifier = modifier
     ) {
         composable(
-            route = "player/{videoId}?streamIndex={streamIndex}",
+            route = NavigationRoutes.PLAYER_ONLINE,
             arguments = listOf(
                 navArgument("videoId") { type = NavType.StringType },
                 navArgument("streamIndex") { type = NavType.IntType; defaultValue = 0 }
@@ -55,11 +62,11 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
             )
         }
         composable(
-            route = "videoDetail/{videoId}",
+            route = NavigationRoutes.VIDEO_DETAIL,
             arguments = listOf(navArgument("videoId") { type = NavType.StringType })
         ) { backStackEntry ->
             val videoId = backStackEntry.arguments?.getString("videoId") ?: return@composable
-            val videoInfo = remember { HomeViewModel.lastResultCache[videoId] }
+            val videoInfo = remember { HomeViewModel.lastResultCache.get(videoId) }
             if (videoInfo != null) {
                 val detailViewModel: com.example.medianest.ui.viewmodel.VideoDetailViewModel = hiltViewModel()
                 LaunchedEffect(videoId) { detailViewModel.loadFavorite(videoId) }
@@ -96,7 +103,7 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
             )
         }
         composable(
-            route = "downloads/player/{videoId}",
+            route = NavigationRoutes.PLAYER_OFFLINE,
             arguments = listOf(navArgument("videoId") { type = NavType.StringType })
         ) { backStackEntry ->
             val videoId = backStackEntry.arguments?.getString("videoId") ?: return@composable

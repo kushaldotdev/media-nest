@@ -8,7 +8,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class BackupMetadata(
     @EncodeDefault(EncodeDefault.Mode.NEVER) val appVersion: String = "1.0",
-    @EncodeDefault(EncodeDefault.Mode.NEVER) val schemaVersion: Int = 7,
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val schemaVersion: Int = 8,
     @EncodeDefault(EncodeDefault.Mode.NEVER) val exportedAt: Long = System.currentTimeMillis(),
     @EncodeDefault(EncodeDefault.Mode.NEVER) val videoCount: Int = 0,
     @EncodeDefault(EncodeDefault.Mode.NEVER) val downloadCount: Int = 0,

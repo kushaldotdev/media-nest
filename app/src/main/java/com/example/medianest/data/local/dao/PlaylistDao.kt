@@ -31,4 +31,7 @@ interface PlaylistDao {
 
     @Delete
     suspend fun delete(playlist: PlaylistEntity)
+
+    @Query("SELECT * FROM playlists WHERE updatedAt > :since")
+    suspend fun getPlaylistsSince(since: Long): List<PlaylistEntity>
 }

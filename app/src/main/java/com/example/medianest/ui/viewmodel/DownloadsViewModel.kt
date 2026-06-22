@@ -122,16 +122,7 @@ class DownloadsViewModel @Inject constructor(
                 )
 
                 if (result.success) {
-                    downloadRepository.markCompleted(insertId, File(result.outputPath).length())
-                    downloadRepository.update(
-                        extractionEntity.copy(
-                            id = insertId,
-                            status = DownloadStatus.COMPLETED,
-                            progress = 1f,
-                            filePath = result.outputPath,
-                            fileSizeBytes = File(result.outputPath).length()
-                        )
-                    )
+                    downloadRepository.markCompleted(insertId, File(result.outputPath).length(), result.outputPath)
                 } else {
                     downloadRepository.markFailed(
                         insertId,

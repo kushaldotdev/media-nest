@@ -90,7 +90,7 @@ class YouTubeExtractor @Inject constructor() {
         }
 
         ExtractedVideoInfo(
-            videoId = info.id,
+            videoId = extractVideoIdFromUrl(info.id).ifBlank { extractVideoIdFromUrl(url) },
             title = info.name ?: "",
             channelName = info.uploaderName ?: "Unknown",
             channelId = extractChannelIdFromUrl(info.uploaderUrl) ?: "",

@@ -2,6 +2,8 @@ package com.example.medianest.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -39,6 +41,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
+import androidx.media3.ui.PlayerView
 import com.example.medianest.ui.viewmodel.PlayerViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -99,13 +102,15 @@ fun PlayerScreen(
                     ) {
                         AndroidView(
                             factory = { ctx ->
-                                android.view.SurfaceView(ctx)
+                                PlayerView(ctx).apply {
+                                    useController = false
+                                }
                             },
-                            update = { surfaceView ->
-                                player?.setVideoSurfaceView(surfaceView)
+                            update = { playerView ->
+                                playerView.player = player
                             },
-                            onRelease = { surfaceView ->
-                                player?.clearVideoSurfaceView(surfaceView)
+                            onRelease = { playerView ->
+                                playerView.player = null
                             },
                             modifier = Modifier.fillMaxSize()
                         )
@@ -164,7 +169,9 @@ fun PlayerScreen(
                     Spacer(Modifier.height(8.dp))
                     Text("Speed", style = MaterialTheme.typography.labelMedium)
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f).forEach { speed ->

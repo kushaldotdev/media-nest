@@ -37,8 +37,8 @@ class DownloadRepository @Inject constructor(
     suspend fun markFailed(id: Long, errorMessage: String, retryCount: Int) =
         downloadDao.markFailed(id, DownloadStatus.FAILED, errorMessage, retryCount)
 
-    suspend fun markCompleted(id: Long, fileSize: Long) =
-        downloadDao.markCompleted(id, fileSize)
+    suspend fun markCompleted(id: Long, fileSize: Long, filePath: String) =
+        downloadDao.markCompleted(id, fileSize, filePath)
 
     suspend fun getLocalDownloadsForVideo(videoId: String): List<DownloadEntity> =
         downloadDao.getCompletedDownloadsForVideo(videoId)
