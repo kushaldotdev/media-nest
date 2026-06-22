@@ -1,0 +1,17 @@
+[Unit]
+Description=MediaNest Sync Server
+After=network.target
+
+[Service]
+Type=simple
+User=medianest
+Group=medianest
+WorkingDirectory=/opt/medianest-sync
+Environment=DATABASE_PATH=/opt/medianest-sync/data/sync.db
+Environment=SYNC_API_KEY=changeme-in-production
+ExecStart=/opt/medianest-sync/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

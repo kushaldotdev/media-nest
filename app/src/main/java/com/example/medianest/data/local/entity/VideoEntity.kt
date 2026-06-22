@@ -15,5 +15,6 @@ data class VideoEntity(
     val uploadDate: String? = null,
     val localFilePath: String = "",
     val favorite: Boolean = false,
-    val addedAt: Long = System.currentTimeMillis()
+    val addedAt: Long = System.currentTimeMillis(),
+    val syncVersion: Long = 0
 )

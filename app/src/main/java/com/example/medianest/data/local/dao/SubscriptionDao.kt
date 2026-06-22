@@ -40,4 +40,7 @@ interface SubscriptionDao {
 
     @Query("UPDATE subscriptions SET autoDownload = :autoDownload, audioOnly = :audioOnly WHERE id = :id")
     suspend fun updateAutoDownload(id: Long, autoDownload: Boolean, audioOnly: Boolean)
+
+    @Query("DELETE FROM subscriptions WHERE sourceId = :sourceId")
+    suspend fun deleteBySourceId(sourceId: String)
 }

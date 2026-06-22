@@ -34,4 +34,7 @@ interface FolderDao {
 
     @Query("UPDATE folders SET name = :name, updatedAt = :updatedAt WHERE id = :id")
     suspend fun rename(id: Long, name: String, updatedAt: Long = System.currentTimeMillis())
+
+    @Query("DELETE FROM folders WHERE id = :folderId")
+    suspend fun deleteById(folderId: Long)
 }

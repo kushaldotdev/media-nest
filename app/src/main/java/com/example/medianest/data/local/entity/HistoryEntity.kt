@@ -20,5 +20,6 @@ import androidx.room.PrimaryKey
 data class HistoryEntity(
     @PrimaryKey val videoId: String,
     val positionMillis: Long = 0,
-    val playedAt: Long = System.currentTimeMillis()
+    val playedAt: Long = System.currentTimeMillis(),
+    val syncVersion: Long = 0
 )

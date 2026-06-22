@@ -27,7 +27,7 @@ import com.example.medianest.data.local.entity.VideoFolderJoin
         VideoFolderJoin::class,
         SubscriptionEntity::class
     ],
-    version = 6,
+    version = 7,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {

@@ -15,5 +15,6 @@ data class SubscriptionEntity(
     val audioOnly: Boolean = false,
     val lastCheckedAt: Long = 0,
     val createdAt: Long = System.currentTimeMillis(),
-    val updatedAt: Long = System.currentTimeMillis()
+    val updatedAt: Long = System.currentTimeMillis(),
+    val syncVersion: Long = 0
 )

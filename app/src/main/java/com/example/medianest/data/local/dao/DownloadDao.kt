@@ -56,4 +56,7 @@ interface DownloadDao {
 
     @Query("SELECT * FROM downloads WHERE videoId = :videoId AND format = 'audio_extracted'")
     suspend fun getAudioExtraction(videoId: String): DownloadEntity?
+
+    @Query("SELECT * FROM downloads")
+    suspend fun getAllDownloadsOnce(): List<DownloadEntity>
 }

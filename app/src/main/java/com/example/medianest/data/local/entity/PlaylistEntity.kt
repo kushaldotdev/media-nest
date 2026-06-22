@@ -13,5 +13,6 @@ data class PlaylistEntity(
     val uploaderName: String? = null,
     val videoCount: Int = 0,
     val createdAt: Long = System.currentTimeMillis(),
-    val updatedAt: Long = System.currentTimeMillis()
+    val updatedAt: Long = System.currentTimeMillis(),
+    val syncVersion: Long = 0
 )

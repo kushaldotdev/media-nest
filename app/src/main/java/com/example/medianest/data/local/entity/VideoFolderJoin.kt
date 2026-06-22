@@ -26,5 +26,6 @@ import androidx.room.Index
 data class VideoFolderJoin(
     val videoId: String,
     val folderId: Long,
-    val addedAt: Long = System.currentTimeMillis()
+    val addedAt: Long = System.currentTimeMillis(),
+    val syncVersion: Long = 0
 )

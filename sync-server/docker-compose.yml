@@ -1,0 +1,17 @@
+version: "3.9"
+
+services:
+  sync-server:
+    build: .
+    container_name: medianest-sync
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_PATH=/app/data/sync.db
+      - SYNC_API_KEY=changeme-in-production
+    volumes:
+      - sync-data:/app/data
+
+volumes:
+  sync-data:

@@ -24,4 +24,25 @@ object WorkScheduler {
             request
         )
     }
+
+    fun scheduleSync(context: Context, intervalHours: Long = 6) {
+        val request = PeriodicWorkRequestBuilder<SyncWorker>(
+            intervalHours, TimeUnit.HOURS
+        ).setConstraints(
+            Constraints.Builder()
+                .setRequiredNetworkType(NetworkType.CONNECTED)
+                .build()
+        ).build()
+
+        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+            "sync_check",
+            ExistingPeriodicWorkPolicy.KEEP,
+            request
+        )
+    }
+
+    fun updateSyncInterval(context: Context, intervalHours: Long) {
+        WorkManager.getInstance(context).cancelUniqueWork("sync_check")
+        scheduleSync(context, intervalHours)
+    }
 }

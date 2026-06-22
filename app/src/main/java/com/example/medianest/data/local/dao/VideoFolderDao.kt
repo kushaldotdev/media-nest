@@ -20,6 +20,9 @@ interface VideoFolderDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun addVideoToFolder(join: VideoFolderJoin)
 
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insert(join: VideoFolderJoin)
+
     @Query("DELETE FROM video_folder_join WHERE videoId = :videoId AND folderId = :folderId")
     suspend fun removeVideoFromFolder(videoId: String, folderId: Long)
 

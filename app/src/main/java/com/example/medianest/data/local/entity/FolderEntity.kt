@@ -22,5 +22,6 @@ data class FolderEntity(
     val name: String,
     val parentId: Long? = null,
     val createdAt: Long = System.currentTimeMillis(),
-    val updatedAt: Long = System.currentTimeMillis()
+    val updatedAt: Long = System.currentTimeMillis(),
+    val syncVersion: Long = 0
 )

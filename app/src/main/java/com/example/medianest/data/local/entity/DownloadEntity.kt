@@ -40,5 +40,6 @@ data class DownloadEntity(
     val status: DownloadStatus = DownloadStatus.QUEUED,
     val progress: Float = 0f,
     val errorMessage: String? = null,
-    val retryCount: Int = 0
+    val retryCount: Int = 0,
+    val syncVersion: Long = 0
 )

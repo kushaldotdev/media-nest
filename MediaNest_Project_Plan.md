@@ -973,7 +973,23 @@ Need decision:
 
 ---
 
-# 7. Desktop Support
+# 7. Future: Sync App Settings to VPS
+
+**Status**: Deferred — not implemented.
+
+Sync app-level DataStore preferences (server URL, API key, sync interval, download max concurrent, playback speed, etc.) to the VPS so settings are shared across devices.
+
+**Scope**:
+- Add an `app_settings` table on the sync server
+- Android: serialize all DataStore prefs into a sync payload
+- Push on settings change, pull during periodic sync
+- Timestamp-based conflict resolution (newest wins)
+
+**Why deferred**: Settings are per-device by nature. Cross-device settings sync needs a clear UI to explain which device's settings take priority on conflict. Low priority vs. metadata sync.
+
+---
+
+# 8. Desktop Support
 
 Need decision later:
 - separate desktop app
