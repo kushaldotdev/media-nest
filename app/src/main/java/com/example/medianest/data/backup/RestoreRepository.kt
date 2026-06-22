@@ -47,7 +47,9 @@ class RestoreRepository @Inject constructor(
             val zip = ZipInputStream(inputStream)
             var databaseJson: String? = null
             var preferencesJson: String? = null
-            val mediaFiles = mutableMapOf<String, ByteArray>()
+            
+            val videoDir = File(context.filesDir, "MediaNest/video").also { it.mkdirs() }
+            val audioDir = File(context.filesDir, "MediaNest/audio").also { it.mkdirs() }
 
             var entry = zip.nextEntry
             while (entry != null) {
@@ -59,7 +61,12 @@ class RestoreRepository @Inject constructor(
                         preferencesJson = zip.readBytes().toString(Charsets.UTF_8)
                     }
                     entry.name.startsWith("media/") -> {
-                        mediaFiles[entry.name.removePrefix("media/")] = zip.readBytes()
+                        val name = entry.name.removePrefix("media/")
+                        val target = if (name.contains("_audio")) audioDir else videoDir
+                        val file = File(target, name)
+                        file.outputStream().use { fos ->
+                            zip.copyTo(fos)
+                        }
                     }
                 }
                 zip.closeEntry()
@@ -121,16 +128,19 @@ class RestoreRepository @Inject constructor(
                 } catch (_: Exception) {
                     // Skip preference restore on parse failure
                 }
+            } else if (databaseJson != null) {
+                try {
+                    val data = json.decodeFromString<BackupData>(databaseJson)
+                    data.preferences.downloads["max_concurrent"]?.toIntOrNull()?.let {
+                        downloadPreferences.setMaxConcurrentDownloads(it)
+                    }
+                    data.preferences.playback["playback_speed"]?.toFloatOrNull()?.let {
+                        playbackPreferences.setPlaybackSpeed(it)
+                    }
+                } catch (_: Exception) {}
             }
             progress(0.85f)
 
-            // Restore media files
-            val videoDir = File(context.filesDir, "MediaNest/video").also { it.mkdirs() }
-            val audioDir = File(context.filesDir, "MediaNest/audio").also { it.mkdirs() }
-            for ((name, bytes) in mediaFiles) {
-                val target = if (name.contains("_audio")) audioDir else videoDir
-                File(target, name).writeBytes(bytes)
-            }
             progress(1.0f)
         }
     }

@@ -24,7 +24,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.File
-import java.io.FileOutputStream
+import java.io.OutputStream
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 import javax.inject.Inject
@@ -44,7 +44,7 @@ class BackupRepository @Inject constructor(
     private val downloadPreferences: DownloadPreferences,
     private val playbackPreferences: PlaybackPreferences
 ) {
-    suspend fun exportToZip(outputStream: FileOutputStream, progress: (Float) -> Unit) {
+    suspend fun exportToZip(outputStream: OutputStream, progress: (Float) -> Unit) {
         withContext(Dispatchers.IO) {
             ZipOutputStream(outputStream).use { zos ->
                 progress(0.05f)
@@ -91,6 +91,11 @@ class BackupRepository @Inject constructor(
                 zos.closeEntry()
                 progress(0.6f)
 
+                // Write preferences.json
+                zos.putNextEntry(ZipEntry("preferences.json"))
+                zos.write(json.encodeToString(preferences).toByteArray())
+                zos.closeEntry()
+
                 // Write media files
                 val mediaFiles = listOf(
                     File(context.filesDir, "MediaNest/video"),
@@ -122,12 +127,12 @@ class BackupRepository @Inject constructor(
         id = id, title = title, channelName = channelName, channelId = channelId,
         durationSeconds = durationSeconds, thumbnailUrl = thumbnailUrl,
         description = description, uploadDate = uploadDate,
-        localFilePath = localFilePath, favorite = favorite, addedAt = addedAt
+        localFilePath = localFilePath?.let { File(it).name } ?: "", favorite = favorite, addedAt = addedAt
     )
 
     private fun DownloadEntity.toBackup() = BackupDownload(
         id = id, videoId = videoId, url = url, format = format, quality = quality,
-        title = title, thumbnailUrl = thumbnailUrl, filePath = filePath,
+        title = title, thumbnailUrl = thumbnailUrl, filePath = filePath?.let { File(it).name } ?: "",
         fileSizeBytes = fileSizeBytes, downloadedAt = downloadedAt,
         lastPlayedAt = lastPlayedAt, status = status.name, progress = progress,
         errorMessage = errorMessage, retryCount = retryCount

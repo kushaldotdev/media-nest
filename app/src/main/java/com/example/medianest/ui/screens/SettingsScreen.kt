@@ -74,7 +74,7 @@ fun SettingsScreen(
     ) { uri: Uri? ->
         uri?.let {
             try {
-                val outputStream = context.contentResolver.openOutputStream(it) as FileOutputStream
+                val outputStream = context.contentResolver.openOutputStream(it) ?: return@let
                 viewModel.exportToFile(outputStream)
             } catch (_: Exception) { }
         }

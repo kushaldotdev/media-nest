@@ -19,7 +19,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import java.io.FileOutputStream
+import java.io.OutputStream
 import javax.inject.Inject
 
 sealed class ExportImportState {
@@ -78,7 +78,7 @@ class ExportImportViewModel @Inject constructor(
     fun triggerSync() { viewModelScope.launch { syncManager.sync() } }
     fun resetSyncState() { syncManager.resetState() }
 
-    fun exportToFile(outputStream: FileOutputStream) {
+    fun exportToFile(outputStream: OutputStream) {
         _state.value = ExportImportState.InProgress("Exporting", 0f)
         viewModelScope.launch {
             try {
