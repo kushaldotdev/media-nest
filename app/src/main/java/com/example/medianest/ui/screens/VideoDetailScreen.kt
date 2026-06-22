@@ -18,6 +18,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Subscriptions
+import androidx.compose.material.icons.outlined.Subscriptions
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.TextButton
@@ -38,7 +40,9 @@ fun VideoDetailScreen(
     onDownload: (StreamSource) -> Unit,
     onBack: () -> Unit,
     onToggleFavorite: () -> Unit = {},
-    isFavorite: Boolean = false
+    isFavorite: Boolean = false,
+    onSubscribe: () -> Unit = {},
+    isSubscribed: Boolean = false
 ) {
     Scaffold(
         topBar = {
@@ -48,6 +52,16 @@ fun VideoDetailScreen(
                     TextButton(onClick = onBack) { Text("Back") }
                 },
                 actions = {
+                    IconToggleButton(
+                        checked = isSubscribed,
+                        onCheckedChange = { onSubscribe() }
+                    ) {
+                        Icon(
+                            imageVector = if (isSubscribed) Icons.Filled.Subscriptions else Icons.Outlined.Subscriptions,
+                            contentDescription = if (isSubscribed) "Unsubscribe" else "Subscribe",
+                            tint = if (isSubscribed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                     IconToggleButton(
                         checked = isFavorite,
                         onCheckedChange = { onToggleFavorite() }

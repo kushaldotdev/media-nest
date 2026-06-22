@@ -45,7 +45,8 @@ import com.example.medianest.ui.viewmodel.HomeViewModel
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel = hiltViewModel(),
-    onVideoSelected: (String) -> Unit = {}
+    onVideoSelected: (String) -> Unit = {},
+    onSubscribe: (sourceType: String, sourceId: String, name: String, thumbnailUrl: String?) -> Unit = { _, _, _, _ -> }
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     var urlInput by remember { mutableStateOf("") }
@@ -119,6 +120,13 @@ fun HomeScreen(
                     "Playlist: ${state.playlist.name}",
                     style = MaterialTheme.typography.titleMedium
                 )
+                Spacer(Modifier.height(4.dp))
+                Button(
+                    onClick = { onSubscribe("playlist", state.playlist.playlistId, state.playlist.name, state.playlist.thumbnailUrl) },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Subscribe to Playlist")
+                }
                 Spacer(Modifier.height(8.dp))
                 LazyColumn {
                     items(state.playlist.videos) { video ->
@@ -131,6 +139,13 @@ fun HomeScreen(
                     "Channel: ${state.channel.name}",
                     style = MaterialTheme.typography.titleMedium
                 )
+                Spacer(Modifier.height(4.dp))
+                Button(
+                    onClick = { onSubscribe("channel", state.channel.channelId, state.channel.name, state.channel.avatarUrl) },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Subscribe to Channel")
+                }
                 Spacer(Modifier.height(8.dp))
                 LazyColumn {
                     items(state.channel.uploads) { video ->

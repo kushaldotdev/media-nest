@@ -5,6 +5,7 @@ import androidx.room.Room
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.medianest.data.local.AppDatabase
+import com.example.medianest.data.local.dao.SubscriptionDao
 import com.example.medianest.data.local.dao.VideoDao
 import com.example.medianest.data.local.dao.VideoFolderDao
 import com.example.medianest.data.local.dao.DownloadDao
@@ -25,6 +26,29 @@ object DatabaseModule {
     private val MIGRATION_3_4 = object : Migration(3, 4) {
         override fun migrate(db: SupportSQLiteDatabase) {
             db.execSQL("ALTER TABLE videos ADD COLUMN localFilePath TEXT NOT NULL DEFAULT ''")
+        }
+    }
+
+    private val MIGRATION_5_6 = object : Migration(5, 6) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS subscriptions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    sourceType TEXT NOT NULL,
+                    sourceId TEXT NOT NULL,
+                    name TEXT NOT NULL,
+                    thumbnailUrl TEXT,
+                    uploaderName TEXT,
+                    autoDownload INTEGER NOT NULL DEFAULT 0,
+                    audioOnly INTEGER NOT NULL DEFAULT 0,
+                    lastCheckedAt INTEGER NOT NULL DEFAULT 0,
+                    createdAt INTEGER NOT NULL,
+                    updatedAt INTEGER NOT NULL
+                )
+            """)
+            db.execSQL("ALTER TABLE playlists ADD COLUMN youtubePlaylistId TEXT NOT NULL DEFAULT ''")
+            db.execSQL("ALTER TABLE playlists ADD COLUMN uploaderName TEXT DEFAULT ''")
+            db.execSQL("ALTER TABLE playlists ADD COLUMN videoCount INTEGER NOT NULL DEFAULT 0")
         }
     }
 
@@ -63,6 +87,7 @@ object DatabaseModule {
             "media_nest.db"
         ).addMigrations(MIGRATION_3_4)
             .addMigrations(MIGRATION_4_5)
+            .addMigrations(MIGRATION_5_6)
             .fallbackToDestructiveMigration(false)
             .build()
     }
@@ -84,4 +109,7 @@ object DatabaseModule {
 
     @Provides
     fun provideVideoFolderDao(database: AppDatabase): VideoFolderDao = database.videoFolderDao()
+
+    @Provides
+    fun provideSubscriptionDao(database: AppDatabase): SubscriptionDao = database.subscriptionDao()
 }

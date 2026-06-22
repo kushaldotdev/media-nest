@@ -16,6 +16,7 @@ import com.example.medianest.ui.screens.HomeScreen
 import com.example.medianest.ui.screens.LibraryScreen
 import com.example.medianest.ui.screens.PlayerScreen
 import com.example.medianest.ui.screens.SettingsScreen
+import com.example.medianest.ui.screens.SubscriptionsScreen
 import com.example.medianest.ui.screens.VideoDetailScreen
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.medianest.ui.viewmodel.HomeViewModel
@@ -58,10 +59,17 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
             if (videoInfo != null) {
                 val detailViewModel: com.example.medianest.ui.viewmodel.VideoDetailViewModel = hiltViewModel()
                 LaunchedEffect(videoId) { detailViewModel.loadFavorite(videoId) }
+                LaunchedEffect(videoInfo) {
+                    detailViewModel.initSubscription(videoInfo.channelId ?: "", videoInfo.channelName, videoInfo.thumbnailUrl)
+                    detailViewModel.checkSubscription()
+                }
                 val isFavorite by detailViewModel.isFavorite.collectAsState()
+                val isSubscribed by detailViewModel.isSubscribed.collectAsState()
                 VideoDetailScreen(
                     videoInfo = videoInfo,
                     isFavorite = isFavorite,
+                    isSubscribed = isSubscribed,
+                    onSubscribe = { detailViewModel.toggleSubscription() },
                     onToggleFavorite = { detailViewModel.toggleFavorite() },
                     onPlay = { stream ->
                         val streamIndex = videoInfo.streamSources.indexOf(stream)
@@ -102,5 +110,8 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
             )
         }
         composable(BottomNavItem.Settings.route) { SettingsScreen() }
+        composable(BottomNavItem.Subscriptions.route) {
+            SubscriptionsScreen()
+        }
     }
 }

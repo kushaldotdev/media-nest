@@ -6,6 +6,7 @@ import com.example.medianest.data.model.ChannelInfo
 import com.example.medianest.data.model.ExtractedPlaylistInfo
 import com.example.medianest.data.model.ExtractedVideoInfo
 import com.example.medianest.data.local.dao.VideoDao
+import com.example.medianest.data.repository.SubscriptionRepository
 import com.example.medianest.data.repository.VideoRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,7 +26,8 @@ sealed class HomeUiState {
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val repository: VideoRepository,
-    private val videoDao: VideoDao
+    private val videoDao: VideoDao,
+    private val subscriptionRepository: SubscriptionRepository
 ) : ViewModel() {
 
     companion object {
@@ -80,6 +82,12 @@ class HomeViewModel @Inject constructor(
     fun toggleFavorite(videoId: String, favorite: Boolean) {
         viewModelScope.launch {
             videoDao.setFavorite(videoId, favorite)
+        }
+    }
+
+    fun subscribe(sourceType: String, sourceId: String, name: String, thumbnailUrl: String?) {
+        viewModelScope.launch {
+            subscriptionRepository.subscribe(sourceType, sourceId, name, thumbnailUrl)
         }
     }
 
