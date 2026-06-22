@@ -1,0 +1,115 @@
+package com.example.medianest.ui.screens
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.OutlinedCard
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
+import com.example.medianest.data.model.ExtractedVideoInfo
+import com.example.medianest.data.model.StreamSource
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun VideoDetailScreen(
+    videoInfo: ExtractedVideoInfo,
+    onPlay: (StreamSource) -> Unit,
+    onBack: () -> Unit
+) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(videoInfo.title, maxLines = 1) },
+                navigationIcon = {
+                    TextButton(onClick = onBack) { Text("Back") }
+                }
+            )
+        }
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState())
+        ) {
+            AsyncImage(
+                model = videoInfo.thumbnailUrl,
+                contentDescription = videoInfo.title,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(220.dp)
+            )
+            Spacer(Modifier.height(12.dp))
+            Text(videoInfo.title, style = androidx.compose.material3.MaterialTheme.typography.titleLarge)
+            Text(videoInfo.channelName, style = androidx.compose.material3.MaterialTheme.typography.bodyMedium)
+
+            Spacer(Modifier.height(16.dp))
+            Text("Available streams:", style = androidx.compose.material3.MaterialTheme.typography.titleSmall)
+
+            val videoStreams = videoInfo.streamSources.filter { it.format == "video" }
+            val audioStreams = videoInfo.streamSources.filter { it.format == "audio" }
+
+            if (videoStreams.isNotEmpty()) {
+                Text("Video", style = androidx.compose.material3.MaterialTheme.typography.labelLarge)
+                videoStreams.forEach { stream ->
+                    StreamQualityRow(stream, onPlay)
+                }
+            }
+
+            if (audioStreams.isNotEmpty()) {
+                Text("Audio Only", style = androidx.compose.material3.MaterialTheme.typography.labelLarge)
+                audioStreams.forEach { stream ->
+                    StreamQualityRow(stream, onPlay)
+                }
+            }
+
+            if (videoStreams.isEmpty() && audioStreams.isEmpty()) {
+                Text(
+                    "No streams available",
+                    color = androidx.compose.material3.MaterialTheme.colorScheme.error
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun StreamQualityRow(stream: StreamSource, onPlay: (StreamSource) -> Unit) {
+    OutlinedCard(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        onClick = { onPlay(stream) }
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(12.dp)
+                .fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(stream.quality)
+            Text(
+                stream.contentLength?.let { "${it / 1024 / 1024}MB" } ?: "Unknown size",
+                style = androidx.compose.material3.MaterialTheme.typography.bodySmall
+            )
+        }
+    }
+}
