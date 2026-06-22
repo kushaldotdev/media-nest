@@ -28,4 +28,7 @@ interface VideoFolderDao {
 
     @Query("SELECT f.* FROM folders f INNER JOIN video_folder_join vfj ON f.id = vfj.folderId WHERE vfj.videoId = :videoId")
     fun getFoldersForVideo(videoId: String): Flow<List<FolderEntity>>
+
+    @Query("SELECT * FROM video_folder_join")
+    suspend fun getAllJoins(): List<VideoFolderJoin>
 }
