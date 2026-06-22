@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -30,6 +31,7 @@ import com.example.medianest.data.model.StreamSource
 fun VideoDetailScreen(
     videoInfo: ExtractedVideoInfo,
     onPlay: (StreamSource) -> Unit,
+    onDownload: (StreamSource) -> Unit,
     onBack: () -> Unit
 ) {
     Scaffold(
@@ -57,33 +59,33 @@ fun VideoDetailScreen(
                     .height(220.dp)
             )
             Spacer(Modifier.height(12.dp))
-            Text(videoInfo.title, style = androidx.compose.material3.MaterialTheme.typography.titleLarge)
-            Text(videoInfo.channelName, style = androidx.compose.material3.MaterialTheme.typography.bodyMedium)
+            Text(videoInfo.title, style = MaterialTheme.typography.titleLarge)
+            Text(videoInfo.channelName, style = MaterialTheme.typography.bodyMedium)
 
             Spacer(Modifier.height(16.dp))
-            Text("Available streams:", style = androidx.compose.material3.MaterialTheme.typography.titleSmall)
+            Text("Available streams:", style = MaterialTheme.typography.titleSmall)
 
             val videoStreams = videoInfo.streamSources.filter { it.format == "video" }
             val audioStreams = videoInfo.streamSources.filter { it.format == "audio" }
 
             if (videoStreams.isNotEmpty()) {
-                Text("Video", style = androidx.compose.material3.MaterialTheme.typography.labelLarge)
+                Text("Video", style = MaterialTheme.typography.labelLarge)
                 videoStreams.forEach { stream ->
-                    StreamQualityRow(stream, onPlay)
+                    StreamQualityRow(stream, onPlay, onDownload)
                 }
             }
 
             if (audioStreams.isNotEmpty()) {
-                Text("Audio Only", style = androidx.compose.material3.MaterialTheme.typography.labelLarge)
+                Text("Audio Only", style = MaterialTheme.typography.labelLarge)
                 audioStreams.forEach { stream ->
-                    StreamQualityRow(stream, onPlay)
+                    StreamQualityRow(stream, onPlay, onDownload)
                 }
             }
 
             if (videoStreams.isEmpty() && audioStreams.isEmpty()) {
                 Text(
                     "No streams available",
-                    color = androidx.compose.material3.MaterialTheme.colorScheme.error
+                    color = MaterialTheme.colorScheme.error
                 )
             }
         }
@@ -91,7 +93,11 @@ fun VideoDetailScreen(
 }
 
 @Composable
-private fun StreamQualityRow(stream: StreamSource, onPlay: (StreamSource) -> Unit) {
+private fun StreamQualityRow(
+    stream: StreamSource,
+    onPlay: (StreamSource) -> Unit,
+    onDownload: (StreamSource) -> Unit
+) {
     OutlinedCard(
         modifier = Modifier
             .fillMaxWidth()
@@ -105,11 +111,16 @@ private fun StreamQualityRow(stream: StreamSource, onPlay: (StreamSource) -> Uni
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(stream.quality)
-            Text(
-                stream.contentLength?.let { "${it / 1024 / 1024}MB" } ?: "Unknown size",
-                style = androidx.compose.material3.MaterialTheme.typography.bodySmall
-            )
+            Column {
+                Text(stream.quality)
+                Text(
+                    stream.contentLength?.let { "${it / 1024 / 1024}MB" } ?: "Unknown size",
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+            TextButton(onClick = { onDownload(stream) }) {
+                Text("Download")
+            }
         }
     }
 }

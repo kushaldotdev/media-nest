@@ -7,6 +7,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
 import com.example.medianest.data.local.entity.DownloadEntity
+import com.example.medianest.data.local.entity.DownloadStatus
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -17,6 +18,21 @@ interface DownloadDao {
     @Query("SELECT * FROM downloads WHERE videoId = :videoId")
     suspend fun getDownloadByVideoId(videoId: String): DownloadEntity?
 
+    @Query("SELECT * FROM downloads WHERE id = :id")
+    suspend fun getDownloadById(id: Long): DownloadEntity?
+
+    @Query("SELECT * FROM downloads WHERE videoId = :videoId AND format = :format AND quality = :quality LIMIT 1")
+    suspend fun getDownload(videoId: String, format: String, quality: String): DownloadEntity?
+
+    @Query("SELECT * FROM downloads WHERE status = :status ORDER BY downloadedAt ASC")
+    fun getDownloadsByStatus(status: DownloadStatus): Flow<List<DownloadEntity>>
+
+    @Query("SELECT * FROM downloads WHERE status = 'QUEUED' OR status = 'DOWNLOADING'")
+    fun getActiveDownloads(): Flow<List<DownloadEntity>>
+
+    @Query("SELECT COUNT(*) FROM downloads WHERE status = 'DOWNLOADING'")
+    suspend fun getActiveDownloadCount(): Int
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(download: DownloadEntity): Long
 
@@ -25,4 +41,13 @@ interface DownloadDao {
 
     @Delete
     suspend fun delete(download: DownloadEntity)
+
+    @Query("UPDATE downloads SET status = :status, progress = :progress WHERE id = :id")
+    suspend fun updateStatus(id: Long, status: DownloadStatus, progress: Float)
+
+    @Query("UPDATE downloads SET status = :status, errorMessage = :errorMessage, retryCount = :retryCount WHERE id = :id")
+    suspend fun markFailed(id: Long, status: DownloadStatus, errorMessage: String, retryCount: Int)
+
+    @Query("UPDATE downloads SET status = 'COMPLETED', progress = 1.0, fileSizeBytes = :fileSize WHERE id = :id")
+    suspend fun markCompleted(id: Long, fileSize: Long)
 }

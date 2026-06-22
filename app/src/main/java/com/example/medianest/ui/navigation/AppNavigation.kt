@@ -14,6 +14,7 @@ import com.example.medianest.ui.screens.LibraryScreen
 import com.example.medianest.ui.screens.PlayerScreen
 import com.example.medianest.ui.screens.SettingsScreen
 import com.example.medianest.ui.screens.VideoDetailScreen
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.medianest.ui.viewmodel.HomeViewModel
 
 @Composable
@@ -52,11 +53,15 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
             val videoId = backStackEntry.arguments?.getString("videoId") ?: return@composable
             val videoInfo = remember { HomeViewModel.lastResultCache[videoId] }
             if (videoInfo != null) {
+                val detailViewModel: com.example.medianest.ui.viewmodel.VideoDetailViewModel = hiltViewModel()
                 VideoDetailScreen(
                     videoInfo = videoInfo,
                     onPlay = { stream ->
                         val streamIndex = videoInfo.streamSources.indexOf(stream)
                         navController.navigate("player/$videoId?streamIndex=$streamIndex")
+                    },
+                    onDownload = { stream ->
+                        detailViewModel.enqueueDownload(videoInfo, stream)
                     },
                     onBack = { navController.popBackStack() }
                 )
