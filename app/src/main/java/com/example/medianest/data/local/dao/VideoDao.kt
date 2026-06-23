@@ -46,4 +46,10 @@ interface VideoDao {
 
     @Query("SELECT * FROM videos WHERE addedAt > :since")
     suspend fun getVideosSince(since: Long): List<VideoEntity>
+
+    @Query("UPDATE videos SET lastPlayedAt = NULL")
+    suspend fun clearAllLastPlayed()
+
+    @Query("DELETE FROM videos WHERE favorite = 0 AND (localFilePath = '' OR localFilePath IS NULL) AND id NOT IN (SELECT videoId FROM video_folder_join)")
+    suspend fun deleteOrphanHistoryVideos()
 }

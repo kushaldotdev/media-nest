@@ -479,7 +479,9 @@ class DownloadService : Service() {
         }
         
         val dir = if (download.format == "audio") "audio" else "video"
-        val outputDir = File(filesDir, "MediaNest/$dir")
+        val customFolder = preferences.downloadFolder.first()
+        val baseDir = if (customFolder.isNotEmpty()) File(customFolder) else filesDir
+        val outputDir = File(baseDir, "MediaNest/$dir")
         outputDir.mkdirs()
 
         val tmpFile = File(outputDir, "${download.videoId}_${download.quality}.tmp")
@@ -783,7 +785,9 @@ class DownloadService : Service() {
                   File(download.filePath).delete()
               }
               val dir = if (download.format == "audio") "audio" else "video"
-              val outputDir = File(filesDir, "MediaNest/$dir")
+              val customFolder = preferences.downloadFolder.first()
+              val baseDir = if (customFolder.isNotEmpty()) File(customFolder) else filesDir
+              val outputDir = File(baseDir, "MediaNest/$dir")
               val tmpFile = File(outputDir, "${download.videoId}_${download.quality}.tmp")
               if (tmpFile.exists()) {
                   tmpFile.delete()
@@ -803,9 +807,11 @@ class DownloadService : Service() {
            serviceScope.launch {
                val download = repository.getDownloadById(id) ?: return@launch
                try {
-                   val dir = if (download.format == "audio" || download.format == "audio_extracted") "audio" else "video"
-                   val outputDir = File(filesDir, "MediaNest/$dir")
-                   val tmpFile = File(outputDir, "${download.videoId}_${download.quality}.tmp")
+                    val dir = if (download.format == "audio" || download.format == "audio_extracted") "audio" else "video"
+                    val customFolder = preferences.downloadFolder.first()
+                    val baseDir = if (customFolder.isNotEmpty()) File(customFolder) else filesDir
+                    val outputDir = File(baseDir, "MediaNest/$dir")
+                    val tmpFile = File(outputDir, "${download.videoId}_${download.quality}.tmp")
                    if (tmpFile.exists()) {
                        tmpFile.delete()
                    }
@@ -890,12 +896,14 @@ class DownloadService : Service() {
                   }
               }
               
+              val customFolder = preferences.downloadFolder.first()
+              val baseDir = if (customFolder.isNotEmpty()) File(customFolder) else filesDir
               all.forEach { download ->
                   if (download.filePath.isNotEmpty()) {
                       File(download.filePath).delete()
                   }
                   val dir = if (download.format == "audio") "audio" else "video"
-                  val outputDir = File(filesDir, "MediaNest/$dir")
+                  val outputDir = File(baseDir, "MediaNest/$dir")
                   val tmpFile = File(outputDir, "${download.videoId}_${download.quality}.tmp")
                   if (tmpFile.exists()) {
                       tmpFile.delete()

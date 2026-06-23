@@ -70,6 +70,7 @@ fun LibraryScreen(
     var deleteDownloadsWithFolder by remember { mutableStateOf(false) }
     var folderToRename by remember { mutableStateOf<FolderEntity?>(null) }
     var renameFolderName by remember { mutableStateOf("") }
+    var showClearHistoryDialog by remember { mutableStateOf(false) }
 
     val allDownloads by viewModel.allDownloads.collectAsStateWithLifecycle()
     val fetchingStreamsFor by viewModel.fetchingStreamsFor.collectAsStateWithLifecycle()
@@ -88,6 +89,14 @@ fun LibraryScreen(
             TopAppBar(
                 title = { Text(if (uiState.isSelectionMode) "${uiState.selectedVideoIds.size} Selected" else "Library") },
                 actions = {
+                    if (uiState.currentTab == LibraryTab.ALL && videos.isNotEmpty()) {
+                        IconButton(onClick = { showClearHistoryDialog = true }) {
+                            Icon(
+                                Icons.Default.DeleteSweep,
+                                contentDescription = "Clear History"
+                            )
+                        }
+                    }
                     if (uiState.currentTab != LibraryTab.SUBSCRIPTIONS && uiState.currentTab != LibraryTab.PLAYLISTS && (uiState.currentTab != LibraryTab.FOLDERS || uiState.selectedFolder != null)) {
                         IconButton(onClick = { viewModel.toggleViewMode() }) {
                             Icon(
@@ -304,6 +313,32 @@ fun LibraryScreen(
                     SubscriptionsScreen(sourceType = "channel", searchQuery = uiState.searchQuery, onSubscriptionClick = onSubscriptionClick)
                 }
                 }
+            }
+
+            if (showClearHistoryDialog) {
+                AlertDialog(
+                    onDismissRequest = { showClearHistoryDialog = false },
+                    title = { Text("Clear Watch History?") },
+                    text = { Text("This will clear all watch history and progress. Saved videos, favorites, and folders will not be affected.") },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                viewModel.clearHistory()
+                                showClearHistoryDialog = false
+                                coroutineScope.launch {
+                                    snackbarHostState.showSnackbar("History cleared")
+                                }
+                            }
+                        ) {
+                            Text("Clear", color = MaterialTheme.colorScheme.error)
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showClearHistoryDialog = false }) {
+                            Text("Cancel")
+                        }
+                    }
+                )
             }
 
             if (showMoveToFolderDialog) {

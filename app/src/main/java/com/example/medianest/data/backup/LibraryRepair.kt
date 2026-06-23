@@ -3,6 +3,7 @@ package com.example.medianest.data.backup
 import android.content.Context
 import com.example.medianest.data.local.dao.DownloadDao
 import com.example.medianest.data.local.dao.VideoDao
+import com.example.medianest.data.preferences.DownloadPreferences
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -23,19 +24,29 @@ data class RepairResult(
 class LibraryRepair @Inject constructor(
     @ApplicationContext private val context: Context,
     private val videoDao: VideoDao,
-    private val downloadDao: DownloadDao
+    private val downloadDao: DownloadDao,
+    private val downloadPreferences: DownloadPreferences
 ) {
     suspend fun repair(progress: (Float) -> Unit): RepairResult {
         return withContext(Dispatchers.IO) {
             val errors = mutableListOf<String>()
-            val videoDir = File(context.filesDir, "MediaNest/video")
-            val audioDir = File(context.filesDir, "MediaNest/audio")
+            
+            val customFolder = downloadPreferences.downloadFolder.first()
+            val baseDirs = mutableListOf(context.filesDir)
+            if (customFolder.isNotEmpty()) {
+                baseDirs.add(File(customFolder))
+            }
+            context.getExternalFilesDir(null)?.let { baseDirs.add(it) }
 
             val mediaFiles = mutableMapOf<String, File>()
-            for (dir in listOf(videoDir, audioDir)) {
-                if (dir.exists()) {
-                    dir.listFiles()?.forEach { file ->
-                        mediaFiles[file.name] = file
+            for (baseDir in baseDirs) {
+                val videoDir = File(baseDir, "MediaNest/video")
+                val audioDir = File(baseDir, "MediaNest/audio")
+                for (dir in listOf(videoDir, audioDir)) {
+                    if (dir.exists()) {
+                        dir.listFiles()?.forEach { file ->
+                            mediaFiles[file.name] = file
+                        }
                     }
                 }
             }

@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.medianest.data.local.dao.FolderDao
 import com.example.medianest.data.local.dao.VideoDao
 import com.example.medianest.data.local.dao.VideoFolderDao
+import com.example.medianest.data.local.dao.HistoryDao
 import com.example.medianest.data.local.entity.DownloadEntity
 import com.example.medianest.data.local.entity.FolderEntity
 import com.example.medianest.data.local.entity.VideoEntity
@@ -56,6 +57,7 @@ class LibraryViewModel @Inject constructor(
     private val videoDao: VideoDao,
     private val folderDao: FolderDao,
     private val videoFolderDao: VideoFolderDao,
+    private val historyDao: HistoryDao,
     private val downloadRepository: DownloadRepository,
     private val videoRepository: VideoRepository,
     private val audioExtractor: AudioExtractor,
@@ -469,6 +471,14 @@ class LibraryViewModel @Inject constructor(
     fun moveVideoToFolder(videoId: String, folderId: Long) {
         viewModelScope.launch {
             videoFolderDao.addVideoToFolder(com.example.medianest.data.local.entity.VideoFolderJoin(videoId, folderId))
+        }
+    }
+
+    fun clearHistory() {
+        viewModelScope.launch {
+            videoDao.clearAllLastPlayed()
+            historyDao.clearAllHistory()
+            videoDao.deleteOrphanHistoryVideos()
         }
     }
 }
