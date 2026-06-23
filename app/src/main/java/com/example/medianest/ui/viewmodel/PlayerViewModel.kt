@@ -45,7 +45,8 @@ data class PlayerUiState(
     val bufferedPositionMs: Long = 0L,
     val videoId: String? = null,
     val isLocal: Boolean = false,
-    val streamIndex: Int = 0
+    val streamIndex: Int = 0,
+    val showWatchedAlertCount: Int? = null
 )
 
 @HiltViewModel
@@ -269,14 +270,19 @@ class PlayerViewModel @Inject constructor(
                     val pos = controller.currentPosition
                     val duration = controller.duration
                     
-                    if (!countedThisSession && duration > 0 && pos >= duration * 0.8) {
+                    if (!countedThisSession && duration > 0 && pos >= duration * 0.9) {
                         countedThisSession = true
+                        val videoId = currentVideoId ?: ""
                         historyDao.insertWatchSession(
                             com.example.medianest.data.local.entity.WatchSessionEntity(
-                                videoId = currentVideoId ?: "",
+                                videoId = videoId,
                                 watchedAt = System.currentTimeMillis()
                             )
                         )
+                        val count = historyDao.getWatchSessionCount(videoId)
+                        if (count >= 2) {
+                            _uiState.value = _uiState.value.copy(showWatchedAlertCount = count)
+                        }
                     }
 
                     val buf = controller.bufferedPosition
@@ -366,6 +372,10 @@ class PlayerViewModel @Inject constructor(
                 )
             )
         }
+    }
+
+    fun dismissWatchedAlert() {
+        _uiState.value = _uiState.value.copy(showWatchedAlertCount = null)
     }
 
     fun stopPlayback() {

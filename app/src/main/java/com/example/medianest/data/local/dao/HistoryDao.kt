@@ -40,4 +40,7 @@ interface HistoryDao {
 
     @Query("SELECT * FROM watch_sessions WHERE videoId = :videoId ORDER BY watchedAt DESC")
     fun getWatchSessions(videoId: String): Flow<List<com.example.medianest.data.local.entity.WatchSessionEntity>>
+
+    @Query("SELECT COUNT(*) FROM watch_sessions WHERE videoId = :videoId")
+    suspend fun getWatchSessionCount(videoId: String): Int
 }
