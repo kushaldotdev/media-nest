@@ -39,7 +39,10 @@ data class PlayerUiState(
     val title: String = "",
     val channelName: String = "",
     val thumbnailUrl: String? = null,
-    val error: String? = null
+    val error: String? = null,
+    val historyPositionMs: Long = 0L,
+    val isBuffering: Boolean = false,
+    val bufferedPositionMs: Long = 0L
 )
 
 @HiltViewModel
@@ -62,6 +65,7 @@ class PlayerViewModel @Inject constructor(
     private var currentStreamIndex: Int = 0
     private var videoInfo: ExtractedVideoInfo? = null
     private var pendingInit: (() -> Unit)? = null
+    private var maxSavedPositionMs: Long = 0L
 
     private val playerListener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -69,6 +73,8 @@ class PlayerViewModel @Inject constructor(
             if (isPlaying) startPositionTracking() else stopPositionTracking()
         }
         override fun onPlaybackStateChanged(state: Int) {
+            val isBuffering = state == Player.STATE_BUFFERING
+            _uiState.value = _uiState.value.copy(isBuffering = isBuffering)
             if (state == Player.STATE_READY) {
                 val duration = _player.value?.duration ?: 0L
                 if (duration > 0) {
@@ -119,31 +125,63 @@ class PlayerViewModel @Inject constructor(
 
                     val localDownloads = downloadRepository.getLocalDownloadsForVideo(videoId)
                     val localFile = localDownloads.firstOrNull { it.filePath.isNotEmpty() && java.io.File(it.filePath).exists() }
+                    val streamSource = if (localFile == null && info != null && streamIndex < info.streamSources.size) {
+                        info.streamSources[streamIndex]
+                    } else {
+                        null
+                    }
                     val uri = if (localFile != null) {
                         android.net.Uri.fromFile(java.io.File(localFile.filePath)).toString()
-                    } else if (info != null && streamIndex < info.streamSources.size) {
-                        info.streamSources[streamIndex].url
+                    } else if (streamSource != null) {
+                        streamSource.url
                     } else {
                         _uiState.value = _uiState.value.copy(error = "No playable source found")
                         return@launch
+                    }
+
+                    val audioUri = if (localFile == null && streamSource != null && streamSource.format == "video_only" && info != null) {
+                        val isWebmVideo = streamSource.mimeType.contains("webm", ignoreCase = true) || streamSource.codec.contains("webm", ignoreCase = true)
+                        val compatibleAudioStreams = info.streamSources
+                            .filter { it.format == "audio" }
+                            .filter {
+                                val mime = it.mimeType.lowercase()
+                                val codec = it.codec.lowercase()
+                                if (isWebmVideo) {
+                                    mime.contains("webm") || mime.contains("ogg") || codec.contains("webm") || codec.contains("opus")
+                                } else {
+                                    mime.contains("mp4") || mime.contains("m4a") || codec.contains("m4a") || codec.contains("aac")
+                                }
+                            }
+                        val audioStreamsToUse = if (compatibleAudioStreams.isNotEmpty()) compatibleAudioStreams else {
+                            info.streamSources.filter { it.format == "audio" }
+                        }
+                        val audioStream = audioStreamsToUse
+                            .maxByOrNull { it.quality.replace("kbps", "").toIntOrNull() ?: 0 }
+                        audioStream?.url
+                    } else {
+                        null
                     }
 
                     val title = info?.title ?: localFile?.title ?: "Unknown"
                     val channel = info?.channelName ?: ""
                     val thumbnail = info?.thumbnailUrl ?: localFile?.thumbnailUrl
 
+                    val lastPlayback = historyDao.getLatestPlayback(videoId)
+                    val startPosition = 0L
+                    val savedPosition = lastPlayback?.positionMillis ?: 0L
+                    maxSavedPositionMs = savedPosition
+
                     _uiState.value = _uiState.value.copy(
                         title = title,
                         channelName = channel,
                         thumbnailUrl = thumbnail,
                         isAudioOnly = localFile?.format == "audio" || localFile?.format == "audio_extracted",
-                        durationMs = if (localFile != null) 0L else (info?.durationSeconds ?: 0L) * 1000
+                        durationMs = if (localFile != null) 0L else (info?.durationSeconds ?: 0L) * 1000,
+                        positionMs = startPosition,
+                        historyPositionMs = savedPosition
                     )
 
-                    val lastPlayback = historyDao.getLatestPlayback(videoId)
-                    val startPosition = lastPlayback?.positionMillis ?: 0L
-
-                    val mediaItem = MediaItem.Builder()
+                    val mediaItemBuilder = MediaItem.Builder()
                         .setMediaId(videoId)
                         .setUri(uri)
                         .setMediaMetadata(
@@ -152,10 +190,20 @@ class PlayerViewModel @Inject constructor(
                                 .setArtist(channel)
                                 .build()
                         )
-                        .build()
+
+                    if (audioUri != null) {
+                        mediaItemBuilder.setRequestMetadata(
+                            MediaItem.RequestMetadata.Builder()
+                                .setExtras(android.os.Bundle().apply {
+                                    putString("audio_url", audioUri)
+                                })
+                                .build()
+                        )
+                    }
+
+                    val mediaItem = mediaItemBuilder.build()
                     controller.setMediaItem(mediaItem)
                     controller.seekTo(startPosition)
-                    _uiState.value = _uiState.value.copy(positionMs = startPosition)
                     controller.prepare()
                     controller.play()
                 }
@@ -177,6 +225,7 @@ class PlayerViewModel @Inject constructor(
     fun seekTo(positionMs: Long) {
         val controller = _player.value ?: return
         controller.seekTo(positionMs)
+        _uiState.value = _uiState.value.copy(positionMs = positionMs)
     }
 
     fun seekRelative(offsetMs: Long) {
@@ -202,7 +251,11 @@ class PlayerViewModel @Inject constructor(
                 val controller = _player.value
                 if (controller != null) {
                     val pos = controller.currentPosition
-                    _uiState.value = _uiState.value.copy(positionMs = pos)
+                    val buf = controller.bufferedPosition
+                    _uiState.value = _uiState.value.copy(
+                        positionMs = pos,
+                        bufferedPositionMs = buf
+                    )
                     savePosition()
                 }
             }
@@ -219,28 +272,37 @@ class PlayerViewModel @Inject constructor(
         val videoId = currentVideoId ?: return
         val controller = _player.value ?: return
         val pos = controller.currentPosition
-        viewModelScope.launch {
-            historyDao.upsert(
-                HistoryEntity(
-                    videoId = videoId,
-                    positionMillis = pos,
-                    playedAt = System.currentTimeMillis()
+        if (pos > maxSavedPositionMs) {
+            maxSavedPositionMs = pos
+            _uiState.value = _uiState.value.copy(historyPositionMs = pos)
+            viewModelScope.launch {
+                historyDao.upsert(
+                    HistoryEntity(
+                        videoId = videoId,
+                        positionMillis = pos,
+                        playedAt = System.currentTimeMillis()
+                    )
                 )
-            )
+            }
         }
     }
 
     private fun saveFinalPosition() {
         val videoId = currentVideoId ?: return
         val controller = _player.value ?: return
-        viewModelScope.launch {
-            historyDao.upsert(
-                HistoryEntity(
-                    videoId = videoId,
-                    positionMillis = controller.duration,
-                    playedAt = System.currentTimeMillis()
+        val duration = controller.duration
+        if (duration > maxSavedPositionMs) {
+            maxSavedPositionMs = duration
+            _uiState.value = _uiState.value.copy(historyPositionMs = duration)
+            viewModelScope.launch {
+                historyDao.upsert(
+                    HistoryEntity(
+                        videoId = videoId,
+                        positionMillis = duration,
+                        playedAt = System.currentTimeMillis()
+                    )
                 )
-            )
+            }
         }
     }
 
@@ -252,6 +314,27 @@ class PlayerViewModel @Inject constructor(
 
     fun resetError() {
         _uiState.value = _uiState.value.copy(error = null)
+    }
+
+    fun clearHistoryPosition() {
+        _uiState.value = _uiState.value.copy(historyPositionMs = 0L)
+    }
+
+    fun forceSaveCurrentPosition() {
+        val videoId = currentVideoId ?: return
+        val controller = _player.value ?: return
+        val pos = controller.currentPosition
+        maxSavedPositionMs = pos
+        _uiState.value = _uiState.value.copy(historyPositionMs = pos)
+        viewModelScope.launch {
+            historyDao.upsert(
+                HistoryEntity(
+                    videoId = videoId,
+                    positionMillis = pos,
+                    playedAt = System.currentTimeMillis()
+                )
+            )
+        }
     }
 
     override fun onCleared() {

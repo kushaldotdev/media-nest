@@ -9,13 +9,56 @@ import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.example.medianest.MainActivity
 
+import androidx.media3.common.MediaItem
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.source.MergingMediaSource
+
+import androidx.media3.exoplayer.drm.DrmSessionManagerProvider
+import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
+
 class PlaybackService : MediaSessionService() {
     private var exoPlayer: ExoPlayer? = null
     private var mediaSession: MediaSession? = null
 
     override fun onCreate() {
         super.onCreate()
+        
+        val defaultMediaSourceFactory = DefaultMediaSourceFactory(this)
+        val customMediaSourceFactory = object : androidx.media3.exoplayer.source.MediaSource.Factory {
+            override fun createMediaSource(mediaItem: MediaItem): androidx.media3.exoplayer.source.MediaSource {
+                val extras = mediaItem.requestMetadata.extras
+                val audioUrl = extras?.getString("audio_url")
+                val videoSource = defaultMediaSourceFactory.createMediaSource(mediaItem)
+                if (!audioUrl.isNullOrEmpty()) {
+                    val audioMediaItem = MediaItem.fromUri(audioUrl)
+                    val audioSource = defaultMediaSourceFactory.createMediaSource(audioMediaItem)
+                    return MergingMediaSource(videoSource, audioSource)
+                }
+                return videoSource
+            }
+
+            @Deprecated("Deprecated in Java", ReplaceWith("defaultMediaSourceFactory.supportedTypes"))
+            override fun getSupportedTypes(): IntArray {
+                return defaultMediaSourceFactory.supportedTypes
+            }
+
+            override fun setDrmSessionManagerProvider(
+                drmSessionManagerProvider: DrmSessionManagerProvider
+            ): androidx.media3.exoplayer.source.MediaSource.Factory {
+                defaultMediaSourceFactory.setDrmSessionManagerProvider(drmSessionManagerProvider)
+                return this
+            }
+
+            override fun setLoadErrorHandlingPolicy(
+                loadErrorHandlingPolicy: LoadErrorHandlingPolicy
+            ): androidx.media3.exoplayer.source.MediaSource.Factory {
+                defaultMediaSourceFactory.setLoadErrorHandlingPolicy(loadErrorHandlingPolicy)
+                return this
+            }
+        }
+
         val player = ExoPlayer.Builder(this)
+            .setMediaSourceFactory(customMediaSourceFactory)
             .setHandleAudioBecomingNoisy(true)
             .build()
         val audioAttributes = AudioAttributes.Builder()
