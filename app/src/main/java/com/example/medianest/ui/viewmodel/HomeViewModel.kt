@@ -35,31 +35,75 @@ class HomeViewModel @Inject constructor(
     private val _uiState = MutableStateFlow<HomeUiState>(HomeUiState.Idle)
     val uiState: StateFlow<HomeUiState> = _uiState
 
-    fun onUrlSubmitted(url: String) {
+    fun onUrlSubmitted(inputUrl: String) {
+        val url = inputUrl.trim()
         if (url.isBlank()) {
             _uiState.value = HomeUiState.Error("Please enter a URL")
             return
+        }
+
+        val sanitizedUrl = when {
+            // Handle @channel inputs
+            url.startsWith("@") -> "https://www.youtube.com/$url"
+            
+            // Handle youtu.be short links (strip ?si= but keep the ID)
+            url.contains("youtu.be/") -> {
+                val idPart = url.substringAfter("youtu.be/").substringBefore("?")
+                "https://www.youtube.com/watch?v=$idPart"
+            }
+            
+            // Handle standard youtube.com links (clean up si= parameter)
+            url.contains("youtube.com/") -> {
+                var cleanUrl = url
+                if (!cleanUrl.startsWith("http")) cleanUrl = "https://$cleanUrl"
+                // Remove si= parameter if it exists (using simple string replace for safety)
+                cleanUrl = cleanUrl.replace(Regex("[?&]si=[^&]*"), "")
+                // If we ended up with a dangling ? or &, clean it
+                cleanUrl.replace(Regex("[?&]$"), "")
+            }
+            
+            // Handle bare IDs (e.g. 5AJ1Lhi-J84?si=...)
+            else -> {
+                val cleanId = url.substringAfterLast("/").substringBefore("?")
+                "https://www.youtube.com/watch?v=$cleanId"
+            }
         }
 
         viewModelScope.launch {
             _uiState.value = HomeUiState.Loading
             runCatching {
                 when {
-                    "youtube.com/playlist" in url || "list=" in url -> {
-                        val playlist = repository.extractPlaylist(url)
-                        if (playlist.videos.isNotEmpty()) {
-                            HomeUiState.PlaylistResult(playlist)
-                        } else {
-                            val video = repository.searchAndSave(url)
-                            HomeUiState.Success(video)
+                    "youtube.com/playlist" in sanitizedUrl || "list=" in sanitizedUrl -> {
+                        val listId = sanitizedUrl.substringAfter("list=").substringBefore("&")
+                        val playlistUrl = "https://www.youtube.com/playlist?list=$listId"
+                        
+                        try {
+                            val playlist = repository.extractPlaylist(playlistUrl)
+                            if (playlist.videos.isNotEmpty()) {
+                                HomeUiState.PlaylistResult(playlist)
+                            } else {
+                                val video = repository.searchAndSave(sanitizedUrl)
+                                HomeUiState.Success(video)
+                            }
+                        } catch (e: Exception) {
+                            // If playlist extraction fails (e.g. YouTube Mixes or v1/next errors), fallback to single video
+                            // NewPipe rejects URLs with &list= for stream extraction, so we must clean it:
+                            if ("v=" in sanitizedUrl) {
+                                val videoId = sanitizedUrl.substringAfter("v=").substringBefore("&")
+                                val cleanVideoUrl = "https://www.youtube.com/watch?v=$videoId"
+                                val video = repository.searchAndSave(cleanVideoUrl)
+                                HomeUiState.Success(video)
+                            } else {
+                                HomeUiState.Error("Playlist failed: ${e.message}")
+                            }
                         }
                     }
-                    "/channel/" in url || "/c/" in url || "/@" in url -> {
-                        val channel = repository.extractChannel(url)
+                    "/channel/" in sanitizedUrl || "/c/" in sanitizedUrl || "/@" in sanitizedUrl || sanitizedUrl.contains("youtube.com/@") -> {
+                        val channel = repository.extractChannel(sanitizedUrl)
                         HomeUiState.ChannelResult(channel)
                     }
                     else -> {
-                        val video = repository.searchAndSave(url)
+                        val video = repository.searchAndSave(sanitizedUrl)
                         HomeUiState.Success(video)
                     }
                 }

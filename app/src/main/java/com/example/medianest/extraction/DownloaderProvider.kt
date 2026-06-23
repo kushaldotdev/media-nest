@@ -12,7 +12,16 @@ object DownloaderProvider {
             try {
                 connection.connectTimeout = 10000
                 connection.readTimeout = 30000
+                connection.requestMethod = request.httpMethod()
                 request.headers()?.forEach { (k, v) -> connection.setRequestProperty(k, v.joinToString()) }
+
+                // Send request body for POST/PUT/PATCH
+                val requestBody = request.dataToSend()
+                if (requestBody != null && requestBody.isNotEmpty()) {
+                    connection.doOutput = true
+                    connection.outputStream.use { os -> os.write(requestBody) }
+                }
+
                 connection.connect()
 
                 val responseCode = connection.responseCode
