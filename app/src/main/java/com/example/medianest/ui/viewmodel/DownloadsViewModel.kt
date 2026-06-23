@@ -1,19 +1,30 @@
 package com.example.medianest.ui.viewmodel
 
+import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
+import androidx.media3.session.MediaController
+import androidx.media3.session.SessionToken
+import com.google.common.util.concurrent.ListenableFuture
 import com.example.medianest.data.local.entity.DownloadEntity
 import com.example.medianest.data.local.entity.DownloadStatus
 import com.example.medianest.data.preferences.DownloadPreferences
 import com.example.medianest.data.repository.DownloadRepository
 import com.example.medianest.service.AudioExtractor
 import com.example.medianest.service.DownloadService
+import com.example.medianest.service.PlaybackService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.io.File
@@ -32,6 +43,14 @@ class DownloadsViewModel @Inject constructor(
     private val downloadPreferences: DownloadPreferences,
     private val audioExtractor: AudioExtractor
 ) : ViewModel() {
+
+    private var mediaController: MediaController? = null
+    private var controllerFuture: ListenableFuture<MediaController>? = null
+    private val _playingVideoId = MutableStateFlow<String?>(null)
+    val playingVideoId: StateFlow<String?> = _playingVideoId
+
+    private val _isPlaying = MutableStateFlow(false)
+    val isPlaying: StateFlow<Boolean> = _isPlaying
 
     val downloads: StateFlow<List<DownloadEntity>> = downloadRepository.getAllDownloads()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -59,6 +78,54 @@ class DownloadsViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(extractingVideoId = id)
             }
         }
+
+        viewModelScope.launch {
+            val activeList = downloadRepository.getActiveDownloads().first()
+            if (activeList.isNotEmpty()) {
+                try {
+                    context.startForegroundService(Intent(context, DownloadService::class.java))
+                } catch (e: Exception) {
+                    android.util.Log.e("DownloadsViewModel", "Failed to auto-start DownloadService on init", e)
+                }
+            }
+        }
+
+        val sessionToken = SessionToken(context, ComponentName(context, PlaybackService::class.java))
+        val future = MediaController.Builder(context, sessionToken).buildAsync()
+        controllerFuture = future
+        future.addListener(
+            {
+                try {
+                    val controller = future.get()
+                    mediaController = controller
+                    updatePlaybackState(controller)
+                    controller.addListener(object : Player.Listener {
+                        override fun onIsPlayingChanged(isPlaying: Boolean) {
+                            updatePlaybackState(controller)
+                        }
+                        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                            updatePlaybackState(controller)
+                        }
+                        override fun onPlaybackStateChanged(playbackState: Int) {
+                            updatePlaybackState(controller)
+                        }
+                    })
+                } catch (e: Exception) {
+                    android.util.Log.e("DownloadsViewModel", "Failed to connect to playback service", e)
+                }
+            },
+            ContextCompat.getMainExecutor(context)
+        )
+    }
+
+    private fun updatePlaybackState(player: Player) {
+        _isPlaying.value = player.isPlaying
+        _playingVideoId.value = player.currentMediaItem?.mediaId
+    }
+
+    fun togglePlayPause() {
+        val controller = mediaController ?: return
+        if (controller.isPlaying) controller.pause() else controller.play()
     }
 
     fun pauseDownload(downloadId: Long) {
@@ -107,6 +174,17 @@ class DownloadsViewModel @Inject constructor(
 
     fun retryDownload(download: DownloadEntity) {
         viewModelScope.launch {
+            try {
+                val dir = if (download.format == "audio" || download.format == "audio_extracted") "audio" else "video"
+                val outputDir = File(context.filesDir, "MediaNest/$dir")
+                val tmpFile = File(outputDir, "${download.videoId}_${download.quality}.tmp")
+                if (tmpFile.exists()) {
+                    tmpFile.delete()
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("DownloadsViewModel", "Failed to delete tmp file on restart", e)
+            }
+
             val reset = download.copy(
                 status = DownloadStatus.QUEUED,
                 progress = 0f,
@@ -121,6 +199,68 @@ class DownloadsViewModel @Inject constructor(
     fun setMaxConcurrent(max: Int) {
         viewModelScope.launch {
             downloadPreferences.setMaxConcurrentDownloads(max)
+        }
+    }
+
+    fun pauseAllDownloads() {
+        val intent = Intent(context, DownloadService::class.java).apply {
+            action = DownloadService.ACTION_PAUSE_ALL
+        }
+        try {
+            ContextCompat.startForegroundService(context, intent)
+        } catch (e: Exception) {
+            android.util.Log.e("DownloadsViewModel", "Failed to start pause all command", e)
+        }
+    }
+
+    fun resumeAllDownloads() {
+        val intent = Intent(context, DownloadService::class.java).apply {
+            action = DownloadService.ACTION_RESUME_ALL
+        }
+        try {
+            ContextCompat.startForegroundService(context, intent)
+        } catch (e: Exception) {
+            android.util.Log.e("DownloadsViewModel", "Failed to start resume all command", e)
+        }
+    }
+
+    fun deleteAllDownloads(deleteFiles: Boolean) {
+        viewModelScope.launch {
+            val intent = Intent(context, DownloadService::class.java).apply {
+                action = DownloadService.ACTION_CANCEL_ALL
+            }
+            try {
+                ContextCompat.startForegroundService(context, intent)
+            } catch (e: Exception) {
+                android.util.Log.e("DownloadsViewModel", "Failed to cancel all on delete all", e)
+            }
+
+            val all = downloadRepository.getAllDownloadsOnce()
+            all.forEach { download ->
+                if (deleteFiles) {
+                    if (download.filePath.isNotEmpty()) {
+                        try {
+                            val file = File(download.filePath)
+                            if (file.exists()) {
+                                file.delete()
+                            }
+                        } catch (e: Exception) {
+                            android.util.Log.e("DownloadsViewModel", "Failed to delete file on delete all", e)
+                        }
+                    }
+                    try {
+                        val dir = if (download.format == "audio" || download.format == "audio_extracted") "audio" else "video"
+                        val outputDir = File(context.filesDir, "MediaNest/$dir")
+                        val tmpFile = File(outputDir, "${download.videoId}_${download.quality}.tmp")
+                        if (tmpFile.exists()) {
+                            tmpFile.delete()
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.e("DownloadsViewModel", "Failed to delete tmp file on delete all", e)
+                    }
+                }
+                downloadRepository.delete(download)
+            }
         }
     }
 
@@ -173,4 +313,16 @@ class DownloadsViewModel @Inject constructor(
             }
         }
     }
+
+    override fun onCleared() {
+        super.onCleared()
+        controllerFuture?.let {
+            MediaController.releaseFuture(it)
+        }
+        mediaController = null
+    }
+}
+
+object PendingRestartConfirmation {
+    val pendingDownloadId = MutableSharedFlow<Long>(extraBufferCapacity = 1)
 }

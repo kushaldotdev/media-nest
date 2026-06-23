@@ -48,4 +48,8 @@ class DownloadRepository @Inject constructor(
 
     fun getDownloadsForVideoFlow(videoId: String): Flow<List<DownloadEntity>> =
         downloadDao.getDownloadsForVideoFlow(videoId)
+
+    suspend fun getAllDownloadsOnce(): List<DownloadEntity> = downloadDao.getAllDownloadsOnce()
+
+    suspend fun resetStaleDownloads() = downloadDao.resetStaleDownloads()
 }

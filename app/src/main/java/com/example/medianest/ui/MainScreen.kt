@@ -17,6 +17,8 @@ import com.example.medianest.ui.navigation.AppNavigation
 import com.example.medianest.ui.navigation.BottomNavItem
 import com.example.medianest.ui.theme.MediaNestTheme
 
+import androidx.compose.runtime.LaunchedEffect
+import com.example.medianest.ui.viewmodel.PendingRestartConfirmation
 import com.example.medianest.ui.navigation.NavigationRoutes
 
 @Composable
@@ -25,6 +27,21 @@ fun MainScreen() {
         val navController = rememberNavController()
         val navBackStackEntry by navController.currentBackStackEntryAsState()
         val currentDestination = navBackStackEntry?.destination
+
+        LaunchedEffect(Unit) {
+            PendingRestartConfirmation.pendingDownloadId.collect { id ->
+                val currentRoute = navController.currentBackStackEntry?.destination?.route
+                if (currentRoute != BottomNavItem.Downloads.route) {
+                    navController.navigate(BottomNavItem.Downloads.route) {
+                        popUpTo(navController.graph.findStartDestination().id) {
+                            saveState = false
+                        }
+                        launchSingleTop = true
+                        restoreState = false
+                    }
+                }
+            }
+        }
 
         val showBottomBar = navBackStackEntry?.destination?.route?.let { route ->
             route != NavigationRoutes.PLAYER_ONLINE && route != NavigationRoutes.PLAYER_OFFLINE

@@ -206,7 +206,7 @@ private fun StreamQualityRow(
                             Text("Paused")
                         }
                     }
-                    DownloadStatus.FAILED -> {
+                    DownloadStatus.FAILED, DownloadStatus.CANCELED -> {
                         TextButton(onClick = { onDownload(stream) }) {
                             Text("Download")
                         }

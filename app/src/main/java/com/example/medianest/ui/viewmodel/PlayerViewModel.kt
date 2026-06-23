@@ -144,6 +144,7 @@ class PlayerViewModel @Inject constructor(
                     val startPosition = lastPlayback?.positionMillis ?: 0L
 
                     val mediaItem = MediaItem.Builder()
+                        .setMediaId(videoId)
                         .setUri(uri)
                         .setMediaMetadata(
                             MediaMetadata.Builder()

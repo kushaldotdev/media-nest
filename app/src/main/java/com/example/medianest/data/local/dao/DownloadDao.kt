@@ -65,4 +65,7 @@ interface DownloadDao {
 
     @Query("SELECT * FROM downloads WHERE updatedAt > :since")
     suspend fun getDownloadsSince(since: Long): List<DownloadEntity>
+
+    @Query("UPDATE downloads SET status = 'QUEUED' WHERE status = 'DOWNLOADING'")
+    suspend fun resetStaleDownloads()
 }
