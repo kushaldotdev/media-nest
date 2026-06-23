@@ -34,6 +34,9 @@ class DownloadRepository @Inject constructor(
     suspend fun updateStatus(id: Long, status: DownloadStatus, progress: Float) =
         downloadDao.updateStatus(id, status, progress)
 
+    suspend fun updateStatusOnly(id: Long, status: DownloadStatus) =
+        downloadDao.updateStatusOnly(id, status)
+
     suspend fun markFailed(id: Long, errorMessage: String, retryCount: Int) =
         downloadDao.markFailed(id, DownloadStatus.FAILED, errorMessage, retryCount)
 

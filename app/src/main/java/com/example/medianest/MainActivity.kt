@@ -51,6 +51,9 @@ class MainActivity : ComponentActivity() {
                 PendingRestartConfirmation.pendingDownloadId.tryEmit(id)
                 intent.action = null
             }
+        } else if (intent?.action == "com.example.medianest.ACTION_NAVIGATE_DOWNLOADS") {
+            PendingRestartConfirmation.navigateToDownloads.tryEmit(Unit)
+            intent.action = null
         }
     }
 }

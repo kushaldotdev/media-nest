@@ -129,14 +129,24 @@ class DownloadsViewModel @Inject constructor(
     }
 
     fun pauseDownload(downloadId: Long) {
+        // Optimistic DB update → Room Flow emits → app UI shows Paused immediately
+        viewModelScope.launch {
+            downloadRepository.updateStatusOnly(downloadId, DownloadStatus.PAUSED)
+        }
         DownloadService.pause(context, downloadId)
     }
 
     fun resumeDownload(downloadId: Long) {
+        viewModelScope.launch {
+            downloadRepository.updateStatusOnly(downloadId, DownloadStatus.QUEUED)
+        }
         DownloadService.resume(context, downloadId)
     }
 
     fun cancelDownload(downloadId: Long) {
+        viewModelScope.launch {
+            downloadRepository.updateStatusOnly(downloadId, DownloadStatus.CANCELED)
+        }
         DownloadService.cancel(context, downloadId)
     }
 
@@ -324,5 +334,6 @@ class DownloadsViewModel @Inject constructor(
 }
 
 object PendingRestartConfirmation {
-    val pendingDownloadId = MutableSharedFlow<Long>(extraBufferCapacity = 1)
+    val pendingDownloadId = kotlinx.coroutines.flow.MutableSharedFlow<Long>(extraBufferCapacity = 1)
+    val navigateToDownloads = kotlinx.coroutines.flow.MutableSharedFlow<Unit>(extraBufferCapacity = 1)
 }

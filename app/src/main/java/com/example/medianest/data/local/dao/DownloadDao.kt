@@ -48,6 +48,9 @@ interface DownloadDao {
     @Query("UPDATE downloads SET status = :status, progress = :progress WHERE id = :id")
     suspend fun updateStatus(id: Long, status: DownloadStatus, progress: Float)
 
+    @Query("UPDATE downloads SET status = :status WHERE id = :id")
+    suspend fun updateStatusOnly(id: Long, status: DownloadStatus)
+
     @Query("UPDATE downloads SET status = :status, errorMessage = :errorMessage, retryCount = :retryCount WHERE id = :id")
     suspend fun markFailed(id: Long, status: DownloadStatus, errorMessage: String, retryCount: Int)
 
