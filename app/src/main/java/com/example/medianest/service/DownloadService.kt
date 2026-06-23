@@ -35,6 +35,10 @@ import okhttp3.Request
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import android.media.MediaExtractor
+import android.media.MediaFormat
+import android.media.MediaMuxer
+import java.nio.ByteBuffer
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 
@@ -112,12 +116,16 @@ class DownloadService : Service() {
     private val queueMutex = kotlinx.coroutines.sync.Mutex()
     private var isFirstStart = true
     private var isForeground = false
+    private lateinit var initJob: Job
 
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
-        serviceScope.launch {
+        initJob = serviceScope.launch {
             repository.resetStaleDownloads()
+        }
+        serviceScope.launch {
+            initJob.join()
             preferences.maxConcurrentDownloads.collect { max ->
                 withContext(Dispatchers.Main) {
                     processQueue()
@@ -166,6 +174,9 @@ class DownloadService : Service() {
 
     private fun processQueue() {
         serviceScope.launch {
+            if (::initJob.isInitialized) {
+                initJob.join()
+            }
             queueMutex.withLock {
                 val maxConcurrent = preferences.maxConcurrentDownloads.first()
                 val queue = repository.getDownloadsByStatus(DownloadStatus.QUEUED).first()
@@ -176,25 +187,30 @@ class DownloadService : Service() {
 
                 val downloading = repository.getDownloadsByStatus(DownloadStatus.DOWNLOADING).first()
                     .filter { it.format != "audio_extracted" && !activeJobs.containsKey(it.id) }
+
+                android.util.Log.d("DownloadService", "processQueue: maxConcurrent=$maxConcurrent, queueSize=${queue.size}, activeJobsSize=${activeJobs.size}, activeJobsKeys=${activeJobs.keys}, downloadingSize=${downloading.size}, pausedSize=${paused.size}")
+
                 // Re-enqueue ghost downloading entries (e.g. killed abruptly)
                 downloading.forEach { download ->
                     if (activeJobs.size < maxConcurrent) {
+                        android.util.Log.d("DownloadService", "Re-enqueuing ghost downloading entry: ${download.id}")
                         enqueueDownload(download)
                     } else {
+                        android.util.Log.d("DownloadService", "Marking ghost downloading entry as QUEUED due to limit: ${download.id}")
                         repository.updateStatus(download.id, DownloadStatus.QUEUED, download.progress)
                     }
                 }
 
                 if (activeJobs.size > maxConcurrent) {
                     val excess = activeJobs.size - maxConcurrent
-                    // Wait, we can't easily queue already running jobs without cancelling them.
-                    // Let's just handle it normally or cancel the newest ones.
-                    // But typically this shouldn't happen dynamically.
+                    android.util.Log.w("DownloadService", "Active jobs size (${activeJobs.size}) exceeds maxConcurrent ($maxConcurrent) by $excess")
                 }
 
                 val slots = (maxConcurrent - activeJobs.size).coerceAtLeast(0)
+                android.util.Log.d("DownloadService", "Available slots: $slots")
 
                 if (queue.isEmpty() && activeJobs.isEmpty() && paused.isEmpty() && downloading.isEmpty()) {
+                    android.util.Log.d("DownloadService", "All queues and jobs empty. Stopping service.")
                     try {
                         NotificationManagerCompat.from(this@DownloadService).cancel(NOTIFICATION_ID)
                     } catch (_: SecurityException) { }
@@ -203,7 +219,13 @@ class DownloadService : Service() {
                     stopSelf()
                     return@launch
                 }
-                queue.take(slots).forEach { enqueueDownload(it) }
+                
+                if (slots > 0 && queue.isNotEmpty()) {
+                    queue.take(slots).forEach { 
+                        android.util.Log.d("DownloadService", "Enqueuing queued download: ${it.id} (title=${it.title})")
+                        enqueueDownload(it) 
+                    }
+                }
                 updateNotification()
             }
         }
@@ -263,6 +285,186 @@ class DownloadService : Service() {
         activeJobs[download.id] = job
     }
 
+    private suspend fun downloadUrlToFile(
+        download: DownloadEntity,
+        url: String,
+        tmpFile: File,
+        startProgress: Float,
+        endProgress: Float,
+        progressMessage: String?,
+        isAudioStream: Boolean = false,
+        onUrlExpired: suspend () -> String?
+    ): Boolean {
+        var currentUrl = url
+        var retries = 0
+        val maxRetries = 3
+        while (retries <= maxRetries) {
+            if (isPaused(download.id) || isCancelled(download.id) || isPutToQueue(download.id)) {
+                return false
+            }
+            try {
+                val existingBytes = if (tmpFile.exists()) tmpFile.length() else 0L
+                val requestBuilder = Request.Builder().url(currentUrl)
+                // Always send the Range header to bypass YouTube's throttling on non-range requests
+                requestBuilder.header("Range", "bytes=$existingBytes-")
+                requestBuilder.header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                requestBuilder.header("Accept-Encoding", "identity")
+                val request = requestBuilder.build()
+
+                val call = okHttpClient.newCall(request)
+                activeCalls[download.id] = call
+                val response = withContext(Dispatchers.IO) {
+                    call.execute()
+                }
+
+                if (!response.isSuccessful) {
+                    if (response.code == 416) {
+                        tmpFile.delete()
+                        retries++
+                        continue
+                    }
+                    if ((response.code == 403 || response.code == 410) && retries < maxRetries) {
+                        retries++
+                        repository.updateRetryCount(download.id, retries)
+                        val freshUrl = onUrlExpired()
+                        if (freshUrl != null) {
+                            currentUrl = freshUrl
+                            continue
+                        }
+                    }
+                    if (isAudioStream) {
+                        throw IOException("HTTP ${response.code}")
+                    } else {
+                        repository.markFailed(download.id, "HTTP ${response.code}", retries)
+                        return false
+                    }
+                }
+
+                val isRange = response.code == 206
+                val actualExistingBytes = if (isRange) existingBytes else 0L
+                if (!isRange && tmpFile.exists()) {
+                    tmpFile.delete()
+                }
+
+                val responseLength = response.body?.contentLength() ?: -1L
+                val resolvedTotalLength = if (responseLength > 0) actualExistingBytes + responseLength else -1L
+
+                if (resolvedTotalLength > 0 && !isAudioStream && download.fileSizeBytes != resolvedTotalLength) {
+                    repository.updateFileSize(download.id, resolvedTotalLength)
+                }
+
+                response.body?.byteStream()?.use { input ->
+                    FileOutputStream(tmpFile, isRange).use { output ->
+                        val buffer = ByteArray(128 * 1024) // 128 KB buffer to maximize throughput
+                        var bytesRead = actualExistingBytes
+                        var lastProgressUpdate = 0L
+                        var lastProgressTime = System.currentTimeMillis()
+                        var lastProgressSent = startProgress + (if (resolvedTotalLength > 0) (bytesRead.toFloat() / resolvedTotalLength) else 0f) * (endProgress - startProgress)
+
+                        var speedLastTime = System.currentTimeMillis()
+                        var speedLastBytes = bytesRead
+                        var currentSpeedString: String? = null
+
+                        while (true) {
+                            if (isPaused(download.id)) {
+                                val currentPct = if (resolvedTotalLength > 0) bytesRead.toFloat() / resolvedTotalLength else 0f
+                                val savedProgress = startProgress + currentPct * (endProgress - startProgress)
+                                repository.updateStatus(download.id, DownloadStatus.PAUSED, savedProgress)
+                                activeJobs.remove(download.id)
+                                return false
+                            }
+                            if (isCancelled(download.id)) {
+                                tmpFile.delete()
+                                repository.updateStatus(download.id, DownloadStatus.CANCELED, download.progress)
+                                return false
+                            }
+                            if (isPutToQueue(download.id)) {
+                                val currentPct = if (resolvedTotalLength > 0) bytesRead.toFloat() / resolvedTotalLength else 0f
+                                val savedProgress = startProgress + currentPct * (endProgress - startProgress)
+                                repository.updateStatus(download.id, DownloadStatus.QUEUED, savedProgress)
+                                activeJobs.remove(download.id)
+                                return false
+                            }
+
+                            val read = input.read(buffer)
+                            if (read == -1) break
+                            output.write(buffer, 0, read)
+                            bytesRead += read
+
+                            val currentPct = if (resolvedTotalLength > 0) bytesRead.toFloat() / resolvedTotalLength else 0f
+                            val currentProgress = startProgress + currentPct * (endProgress - startProgress)
+
+                            val currentTime = System.currentTimeMillis()
+                            val timeElapsed = currentTime - lastProgressTime >= 250
+
+                            // Calculate download speed every 1 second
+                            if (currentTime - speedLastTime >= 1000) {
+                                val bytesDiff = bytesRead - speedLastBytes
+                                val timeDiff = currentTime - speedLastTime
+                                if (timeDiff > 0) {
+                                    val bytesPerSec = (bytesDiff * 1000f) / timeDiff
+                                    currentSpeedString = if (bytesPerSec >= 1024 * 1024) {
+                                        "%.1f MB/s".format(bytesPerSec / (1024f * 1024f))
+                                    } else {
+                                        "%.0f KB/s".format(bytesPerSec / 1024f)
+                                    }
+                                }
+                                speedLastTime = currentTime
+                                speedLastBytes = bytesRead
+                            }
+
+                            val shouldUpdate = if (resolvedTotalLength > 0) {
+                                (currentProgress - lastProgressSent >= 0.01f && timeElapsed) || (bytesRead == resolvedTotalLength)
+                            } else {
+                                (bytesRead - lastProgressUpdate > 1024 * 1024) && timeElapsed
+                            }
+
+                            if (shouldUpdate) {
+                                if (!isPaused(download.id) && !isCancelled(download.id) && !isPutToQueue(download.id)) {
+                                    val payload = if (progressMessage != null) {
+                                        if (currentSpeedString != null) "$progressMessage|$currentSpeedString" else progressMessage
+                                    } else {
+                                        currentSpeedString
+                                    }
+                                    repository.updateProgressAndMessage(download.id, currentProgress, payload)
+                                }
+                                activeProgress[download.id] = ActiveProgress(
+                                    title = if (progressMessage != null) "Downloading audio..." else (download.title.ifEmpty { download.quality }),
+                                    bytesDownloaded = (currentProgress * (if (resolvedTotalLength > 0) resolvedTotalLength else bytesRead)).toLong(),
+                                    totalBytes = if (resolvedTotalLength > 0) resolvedTotalLength else bytesRead
+                                )
+                                updateNotification()
+                                lastProgressSent = currentProgress
+                                lastProgressUpdate = bytesRead
+                                lastProgressTime = currentTime
+                            }
+                        }
+                    }
+                }
+                return true
+            } catch (e: CancellationException) {
+                return false
+            } catch (e: Exception) {
+                if (isPaused(download.id) || isCancelled(download.id) || isPutToQueue(download.id)) {
+                    return false
+                }
+                if (retries < maxRetries) {
+                    retries++
+                    repository.updateRetryCount(download.id, retries)
+                    kotlinx.coroutines.delay(1000L * retries)
+                    continue
+                }
+                if (isAudioStream) {
+                    throw e
+                } else {
+                    repository.markFailed(download.id, e.message ?: "Download failed", retries)
+                    return false
+                }
+            }
+        }
+        return false
+    }
+
     private suspend fun downloadFile(download: DownloadEntity) {
         if (isPaused(download.id)) {
             repository.updateStatus(download.id, DownloadStatus.PAUSED, download.progress)
@@ -281,348 +483,210 @@ class DownloadService : Service() {
         outputDir.mkdirs()
 
         val tmpFile = File(outputDir, "${download.videoId}_${download.quality}.tmp")
+        val audioFile = File(outputDir, "${download.videoId}_${download.quality}_audio.tmp")
         
-        val initialBytes = if (tmpFile.exists()) tmpFile.length() else 0L
-        activeProgress[download.id] = ActiveProgress(
-            title = download.title.ifEmpty { download.quality },
-            bytesDownloaded = initialBytes,
-            totalBytes = download.fileSizeBytes
-        )
-        updateNotification()
-
-        var currentUrl = download.url
-        var retries = 0
-        val maxRetries = 3
-        var videoDownloadCompleted = false
         var ext = if (download.url.contains("webm", ignoreCase = true) || download.quality.contains("webm", ignoreCase = true)) "webm" else "mp4"
+        var videoDownloadCompleted = false
 
         if (download.format == "video_only" && tmpFile.exists() && download.fileSizeBytes > 0L && tmpFile.length() >= download.fileSizeBytes) {
             videoDownloadCompleted = true
         }
 
-        while (retries <= maxRetries) {
-            try {
-                var totalLength = download.fileSizeBytes
-                var bytesRead = tmpFile.length()
+        // Step 1: Download video (or primary stream)
+        val videoSuccess = if (videoDownloadCompleted) true else {
+            downloadUrlToFile(
+                download = download,
+                url = download.url,
+                tmpFile = tmpFile,
+                startProgress = 0.0f,
+                endProgress = if (download.format == "video_only") 0.90f else 1.0f,
+                progressMessage = null,
+                isAudioStream = false
+            ) {
+                val freshInfo = extractor.extractVideo(download.videoUrl ?: download.url)
+                val matchingStream = freshInfo.streamSources.find {
+                    it.format == download.format && it.quality == download.quality
+                }
+                matchingStream?.url
+            }
+        }
 
-                if (!videoDownloadCompleted) {
-                    val existingBytes = if (tmpFile.exists()) tmpFile.length() else 0L
+        if (!videoSuccess) {
+            return
+        }
 
-                    val requestBuilder = Request.Builder().url(currentUrl)
-                    if (existingBytes > 0) {
-                        requestBuilder.header("Range", "bytes=$existingBytes-")
-                    }
-                    requestBuilder.header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
-                    requestBuilder.header("Accept-Encoding", "identity")
-                    val request = requestBuilder.build()
+        val fileName = "${download.videoId}_${download.quality}.$ext"
+        val outputFile = File(outputDir, fileName)
 
-                    val call = okHttpClient.newCall(request)
-                    activeCalls[download.id] = call
-                    val response = withContext(Dispatchers.IO) {
-                        call.execute()
-                    }
+        // Step 2: Download and merge audio if video_only
+        if (download.format == "video_only") {
+            var audioSuccess = false
+            var audioRetries = 0
+            val maxAudioRetries = 3
 
-                    if (!response.isSuccessful) {
-                        if (response.code == 416) {
-                            tmpFile.delete()
-                            retries++
-                            continue
-                        }
-                        if ((response.code == 403 || response.code == 410) && retries < maxRetries) {
-                            retries++
-                            repository.update(download.copy(retryCount = retries))
-                            val freshInfo = extractor.extractVideo(download.videoUrl ?: download.url)
-                            val matchingStream = freshInfo.streamSources.find {
-                                it.format == download.format && it.quality == download.quality
+            while (audioRetries <= maxAudioRetries) {
+                if (isPaused(download.id) || isCancelled(download.id) || isPutToQueue(download.id)) {
+                    return
+                }
+                try {
+                    repository.updateProgressAndMessage(download.id, 0.90f, "downloading_audio")
+                    activeProgress[download.id] = ActiveProgress(
+                        title = "Downloading audio...",
+                        bytesDownloaded = (0.90f * (if (download.fileSizeBytes > 0) download.fileSizeBytes else tmpFile.length())).toLong(),
+                        totalBytes = if (download.fileSizeBytes > 0) download.fileSizeBytes else tmpFile.length()
+                    )
+                    updateNotification()
+
+                    val freshInfo = extractor.extractVideo(download.videoUrl ?: ("https://www.youtube.com/watch?v=" + download.videoId))
+                    val isWebmVideo = ext.contains("webm", ignoreCase = true)
+                    val compatibleAudioStreams = freshInfo.streamSources
+                        .filter { it.format == "audio" }
+                        .filter {
+                            val mime = it.mimeType.lowercase()
+                            val codec = it.codec.lowercase()
+                            if (isWebmVideo) {
+                                mime.contains("webm") || mime.contains("ogg") || codec.contains("webm") || codec.contains("opus")
+                            } else {
+                                mime.contains("mp4") || mime.contains("m4a") || codec.contains("m4a") || codec.contains("aac")
                             }
-                            if (matchingStream != null) {
-                                currentUrl = matchingStream.url
-                                continue
-                            }
                         }
-                        repository.markFailed(download.id, "HTTP ${response.code}", retries)
+                    val audioStreamsToUse = if (compatibleAudioStreams.isNotEmpty()) compatibleAudioStreams else {
+                        freshInfo.streamSources.filter { it.format == "audio" }
+                    }
+                    val audioStream = audioStreamsToUse
+                        .maxByOrNull { it.quality.replace("kbps", "").toIntOrNull() ?: 0 }
+
+                    if (audioStream == null) {
+                        throw IOException("No audio stream found for merging")
+                    }
+
+                    val downloadAudioSuccess = downloadUrlToFile(
+                        download = download,
+                        url = audioStream.url,
+                        tmpFile = audioFile,
+                        startProgress = 0.90f,
+                        endProgress = 0.95f,
+                        progressMessage = "downloading_audio",
+                        isAudioStream = true
+                    ) {
+                        val freshAudioInfo = extractor.extractVideo(download.videoUrl ?: ("https://www.youtube.com/watch?v=" + download.videoId))
+                        val compatibleFreshAudioStreams = freshAudioInfo.streamSources
+                            .filter { it.format == "audio" }
+                            .filter {
+                                val mime = it.mimeType.lowercase()
+                                val codec = it.codec.lowercase()
+                                if (isWebmVideo) {
+                                    mime.contains("webm") || mime.contains("ogg") || codec.contains("webm") || codec.contains("opus")
+                                } else {
+                                    mime.contains("mp4") || mime.contains("m4a") || codec.contains("m4a") || codec.contains("aac")
+                                }
+                            }
+                        val freshAudioStreamsToUse = if (compatibleFreshAudioStreams.isNotEmpty()) compatibleFreshAudioStreams else {
+                            freshAudioInfo.streamSources.filter { it.format == "audio" }
+                        }
+                        val freshAudioStream = freshAudioStreamsToUse
+                            .maxByOrNull { it.quality.replace("kbps", "").toIntOrNull() ?: 0 }
+                        freshAudioStream?.url
+                    }
+
+                    if (!downloadAudioSuccess) {
                         return
                     }
 
-                    val isRange = response.code == 206
-                    val actualExistingBytes = if (isRange) existingBytes else 0L
-                    if (!isRange && tmpFile.exists()) {
+                    repository.updateProgressAndMessage(download.id, 0.97f, "merging")
+                    activeProgress[download.id] = ActiveProgress(
+                        title = "Merging video & audio...",
+                        bytesDownloaded = (0.97f * (if (download.fileSizeBytes > 0) download.fileSizeBytes else tmpFile.length())).toLong(),
+                        totalBytes = if (download.fileSizeBytes > 0) download.fileSizeBytes else tmpFile.length()
+                    )
+                    updateNotification()
+
+                    android.util.Log.d("DownloadService", "Attempting native MediaMuxer merge...")
+                    var nativeMergeSuccess = false
+                    try {
+                        nativeMergeSuccess = mergeAudioVideoNative(tmpFile, audioFile, outputFile)
+                    } catch (t: Throwable) {
+                        android.util.Log.e("DownloadService", "Native MediaMuxer merge failed with exception", t)
+                    }
+
+                    if (nativeMergeSuccess) {
                         tmpFile.delete()
+                        audioFile.delete()
+                        audioSuccess = true
+                        break
                     }
 
-                    val responseLength = response.body?.contentLength() ?: -1L
-                    val resolvedTotalLength = if (responseLength > 0) actualExistingBytes + responseLength else -1L
-                    totalLength = resolvedTotalLength
-
-                    if (resolvedTotalLength > 0 && download.fileSizeBytes != resolvedTotalLength) {
-                        repository.update(download.copy(fileSizeBytes = resolvedTotalLength))
-                    }
-
-                    val mimeType = response.body?.contentType()?.toString() ?: "video/mp4"
-                    ext = mimeType.split("/").lastOrNull()?.split(";")?.first() ?: "mp4"
-
-                    response.body?.byteStream()?.use { input ->
-                        FileOutputStream(tmpFile, isRange).use { output ->
-                            val buffer = ByteArray(8192)
-                            bytesRead = actualExistingBytes
-                            var lastProgressUpdate = 0L
-                            var lastProgressTime = System.currentTimeMillis()
-                            var lastProgressSent = if (resolvedTotalLength > 0) {
-                                val raw = bytesRead.toFloat() / resolvedTotalLength
-                                if (download.format == "video_only") raw * 0.90f else raw
-                            } else {
-                                0.0f
-                            }
-
-                            while (true) {
-                                if (isPaused(download.id)) {
-                                    repository.updateStatus(download.id, DownloadStatus.PAUSED,
-                                        if (resolvedTotalLength > 0) bytesRead.toFloat() / resolvedTotalLength else 0f)
-                                    activeJobs.remove(download.id)
-                                    return
-                                }
-                                if (isCancelled(download.id)) {
-                                    tmpFile.delete()
-                                    repository.updateStatus(download.id, DownloadStatus.CANCELED, download.progress)
-                                    return
-                                }
-                                if (isPutToQueue(download.id)) {
-                                    repository.updateStatus(download.id, DownloadStatus.QUEUED,
-                                        if (resolvedTotalLength > 0) bytesRead.toFloat() / resolvedTotalLength else 0f)
-                                    activeJobs.remove(download.id)
-                                    return
-                                }
-
-                                val read = input.read(buffer)
-                                if (read == -1) break
-                                output.write(buffer, 0, read)
-                                bytesRead += read
-
-                                val currentProgress = if (resolvedTotalLength > 0) {
-                                    val rawProgress = bytesRead.toFloat() / resolvedTotalLength
-                                    if (download.format == "video_only") rawProgress * 0.90f else rawProgress
-                                } else {
-                                    0f
-                                }
-
-                                val currentTime = System.currentTimeMillis()
-                                val timeElapsed = currentTime - lastProgressTime >= 250
-                                val shouldUpdate = if (resolvedTotalLength > 0) {
-                                    (currentProgress - lastProgressSent >= 0.01f && timeElapsed) || (bytesRead == resolvedTotalLength)
-                                } else {
-                                    (bytesRead - lastProgressUpdate > 1024 * 1024) && timeElapsed
-                                }
-
-                                if (shouldUpdate) {
-                                    if (!isPaused(download.id) && !isCancelled(download.id) && !isPutToQueue(download.id)) {
-                                        repository.updateStatus(download.id, DownloadStatus.DOWNLOADING, currentProgress)
-                                    }
-                                    activeProgress[download.id] = ActiveProgress(
-                                        title = download.title.ifEmpty { download.quality },
-                                        bytesDownloaded = (currentProgress * (if (resolvedTotalLength > 0) resolvedTotalLength else bytesRead)).toLong(),
-                                        totalBytes = if (resolvedTotalLength > 0) resolvedTotalLength else bytesRead
-                                    )
-                                    updateNotification()
-                                    lastProgressSent = currentProgress
-                                    lastProgressUpdate = bytesRead
-                                    lastProgressTime = currentTime
-                                }
-                            }
-                        }
-                    }
-                    videoDownloadCompleted = true
-                }
-
-                val fileName = "${download.videoId}_${download.quality}.$ext"
-                val outputFile = File(outputDir, fileName)
-
-                if (download.format == "video_only") {
-                    var audioRetries = 0
-                    val maxAudioRetries = 3
-                    var audioSuccess = false
-
-                    while (audioRetries <= maxAudioRetries) {
-                        if (isPaused(download.id) || isCancelled(download.id) || isPutToQueue(download.id)) {
-                            throw CancellationException("Download interrupted during audio phase")
-                        }
-                        val audioFile = File(outputDir, "${download.videoId}_${download.quality}_audio.tmp")
-                        try {
-                            if (!isPaused(download.id) && !isCancelled(download.id) && !isPutToQueue(download.id)) {
-                                repository.updateProgressAndMessage(download.id, 0.90f, "downloading_audio")
-                            }
-                            activeProgress[download.id] = ActiveProgress(
-                                title = "Downloading audio...",
-                                bytesDownloaded = (0.90f * (if (totalLength > 0) totalLength else bytesRead)).toLong(),
-                                totalBytes = if (totalLength > 0) totalLength else bytesRead
-                            )
-                            updateNotification()
-
-                            val freshInfo = extractor.extractVideo(download.videoUrl ?: ("https://www.youtube.com/watch?v=" + download.videoId))
-                            val audioStream = freshInfo.streamSources
-                                .filter { it.format == "audio" }
-                                .maxByOrNull { it.quality.replace("kbps", "").toIntOrNull() ?: 0 }
-
-                            if (audioStream == null) {
-                                throw IOException("No audio stream found for merging")
-                            }
-
-                            val audioRequest = Request.Builder().url(audioStream.url)
-                                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
-                                .header("Accept-Encoding", "identity").build()
-
-                            okHttpClient.newCall(audioRequest).execute().use { response ->
-                                if (!response.isSuccessful) {
-                                    throw IOException("Failed to download audio stream: HTTP ${response.code}")
-                                }
-                                val audioBody = response.body ?: throw IOException("Empty response body for audio stream")
-                                val audioTotalLength = audioBody.contentLength()
-                                audioBody.byteStream().use { audioInput ->
-                                    FileOutputStream(audioFile).use { audioOutput ->
-                                        val audioBuffer = ByteArray(8192)
-                                        var audioBytesRead = 0L
-                                        var audioLastProgressSent = 0.90f
-                                        var audioLastProgressTime = System.currentTimeMillis()
-
-                                        while (true) {
-                                            if (isPaused(download.id) || isCancelled(download.id) || isPutToQueue(download.id)) {
-                                                throw CancellationException("Download interrupted during audio phase")
-                                            }
-                                            val read = audioInput.read(audioBuffer)
-                                            if (read == -1) break
-                                            audioOutput.write(audioBuffer, 0, read)
-                                            audioBytesRead += read
-
-                                            val audioProgress = 0.90f + (if (audioTotalLength > 0) (audioBytesRead.toFloat() / audioTotalLength) else 0f) * 0.05f
-                                            
-                                            val currentTime = System.currentTimeMillis()
-                                            val timeElapsed = currentTime - audioLastProgressTime >= 250
-                                            val shouldUpdateAudio = if (audioTotalLength > 0) {
-                                                (audioProgress - audioLastProgressSent >= 0.01f && timeElapsed) || (audioBytesRead == audioTotalLength)
-                                            } else {
-                                                (audioBytesRead % (1024 * 1024) == 0L) && timeElapsed
-                                            }
-
-                                            if (shouldUpdateAudio) {
-                                                if (!isPaused(download.id) && !isCancelled(download.id) && !isPutToQueue(download.id)) {
-                                                    repository.updateProgressAndMessage(download.id, audioProgress, "downloading_audio")
-                                                }
-                                                activeProgress[download.id] = ActiveProgress(
-                                                    title = "Downloading audio...",
-                                                    bytesDownloaded = (audioProgress * (if (totalLength > 0) totalLength else bytesRead)).toLong(),
-                                                    totalBytes = if (totalLength > 0) totalLength else bytesRead
-                                                )
-                                                updateNotification()
-                                                audioLastProgressSent = audioProgress
-                                                audioLastProgressTime = currentTime
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                            if (!isPaused(download.id) && !isCancelled(download.id) && !isPutToQueue(download.id)) {
-                                repository.updateProgressAndMessage(download.id, 0.95f, "downloading_audio")
-                            }
-
-                            if (!isPaused(download.id) && !isCancelled(download.id) && !isPutToQueue(download.id)) {
-                                repository.updateProgressAndMessage(download.id, 0.97f, "merging")
-                            }
-                            activeProgress[download.id] = ActiveProgress(
-                                title = "Merging video & audio...",
-                                bytesDownloaded = (0.97f * (if (totalLength > 0) totalLength else bytesRead)).toLong(),
-                                totalBytes = if (totalLength > 0) totalLength else bytesRead
-                            )
-                            updateNotification()
-
-                            val audioCodec = if (ext.contains("webm", ignoreCase = true)) "opus" else "aac"
-                            val ffmpegCommand = "-y -i \"${tmpFile.absolutePath}\" -i \"${audioFile.absolutePath}\" -c:v copy -c:a $audioCodec \"${outputFile.absolutePath}\""
-                            val session = com.arthenica.ffmpegkit.FFmpegKit.execute(ffmpegCommand)
-                            if (com.arthenica.ffmpegkit.ReturnCode.isSuccess(session.returnCode)) {
-                                tmpFile.delete()
-                                audioFile.delete()
-                                audioSuccess = true
-                                break
-                            } else {
-                                val logs = session.allLogsAsString ?: "FFmpeg merge failed with no logs"
-                                throw IOException("FFmpeg merge failed: $logs")
-                            }
-                        } catch (e: CancellationException) {
-                            if (audioFile.exists()) audioFile.delete()
-                            throw e
-                        } catch (e: Exception) {
-                            android.util.Log.e("DownloadService", "Audio download/merge attempt $audioRetries failed", e)
-                            if (audioFile.exists()) audioFile.delete()
-                            audioRetries++
-                            if (audioRetries > maxAudioRetries) {
-                                throw e
-                            }
-                            kotlinx.coroutines.delay(2000)
-                        }
-                    }
-                } else {
-                    if (!tmpFile.renameTo(outputFile)) {
-                        try {
-                            tmpFile.copyTo(outputFile, overwrite = true)
+                    android.util.Log.d("DownloadService", "Native merge failed/skipped. Falling back to FFmpegKit...")
+                    val audioCodec = if (ext.contains("webm", ignoreCase = true)) "opus" else "aac"
+                    val ffmpegCommand = "-y -i \"${tmpFile.absolutePath}\" -i \"${audioFile.absolutePath}\" -c:v copy -c:a $audioCodec \"${outputFile.absolutePath}\""
+                    
+                    var ffmpegSuccess = false
+                    try {
+                        val session = com.arthenica.ffmpegkit.FFmpegKit.execute(ffmpegCommand)
+                        if (com.arthenica.ffmpegkit.ReturnCode.isSuccess(session.returnCode)) {
                             tmpFile.delete()
-                        } catch (e: Exception) {
-                            throw IOException("Failed to rename temp file to $outputFile: ${e.message}")
+                            audioFile.delete()
+                            ffmpegSuccess = true
+                        } else {
+                            val logs = session.allLogsAsString ?: "FFmpeg merge failed with no logs"
+                            android.util.Log.e("DownloadService", "FFmpeg merge failed: $logs")
                         }
+                    } catch (t: Throwable) {
+                        android.util.Log.e("DownloadService", "FFmpegKit execution failed completely", t)
+                        throw IOException("FFmpegKit failed to load or run: ${t.message}", t)
                     }
-                }
 
-                repository.markCompleted(download.id, bytesRead, outputFile.absolutePath)
-                activeProgress.remove(download.id)
-                updateNotification()
-
-                // Persist video metadata for offline playback
-                val existing = videoDao.getVideoById(download.videoId)
-                if (existing == null) {
-                    videoDao.insert(
-                        VideoEntity(
-                            id = download.videoId,
-                            title = download.title.ifEmpty { download.quality },
-                            channelName = "",
-                            durationSeconds = 0,
-                            thumbnailUrl = download.thumbnailUrl,
-                            localFilePath = outputFile.absolutePath
-                        )
-                    )
-                } else {
-                    videoDao.update(existing.copy(localFilePath = outputFile.absolutePath))
-                }
-                return
-            } catch (e: CancellationException) {
-                return
-            } catch (e: Exception) {
-                if (isPaused(download.id)) {
-                    repository.updateStatus(
-                        download.id,
-                        DownloadStatus.PAUSED,
-                        currentProgress(download.id) ?: download.progress
-                    )
+                    if (ffmpegSuccess) {
+                        audioSuccess = true
+                        break
+                    } else {
+                        throw IOException("Both native MediaMuxer and FFmpegKit merging failed")
+                    }
+                } catch (e: CancellationException) {
                     return
+                } catch (e: Throwable) {
+                    android.util.Log.e("DownloadService", "Audio download/merge attempt $audioRetries failed", e)
+                    audioRetries++
+                    if (audioRetries > maxAudioRetries) {
+                        if (audioFile.exists()) audioFile.delete()
+                        tmpFile.delete()
+                        repository.markFailed(download.id, e.message ?: "Audio download/merge failed", audioRetries)
+                        return
+                    }
+                    kotlinx.coroutines.delay(2000)
                 }
-                if (isCancelled(download.id)) {
-                    tmpFile.delete()
-                    repository.updateStatus(download.id, DownloadStatus.CANCELED, download.progress)
-                    return
-                }
-                if (isPutToQueue(download.id)) {
-                    repository.updateStatus(download.id, DownloadStatus.QUEUED, download.progress)
-                    return
-                }
-
-                if (retries < maxRetries) {
-                    retries++
-                    repository.update(download.copy(retryCount = retries))
-                    continue
-                }
-                if (!videoDownloadCompleted) {
-                    tmpFile.delete()
-                }
-                repository.markFailed(download.id, e.message ?: "Download failed", retries)
-                return
             }
+            if (!audioSuccess) return
+        } else {
+            if (!tmpFile.renameTo(outputFile)) {
+                try {
+                    tmpFile.copyTo(outputFile, overwrite = true)
+                    tmpFile.delete()
+                } catch (e: Exception) {
+                    repository.markFailed(download.id, "Failed to move temp file: ${e.message}", 0)
+                    return
+                }
+            }
+        }
+
+        repository.markCompleted(download.id, outputFile.length(), outputFile.absolutePath)
+        activeProgress.remove(download.id)
+        updateNotification()
+
+        val existing = videoDao.getVideoById(download.videoId)
+        if (existing == null) {
+            videoDao.insert(
+                VideoEntity(
+                    id = download.videoId,
+                    title = download.title.ifEmpty { download.quality },
+                    channelName = "",
+                    durationSeconds = 0,
+                    thumbnailUrl = download.thumbnailUrl,
+                    localFilePath = outputFile.absolutePath
+                )
+            )
+        } else {
+            videoDao.update(existing.copy(localFilePath = outputFile.absolutePath))
         }
     }
       private fun isPaused(id: Long): Boolean = pauseFlags[id] == true
@@ -724,6 +788,10 @@ class DownloadService : Service() {
               if (tmpFile.exists()) {
                   tmpFile.delete()
               }
+              val audioFile = File(outputDir, "${download.videoId}_${download.quality}_audio.tmp")
+              if (audioFile.exists()) {
+                  audioFile.delete()
+              }
               // Idempotent update
               repository.updateStatus(id, DownloadStatus.CANCELED, download.progress)
               updateNotification()
@@ -732,28 +800,32 @@ class DownloadService : Service() {
       }
 
       private fun restartDownload(id: Long) {
-          serviceScope.launch {
-              val download = repository.getDownloadById(id) ?: return@launch
-              try {
-                  val dir = if (download.format == "audio" || download.format == "audio_extracted") "audio" else "video"
-                  val outputDir = File(filesDir, "MediaNest/$dir")
-                  val tmpFile = File(outputDir, "${download.videoId}_${download.quality}.tmp")
-                  if (tmpFile.exists()) {
-                      tmpFile.delete()
-                  }
-              } catch (e: Exception) {
-                  android.util.Log.e("DownloadService", "Failed to delete tmp file on restart", e)
-              }
-              val reset = download.copy(
-                  status = DownloadStatus.QUEUED,
-                  progress = 0f,
-                  errorMessage = null,
-                  retryCount = 0
-              )
-              repository.update(reset)
-              resumeDownload(id)
-          }
-      }
+           serviceScope.launch {
+               val download = repository.getDownloadById(id) ?: return@launch
+               try {
+                   val dir = if (download.format == "audio" || download.format == "audio_extracted") "audio" else "video"
+                   val outputDir = File(filesDir, "MediaNest/$dir")
+                   val tmpFile = File(outputDir, "${download.videoId}_${download.quality}.tmp")
+                   if (tmpFile.exists()) {
+                       tmpFile.delete()
+                   }
+                   val audioFile = File(outputDir, "${download.videoId}_${download.quality}_audio.tmp")
+                   if (audioFile.exists()) {
+                       audioFile.delete()
+                   }
+               } catch (e: Exception) {
+                   android.util.Log.e("DownloadService", "Failed to delete tmp file on restart", e)
+               }
+               val reset = download.copy(
+                   status = DownloadStatus.QUEUED,
+                   progress = 0f,
+                   errorMessage = null,
+                   retryCount = 0
+               )
+               repository.update(reset)
+               resumeDownload(id)
+           }
+       }
 
       private fun pauseAllDownloads() {
           serviceScope.launch {
@@ -827,6 +899,10 @@ class DownloadService : Service() {
                   val tmpFile = File(outputDir, "${download.videoId}_${download.quality}.tmp")
                   if (tmpFile.exists()) {
                       tmpFile.delete()
+                  }
+                  val audioFile = File(outputDir, "${download.videoId}_${download.quality}_audio.tmp")
+                  if (audioFile.exists()) {
+                      audioFile.delete()
                   }
                   repository.updateStatus(download.id, DownloadStatus.CANCELED, download.progress)
               }
@@ -1194,6 +1270,104 @@ class DownloadService : Service() {
         try {
             NotificationManagerCompat.from(this).notify(NOTIFICATION_ID, notification)
         } catch (_: SecurityException) {}
+    }
+
+    private fun mergeAudioVideoNative(videoFile: File, audioFile: File, outputFile: File): Boolean {
+        var videoExtractor: MediaExtractor? = null
+        var audioExtractor: MediaExtractor? = null
+        var muxer: MediaMuxer? = null
+        try {
+            videoExtractor = MediaExtractor().apply { setDataSource(videoFile.absolutePath) }
+            audioExtractor = MediaExtractor().apply { setDataSource(audioFile.absolutePath) }
+
+            var videoTrackIndex = -1
+            var videoFormat: MediaFormat? = null
+            for (i in 0 until videoExtractor.trackCount) {
+                val format = videoExtractor.getTrackFormat(i)
+                val mime = format.getString(MediaFormat.KEY_MIME) ?: ""
+                if (mime.startsWith("video/")) {
+                    videoTrackIndex = i
+                    videoFormat = format
+                    break
+                }
+            }
+
+            var audioTrackIndex = -1
+            var audioFormat: MediaFormat? = null
+            for (i in 0 until audioExtractor.trackCount) {
+                val format = audioExtractor.getTrackFormat(i)
+                val mime = format.getString(MediaFormat.KEY_MIME) ?: ""
+                if (mime.startsWith("audio/")) {
+                    audioTrackIndex = i
+                    audioFormat = format
+                    break
+                }
+            }
+
+            if (videoTrackIndex == -1 || audioTrackIndex == -1 || videoFormat == null || audioFormat == null) {
+                android.util.Log.e("DownloadService", "Native merge: Missing video or audio track. Video track index: $videoTrackIndex, Audio track index: $audioTrackIndex")
+                return false
+            }
+
+            videoExtractor.selectTrack(videoTrackIndex)
+            audioExtractor.selectTrack(audioTrackIndex)
+
+            val outputFormat = if (outputFile.name.endsWith(".webm", ignoreCase = true)) {
+                MediaMuxer.OutputFormat.MUXER_OUTPUT_WEBM
+            } else {
+                MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4
+            }
+
+            muxer = MediaMuxer(outputFile.absolutePath, outputFormat)
+            val muxerVideoTrack = muxer.addTrack(videoFormat)
+            val muxerAudioTrack = muxer.addTrack(audioFormat)
+            muxer.start()
+
+            val bufferSize = 1024 * 1024
+            val byteBuffer = ByteBuffer.allocate(bufferSize)
+            val bufferInfo = android.media.MediaCodec.BufferInfo()
+
+            // Mux video track
+            while (true) {
+                byteBuffer.clear()
+                val sampleSize = videoExtractor.readSampleData(byteBuffer, 0)
+                if (sampleSize < 0) break
+
+                bufferInfo.offset = 0
+                bufferInfo.size = sampleSize
+                bufferInfo.presentationTimeUs = videoExtractor.sampleTime
+                bufferInfo.flags = videoExtractor.sampleFlags
+
+                muxer.writeSampleData(muxerVideoTrack, byteBuffer, bufferInfo)
+                videoExtractor.advance()
+            }
+
+            // Mux audio track
+            while (true) {
+                byteBuffer.clear()
+                val sampleSize = audioExtractor.readSampleData(byteBuffer, 0)
+                if (sampleSize < 0) break
+
+                bufferInfo.offset = 0
+                bufferInfo.size = sampleSize
+                bufferInfo.presentationTimeUs = audioExtractor.sampleTime
+                bufferInfo.flags = audioExtractor.sampleFlags
+
+                muxer.writeSampleData(muxerAudioTrack, byteBuffer, bufferInfo)
+                audioExtractor.advance()
+            }
+
+            muxer.stop()
+            android.util.Log.d("DownloadService", "Native MediaMuxer merge completed successfully")
+            return true
+        } catch (e: Exception) {
+            android.util.Log.e("DownloadService", "Native MediaMuxer merge failed with exception", e)
+            return false
+        } finally {
+            runCatching { videoExtractor?.release() }
+            runCatching { audioExtractor?.release() }
+            runCatching { muxer?.release() }
+        }
     }
  
      override fun onBind(intent: Intent?): IBinder? = null

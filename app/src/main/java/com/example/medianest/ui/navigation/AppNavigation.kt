@@ -117,6 +117,9 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
             DownloadsScreen(
                 onPlayDownload = { download ->
                     navController.navigate("downloads/player/${download.videoId}")
+                },
+                onVideoClick = { videoId ->
+                    navController.navigate("videoDetail/$videoId")
                 }
             )
         }
