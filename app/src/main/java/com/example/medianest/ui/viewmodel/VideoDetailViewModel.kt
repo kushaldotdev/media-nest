@@ -30,6 +30,10 @@ class VideoDetailViewModel @Inject constructor(
     private val videoRepository: com.example.medianest.data.repository.VideoRepository,
     private val subscriptionRepository: SubscriptionRepository
 ) : ViewModel() {
+    private val _videoDownloads = MutableStateFlow<List<DownloadEntity>>(emptyList())
+    val videoDownloads: StateFlow<List<DownloadEntity>> = _videoDownloads
+
+    private var downloadsJob: kotlinx.coroutines.Job? = null
     private var currentVideoId: String = ""
 
     private val _videoInfo = MutableStateFlow<ExtractedVideoInfo?>(null)
@@ -42,7 +46,15 @@ class VideoDetailViewModel @Inject constructor(
     val isSubscribed: StateFlow<Boolean> = _isSubscribed
 
     fun loadVideoInfo(videoId: String) {
-        currentVideoId = videoId
+        if (currentVideoId != videoId) {
+            currentVideoId = videoId
+            downloadsJob?.cancel()
+            downloadsJob = viewModelScope.launch {
+                downloadRepository.getDownloadsForVideoFlow(videoId).collect {
+                    _videoDownloads.value = it
+                }
+            }
+        }
         val cached = HomeViewModel.lastResultCache.get(videoId)
         if (cached != null && cached.streamSources.isNotEmpty()) {
             _videoInfo.value = cached

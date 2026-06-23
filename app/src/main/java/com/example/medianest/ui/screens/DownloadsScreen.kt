@@ -14,10 +14,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
@@ -52,6 +54,7 @@ fun DownloadsScreen(
 ) {
     val downloads by viewModel.downloads.collectAsStateWithLifecycle()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    var showDeleteDialogFor by remember { mutableStateOf<DownloadEntity?>(null) }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Row(
@@ -91,19 +94,83 @@ fun DownloadsScreen(
                     DownloadItem(
                         download = download,
                         onPlayDownload = onPlayDownload,
-                        viewModel = viewModel
+                        viewModel = viewModel,
+                        onDeleteClick = { showDeleteDialogFor = it }
                     )
                 }
             }
         }
     }
-}
 
+    if (showDeleteDialogFor != null) {
+        val download = showDeleteDialogFor!!
+        val isActive = download.status == DownloadStatus.DOWNLOADING || download.status == DownloadStatus.QUEUED
+        
+        AlertDialog(
+            onDismissRequest = { showDeleteDialogFor = null },
+            title = {
+                Text(text = if (isActive) "Cancel Download" else "Delete Download")
+            },
+            text = {
+                Text(
+                    text = if (isActive) {
+                        "Are you sure you want to cancel downloading \"${download.title}\"?"
+                    } else {
+                        "Choose how you want to delete \"${download.title}\"."
+                    }
+                )
+            },
+            confirmButton = {
+                if (isActive) {
+                    TextButton(
+                        onClick = {
+                            viewModel.deleteDownload(download, deleteFile = true)
+                            showDeleteDialogFor = null
+                        }
+                    ) {
+                        Text("Cancel Download")
+                    }
+                } else {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        TextButton(
+                            onClick = {
+                                viewModel.deleteDownload(download, deleteFile = false)
+                                showDeleteDialogFor = null
+                            }
+                        ) {
+                            Text("List Only")
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        TextButton(
+                            onClick = {
+                                viewModel.deleteDownload(download, deleteFile = true)
+                                showDeleteDialogFor = null
+                            }
+                        ) {
+                            Text("Delete File & List")
+                        }
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showDeleteDialogFor = null }
+                ) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+}
 @Composable
 private fun DownloadItem(
     download: DownloadEntity,
     onPlayDownload: (DownloadEntity) -> Unit,
-    viewModel: DownloadsViewModel
+    viewModel: DownloadsViewModel,
+    onDeleteClick: (DownloadEntity) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -151,45 +218,61 @@ private fun DownloadItem(
                             overflow = TextOverflow.Ellipsis
                         )
                         Spacer(Modifier.width(8.dp))
-                        Text(
-                            text = when (download.status) {
-                                DownloadStatus.QUEUED -> "Queued"
-                                DownloadStatus.DOWNLOADING -> {
-                                    if (download.fileSizeBytes > 0L) {
-                                        val downloadedMb = (download.progress * download.fileSizeBytes) / (1024f * 1024f)
-                                        val totalMb = download.fileSizeBytes / (1024f * 1024f)
-                                        "%.1fMB / %.1fMB (%d%%)".format(downloadedMb, totalMb, (download.progress * 100).toInt())
-                                    } else {
-                                        "${(download.progress * 100).toInt()}%"
-                                    }
+                        if (download.status == DownloadStatus.COMPLETED) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = "Completed",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(Modifier.width(4.dp))
+                                val sizeText = if (download.fileSizeBytes > 0L) {
+                                    "%.1f MB".format(download.fileSizeBytes / (1024f * 1024f))
+                                } else {
+                                    "Done"
                                 }
-                                DownloadStatus.PAUSED -> {
-                                    if (download.fileSizeBytes > 0L) {
-                                        "Paused — %.1fMB / %.1fMB".format(
-                                            (download.progress * download.fileSizeBytes) / (1024f * 1024f),
-                                            download.fileSizeBytes / (1024f * 1024f)
-                                        )
-                                    } else {
-                                        "Paused"
+                                Text(
+                                    text = sizeText,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    maxLines = 1
+                                )
+                            }
+                        } else {
+                            Text(
+                                text = when (download.status) {
+                                    DownloadStatus.QUEUED -> "Queued"
+                                    DownloadStatus.DOWNLOADING -> {
+                                        if (download.fileSizeBytes > 0L) {
+                                            val downloadedMb = (download.progress * download.fileSizeBytes) / (1024f * 1024f)
+                                            val totalMb = download.fileSizeBytes / (1024f * 1024f)
+                                            "%.1fMB / %.1fMB (%d%%)".format(downloadedMb, totalMb, (download.progress * 100).toInt())
+                                        } else {
+                                            "${(download.progress * 100).toInt()}%"
+                                        }
                                     }
-                                }
-                                DownloadStatus.COMPLETED -> {
-                                    if (download.fileSizeBytes > 0L) {
-                                        "Done — %.1f MB".format(download.fileSizeBytes / (1024f * 1024f))
-                                    } else {
-                                        "Done"
+                                    DownloadStatus.PAUSED -> {
+                                        if (download.fileSizeBytes > 0L) {
+                                            "Paused — %.1fMB / %.1fMB".format(
+                                                (download.progress * download.fileSizeBytes) / (1024f * 1024f),
+                                                download.fileSizeBytes / (1024f * 1024f)
+                                            )
+                                        } else {
+                                            "Paused"
+                                        }
                                     }
-                                }
-                                DownloadStatus.FAILED -> download.errorMessage ?: "Failed"
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = when (download.status) {
-                                DownloadStatus.FAILED -> MaterialTheme.colorScheme.error
-                                DownloadStatus.COMPLETED -> MaterialTheme.colorScheme.primary
-                                else -> MaterialTheme.colorScheme.onSurfaceVariant
-                            },
-                            maxLines = 1
-                        )
+                                    DownloadStatus.FAILED -> download.errorMessage ?: "Failed"
+                                    else -> ""
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = when (download.status) {
+                                    DownloadStatus.FAILED -> MaterialTheme.colorScheme.error
+                                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                                maxLines = 1
+                            )
+                        }
                     }
                 }
             }
@@ -212,7 +295,7 @@ private fun DownloadItem(
             ) {
                 when (download.status) {
                     DownloadStatus.QUEUED -> {
-                        TextButton(onClick = { viewModel.cancelDownload(download.id) }) {
+                        TextButton(onClick = { onDeleteClick(download) }) {
                             Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(4.dp))
                             Text("Cancel")
@@ -225,7 +308,7 @@ private fun DownloadItem(
                             Text("Pause")
                         }
                         Spacer(Modifier.width(8.dp))
-                        TextButton(onClick = { viewModel.cancelDownload(download.id) }) {
+                        TextButton(onClick = { onDeleteClick(download) }) {
                             Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(4.dp))
                             Text("Cancel")
@@ -238,7 +321,7 @@ private fun DownloadItem(
                             Text("Resume")
                         }
                         Spacer(Modifier.width(8.dp))
-                        TextButton(onClick = { viewModel.cancelDownload(download.id) }) {
+                        TextButton(onClick = { onDeleteClick(download) }) {
                             Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(4.dp))
                             Text("Delete")
@@ -251,7 +334,7 @@ private fun DownloadItem(
                             Text("Retry")
                         }
                         Spacer(Modifier.width(8.dp))
-                        TextButton(onClick = { viewModel.cancelDownload(download.id) }) {
+                        TextButton(onClick = { onDeleteClick(download) }) {
                             Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(4.dp))
                             Text("Delete")
@@ -282,7 +365,7 @@ private fun DownloadItem(
                             }
                             Spacer(Modifier.width(8.dp))
                         }
-                        TextButton(onClick = { viewModel.cancelDownload(download.id) }) {
+                        TextButton(onClick = { onDeleteClick(download) }) {
                             Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(Modifier.width(4.dp))
                             Text("Delete")

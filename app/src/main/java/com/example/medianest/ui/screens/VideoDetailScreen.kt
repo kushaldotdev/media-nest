@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -20,9 +21,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Subscriptions
 import androidx.compose.material.icons.outlined.Subscriptions
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.TextButton
+import com.example.medianest.data.local.entity.DownloadEntity
+import com.example.medianest.data.local.entity.DownloadStatus
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -36,6 +40,7 @@ import com.example.medianest.data.model.StreamSource
 @Composable
 fun VideoDetailScreen(
     videoInfo: ExtractedVideoInfo,
+    downloads: List<DownloadEntity> = emptyList(),
     onPlay: (StreamSource) -> Unit,
     onDownload: (StreamSource) -> Unit,
     onBack: () -> Unit,
@@ -105,7 +110,7 @@ fun VideoDetailScreen(
                 Spacer(Modifier.height(8.dp))
                 Text("Video (with audio)", style = MaterialTheme.typography.labelLarge)
                 videoStreams.forEach { stream ->
-                    StreamQualityRow(stream, onPlay, onDownload)
+                    StreamQualityRow(stream, downloads, onPlay, onDownload)
                 }
             }
 
@@ -113,7 +118,7 @@ fun VideoDetailScreen(
                 Spacer(Modifier.height(8.dp))
                 Text("Video Only (no audio)", style = MaterialTheme.typography.labelLarge)
                 videoOnlyStreams.forEach { stream ->
-                    StreamQualityRow(stream, onPlay, onDownload)
+                    StreamQualityRow(stream, downloads, onPlay, onDownload)
                 }
             }
 
@@ -121,7 +126,7 @@ fun VideoDetailScreen(
                 Spacer(Modifier.height(8.dp))
                 Text("Audio Only", style = MaterialTheme.typography.labelLarge)
                 audioStreams.forEach { stream ->
-                    StreamQualityRow(stream, onPlay, onDownload)
+                    StreamQualityRow(stream, downloads, onPlay, onDownload)
                 }
             }
 
@@ -138,6 +143,7 @@ fun VideoDetailScreen(
 @Composable
 private fun StreamQualityRow(
     stream: StreamSource,
+    downloads: List<DownloadEntity>,
     onPlay: (StreamSource) -> Unit,
     onDownload: (StreamSource) -> Unit
 ) {
@@ -168,8 +174,48 @@ private fun StreamQualityRow(
                 }
                 Text(sizeText, style = MaterialTheme.typography.bodySmall)
             }
-            TextButton(onClick = { onDownload(stream) }) {
-                Text("Download")
+            val downloadState = downloads.find { it.format == stream.format && it.quality == stream.quality }
+            if (downloadState != null) {
+                when (downloadState.status) {
+                    DownloadStatus.COMPLETED -> {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = "Downloaded",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                text = "Downloaded",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                    DownloadStatus.DOWNLOADING, DownloadStatus.QUEUED -> {
+                        TextButton(onClick = {}, enabled = false) {
+                            Text("Downloading")
+                        }
+                    }
+                    DownloadStatus.PAUSED -> {
+                        TextButton(onClick = {}, enabled = false) {
+                            Text("Paused")
+                        }
+                    }
+                    DownloadStatus.FAILED -> {
+                        TextButton(onClick = { onDownload(stream) }) {
+                            Text("Download")
+                        }
+                    }
+                }
+            } else {
+                TextButton(onClick = { onDownload(stream) }) {
+                    Text("Download")
+                }
             }
         }
     }

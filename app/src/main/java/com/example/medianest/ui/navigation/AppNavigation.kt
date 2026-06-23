@@ -78,6 +78,7 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
             }
 
             val videoInfo by detailViewModel.videoInfo.collectAsState()
+            val downloads by detailViewModel.videoDownloads.collectAsState()
 
             LaunchedEffect(videoInfo) {
                 val info = videoInfo ?: return@LaunchedEffect
@@ -92,6 +93,7 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
             if (info != null) {
                 VideoDetailScreen(
                     videoInfo = info,
+                    downloads = downloads,
                     isFavorite = isFavorite,
                     isSubscribed = isSubscribed,
                     onSubscribe = { detailViewModel.toggleSubscription() },

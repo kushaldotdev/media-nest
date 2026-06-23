@@ -73,6 +73,38 @@ class DownloadsViewModel @Inject constructor(
         DownloadService.cancel(context, downloadId)
     }
 
+    fun deleteDownload(download: DownloadEntity, deleteFile: Boolean) {
+        viewModelScope.launch {
+            if (download.status == DownloadStatus.DOWNLOADING || download.status == DownloadStatus.QUEUED) {
+                DownloadService.cancel(context, download.id)
+            } else {
+                if (deleteFile) {
+                    if (download.filePath.isNotEmpty()) {
+                        try {
+                            val file = File(download.filePath)
+                            if (file.exists()) {
+                                file.delete()
+                            }
+                        } catch (e: Exception) {
+                            android.util.Log.e("DownloadsViewModel", "Failed to delete completed file", e)
+                        }
+                    }
+                    try {
+                        val dir = if (download.format == "audio" || download.format == "audio_extracted") "audio" else "video"
+                        val outputDir = File(context.filesDir, "MediaNest/$dir")
+                        val tmpFile = File(outputDir, "${download.videoId}_${download.quality}.tmp")
+                        if (tmpFile.exists()) {
+                            tmpFile.delete()
+                        }
+                    } catch (e: Exception) {
+                        android.util.Log.e("DownloadsViewModel", "Failed to delete tmp file", e)
+                    }
+                }
+                downloadRepository.delete(download)
+            }
+        }
+    }
+
     fun retryDownload(download: DownloadEntity) {
         viewModelScope.launch {
             val reset = download.copy(

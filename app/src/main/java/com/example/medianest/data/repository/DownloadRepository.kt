@@ -45,4 +45,7 @@ class DownloadRepository @Inject constructor(
 
     suspend fun getAudioExtraction(videoId: String): DownloadEntity? =
         downloadDao.getAudioExtraction(videoId)
+
+    fun getDownloadsForVideoFlow(videoId: String): Flow<List<DownloadEntity>> =
+        downloadDao.getDownloadsForVideoFlow(videoId)
 }
