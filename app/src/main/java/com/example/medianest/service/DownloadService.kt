@@ -211,7 +211,6 @@ class DownloadService : Service() {
             }
             return
         }
-        pauseFlags.remove(download.id)
         cancelFlags.remove(download.id)
         putToQueueFlags.remove(download.id)
         activeProgress[download.id] = ActiveProgress(
@@ -250,7 +249,17 @@ class DownloadService : Service() {
     }
 
     private suspend fun downloadFile(download: DownloadEntity) {
+        if (isPaused(download.id)) {
+            repository.updateStatus(download.id, DownloadStatus.PAUSED, download.progress)
+            updateNotification()
+            return
+        }
         repository.updateStatus(download.id, DownloadStatus.DOWNLOADING, download.progress)
+        if (isPaused(download.id)) {
+            repository.updateStatus(download.id, DownloadStatus.PAUSED, download.progress)
+            updateNotification()
+            return
+        }
         
         val dir = if (download.format == "audio") "audio" else "video"
         val outputDir = File(filesDir, "MediaNest/$dir")
@@ -410,7 +419,11 @@ class DownloadService : Service() {
                 return
             } catch (e: Exception) {
                 if (isPaused(download.id)) {
-                    repository.updateStatus(download.id, DownloadStatus.PAUSED, download.progress)
+                    repository.updateStatus(
+                        download.id,
+                        DownloadStatus.PAUSED,
+                        currentProgress(download.id) ?: download.progress
+                    )
                     return
                 }
                 if (isCancelled(download.id)) {
@@ -439,32 +452,45 @@ class DownloadService : Service() {
       private fun isCancelled(id: Long): Boolean = cancelFlags[id] == true
 
       private fun isPutToQueue(id: Long): Boolean = putToQueueFlags[id] == true
+
+      private fun currentProgress(id: Long): Float? =
+          activeProgress[id]?.let {
+              if (it.totalBytes > 0) {
+                  (it.bytesDownloaded.toFloat() / it.totalBytes).coerceIn(0f, 1f)
+              } else {
+                  null
+              }
+          }
   
       private fun pauseDownload(id: Long) {
           pauseFlags[id] = true
           // Capture in-memory progress before job cancellation clears it
-          val currentProgress = activeProgress[id]?.let {
-              if (it.totalBytes > 0) it.bytesDownloaded.toFloat() / it.totalBytes else 0f
+          val progressAtPause = currentProgress(id)
+          activeProgress[id]?.let { progress ->
+              showPausedNotification(
+                  downloadId = id,
+                  title = progress.title,
+                  progress = progressAtPause ?: 0f,
+                  totalBytes = progress.totalBytes
+              )
           }
           val job = activeJobs[id]
-          if (job != null) {
-              activeCalls[id]?.cancel()
-              job.cancel()
-              // Immediately update DB + notification (finally block will also run, idempotent)
-              serviceScope.launch {
-                  val effectiveProgress = currentProgress
-                      ?: repository.getDownloadById(id)?.progress
-                      ?: 0f
-                  repository.updateStatus(id, DownloadStatus.PAUSED, effectiveProgress)
-                  updateNotification()
+          activeCalls[id]?.cancel()
+          job?.cancel()
+          serviceScope.launch {
+              val download = repository.getDownloadById(id) ?: return@launch
+              val effectiveProgress = progressAtPause ?: download.progress
+              if (!activeProgress.containsKey(id)) {
+                  showPausedNotification(
+                      downloadId = id,
+                      title = download.title.ifEmpty { download.quality },
+                      progress = effectiveProgress,
+                      totalBytes = download.fileSizeBytes
+                  )
               }
-          } else {
-              serviceScope.launch {
-                  val download = repository.getDownloadById(id) ?: return@launch
-                  repository.updateStatus(id, DownloadStatus.PAUSED, download.progress)
-                  updateNotification()
-                  processQueue()
-              }
+              repository.updateStatus(id, DownloadStatus.PAUSED, effectiveProgress)
+              updateNotification()
+              processQueue()
           }
       }
 
@@ -566,7 +592,7 @@ class DownloadService : Service() {
                   }
               }
               
-              downloading.forEach { repository.updateStatus(it.id, DownloadStatus.PAUSED, it.progress) }
+              downloading.forEach { repository.updateStatus(it.id, DownloadStatus.PAUSED, currentProgress(it.id) ?: it.progress) }
               queued.forEach { repository.updateStatus(it.id, DownloadStatus.PAUSED, it.progress) }
               
               updateNotification()
@@ -704,7 +730,7 @@ class DownloadService : Service() {
                     action = ACTION_RESUME
                     putExtra(EXTRA_DOWNLOAD_ID, download.id)
                 }
-                val pendingResume = PendingIntent.getService(
+                val pendingResume = servicePendingIntent(
                     this, download.id.toInt() + 4000,
                     resumeIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
@@ -713,7 +739,7 @@ class DownloadService : Service() {
                     action = ACTION_CANCEL
                     putExtra(EXTRA_DOWNLOAD_ID, download.id)
                 }
-                val pendingCancel = PendingIntent.getService(
+                val pendingCancel = servicePendingIntent(
                     this, download.id.toInt() + 5000,
                     cancelIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
@@ -752,7 +778,7 @@ class DownloadService : Service() {
                 val resumeAllIntent = Intent(this, DownloadService::class.java).apply {
                     action = ACTION_RESUME_ALL
                 }
-                val pendingResumeAll = PendingIntent.getService(
+                val pendingResumeAll = servicePendingIntent(
                     this, 7000,
                     resumeAllIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
@@ -760,7 +786,7 @@ class DownloadService : Service() {
                 val cancelAllIntent = Intent(this, DownloadService::class.java).apply {
                     action = ACTION_CANCEL_ALL
                 }
-                val pendingCancelAll = PendingIntent.getService(
+                val pendingCancelAll = servicePendingIntent(
                     this, 8000,
                     cancelAllIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                 )
@@ -802,7 +828,7 @@ class DownloadService : Service() {
                 action = ACTION_PAUSE
                 putExtra(EXTRA_DOWNLOAD_ID, downloadId)
             }
-            val pendingPause = PendingIntent.getService(
+            val pendingPause = servicePendingIntent(
                 this, downloadId.toInt() + 1000,
                 pauseIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
@@ -811,7 +837,7 @@ class DownloadService : Service() {
                 action = ACTION_CANCEL
                 putExtra(EXTRA_DOWNLOAD_ID, downloadId)
             }
-            val pendingCancel = PendingIntent.getService(
+            val pendingCancel = servicePendingIntent(
                 this, downloadId.toInt() + 3000,
                 cancelIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
@@ -864,7 +890,7 @@ class DownloadService : Service() {
             val pauseAllIntent = Intent(this, DownloadService::class.java).apply {
                 action = ACTION_PAUSE_ALL
             }
-            val pendingPauseAll = PendingIntent.getService(
+            val pendingPauseAll = servicePendingIntent(
                 this, 3000,
                 pauseAllIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
@@ -872,7 +898,7 @@ class DownloadService : Service() {
             val cancelAllIntent = Intent(this, DownloadService::class.java).apply {
                 action = ACTION_CANCEL_ALL
             }
-            val pendingCancelAll = PendingIntent.getService(
+            val pendingCancelAll = servicePendingIntent(
                 this, 8000,
                 cancelAllIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
@@ -897,6 +923,89 @@ class DownloadService : Service() {
                 )
                 .build()
         }
+
+        try {
+            NotificationManagerCompat.from(this).notify(NOTIFICATION_ID, notification)
+        } catch (_: SecurityException) {}
+    }
+
+    private fun servicePendingIntent(
+        context: Context,
+        requestCode: Int,
+        intent: Intent,
+        flags: Int
+    ): PendingIntent = PendingIntent.getForegroundService(context, requestCode, intent, flags)
+
+    private fun showPausedNotification(
+        downloadId: Long,
+        title: String,
+        progress: Float,
+        totalBytes: Long
+    ) {
+        val boundedProgress = progress.coerceIn(0f, 1f)
+        val pct = (boundedProgress * 100).toInt()
+        val contentText = if (totalBytes > 0) {
+            val downloadedMb = "%.1f".format((boundedProgress * totalBytes) / (1024f * 1024f))
+            val totalMb = "%.1f".format(totalBytes / (1024f * 1024f))
+            "Paused \u00b7 $pct% (${downloadedMb}/${totalMb} MB)"
+        } else {
+            "Paused"
+        }
+
+        val resumeIntent = Intent(this, DownloadService::class.java).apply {
+            action = ACTION_RESUME
+            putExtra(EXTRA_DOWNLOAD_ID, downloadId)
+        }
+        val pendingResume = servicePendingIntent(
+            this,
+            downloadId.toInt() + 4000,
+            resumeIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val cancelIntent = Intent(this, DownloadService::class.java).apply {
+            action = ACTION_CANCEL
+            putExtra(EXTRA_DOWNLOAD_ID, downloadId)
+        }
+        val pendingCancel = servicePendingIntent(
+            this,
+            downloadId.toInt() + 5000,
+            cancelIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val restartIntent = Intent(this, MainActivity::class.java).apply {
+            action = "com.example.medianest.ACTION_CONFIRM_RESTART"
+            putExtra("download_id", downloadId)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+        }
+        val pendingRestart = PendingIntent.getActivity(
+            this,
+            downloadId.toInt() + 6000,
+            restartIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle(title)
+            .setContentText(contentText)
+            .setSmallIcon(android.R.drawable.stat_sys_download)
+            .setOngoing(true)
+            .setProgress(100, pct, totalBytes <= 0)
+            .addAction(android.R.drawable.ic_media_play, "Resume", pendingResume)
+            .addAction(android.R.drawable.ic_menu_revert, "Restart", pendingRestart)
+            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Cancel", pendingCancel)
+            .setContentIntent(
+                PendingIntent.getActivity(
+                    this, 0,
+                    Intent(this, MainActivity::class.java).apply {
+                        flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
+                        action = "com.example.medianest.ACTION_NAVIGATE_DOWNLOADS"
+                    },
+                    PendingIntent.FLAG_IMMUTABLE
+                )
+            )
+            .build()
 
         try {
             NotificationManagerCompat.from(this).notify(NOTIFICATION_ID, notification)
