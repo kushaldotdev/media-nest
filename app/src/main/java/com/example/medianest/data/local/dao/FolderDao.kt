@@ -40,4 +40,10 @@ interface FolderDao {
 
     @Query("SELECT * FROM folders WHERE updatedAt > :since")
     suspend fun getFoldersSince(since: Long): List<FolderEntity>
+
+    @Query("SELECT * FROM folders WHERE name LIKE '%' || :query || '%' ORDER BY name ASC")
+    fun searchAllFolders(query: String): Flow<List<FolderEntity>>
+
+    @Query("SELECT * FROM folders WHERE parentId = :parentId AND name LIKE '%' || :query || '%' ORDER BY name ASC")
+    fun searchChildFolders(parentId: Long, query: String): Flow<List<FolderEntity>>
 }

@@ -50,13 +50,17 @@ import com.example.medianest.ui.viewmodel.SubscriptionsViewModel
 @Composable
 fun SubscriptionsScreen(
     sourceType: String,
+    searchQuery: String = "",
     onSubscriptionClick: (String, String) -> Unit,
     viewModel: SubscriptionsViewModel = hiltViewModel()
 ) {
     val subscriptions by viewModel.subscriptions.collectAsStateWithLifecycle()
     val snackbarHostState = androidx.compose.runtime.remember { SnackbarHostState() }
     val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
-    val filtered = subscriptions.filter { it.sourceType == sourceType }
+    val filtered = subscriptions.filter { 
+        it.sourceType == sourceType && 
+        (searchQuery.isBlank() || it.name.contains(searchQuery, ignoreCase = true))
+    }
 
     if (filtered.isEmpty()) {
         Box(
@@ -64,7 +68,7 @@ fun SubscriptionsScreen(
             contentAlignment = Alignment.Center
         ) {
             Text(
-                "No subscriptions yet",
+                if (searchQuery.isNotEmpty()) "No results found" else "No subscriptions yet",
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }

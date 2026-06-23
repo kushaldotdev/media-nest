@@ -37,4 +37,22 @@ interface VideoFolderDao {
 
     @Query("SELECT * FROM video_folder_join WHERE addedAt > :since")
     suspend fun getJoinsSince(since: Long): List<VideoFolderJoin>
+
+    @Query("""
+        SELECT DISTINCT v.* FROM videos v 
+        INNER JOIN video_folder_join vfj ON v.id = vfj.videoId 
+        WHERE v.title LIKE '%' || :query || '%' OR v.channelName LIKE '%' || :query || '%'
+    """)
+    fun searchVideosInAnyFolder(query: String): Flow<List<VideoEntity>>
+
+    @Query("""
+        SELECT v.* FROM videos v 
+        INNER JOIN video_folder_join vfj ON v.id = vfj.videoId 
+        WHERE vfj.folderId = :folderId AND (v.title LIKE '%' || :query || '%' OR v.channelName LIKE '%' || :query || '%')
+        ORDER BY vfj.addedAt DESC
+    """)
+    fun searchVideosInFolder(folderId: Long, query: String): Flow<List<VideoEntity>>
+
+    @Query("SELECT * FROM video_folder_join")
+    fun getAllJoinsFlow(): Flow<List<VideoFolderJoin>>
 }

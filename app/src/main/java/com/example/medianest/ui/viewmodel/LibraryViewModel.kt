@@ -26,6 +26,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -40,6 +43,11 @@ data class LibraryUiState(
     val viewMode: ViewMode = ViewMode.GRID,
     val isSelectionMode: Boolean = false,
     val selectedVideoIds: Set<String> = emptySet()
+)
+
+data class FolderStats(
+    val itemCount: Int,
+    val totalSizeBytes: Long
 )
 
 @HiltViewModel
@@ -69,36 +77,124 @@ class LibraryViewModel @Inject constructor(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    val favoriteVideos: StateFlow<List<VideoEntity>> = _uiState.flatMapLatest { state ->
-        if (state.currentTab == LibraryTab.FAVORITES) {
-            videoDao.getFavoriteVideos()
+    val favoriteVideos: StateFlow<List<VideoEntity>> = combine(_uiState, _searchQuery) { state, query ->
+        state.currentTab to query
+    }.flatMapLatest { (tab, query) ->
+        if (tab == LibraryTab.FAVORITES) {
+            videoDao.getFavoriteVideos().map { list ->
+                if (query.isBlank()) list
+                else list.filter { it.title.contains(query, ignoreCase = true) || it.channelName.contains(query, ignoreCase = true) }
+            }
         } else {
             flowOf(emptyList())
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    val folderVideos: StateFlow<List<VideoEntity>> = _uiState.flatMapLatest { state ->
-        val folder = state.selectedFolder
-        if (folder != null) {
-            videoFolderDao.getVideosInFolder(folder.id)
+    val folderVideos: StateFlow<List<VideoEntity>> = combine(_uiState, _searchQuery) { state, query ->
+        state.selectedFolder to query
+    }.flatMapLatest { (selectedFolder, query) ->
+        if (selectedFolder != null) {
+            if (query.isBlank()) {
+                videoFolderDao.getVideosInFolder(selectedFolder.id)
+            } else {
+                videoFolderDao.searchVideosInFolder(selectedFolder.id, query)
+            }
         } else {
-            flowOf(emptyList())
+            if (query.isBlank()) {
+                flowOf(emptyList())
+            } else {
+                videoFolderDao.searchVideosInAnyFolder(query)
+            }
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    val rootFolders: StateFlow<List<FolderEntity>> = folderDao.getRootFolders()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    val childFolders: StateFlow<List<FolderEntity>> = _uiState.flatMapLatest { state ->
-        val folder = state.selectedFolder
-        if (folder != null) {
-            folderDao.getChildFolders(folder.id)
+    val rootFolders: StateFlow<List<FolderEntity>> = combine(_uiState, _searchQuery) { state, query ->
+        state.currentTab to query
+    }.flatMapLatest { (tab, query) ->
+        if (query.isBlank()) {
+            folderDao.getRootFolders()
+        } else {
+            folderDao.searchAllFolders(query)
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val childFolders: StateFlow<List<FolderEntity>> = combine(_uiState, _searchQuery) { state, query ->
+        state.selectedFolder to query
+    }.flatMapLatest { (selectedFolder, query) ->
+        if (selectedFolder != null) {
+            if (query.isBlank()) {
+                folderDao.getChildFolders(selectedFolder.id)
+            } else {
+                folderDao.searchChildFolders(selectedFolder.id, query)
+            }
         } else {
             flowOf(emptyList())
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val videoFolderMap: StateFlow<Map<String, List<FolderEntity>>> = combine(
+        folderDao.getAllFolders(),
+        videoFolderDao.getAllJoinsFlow()
+    ) { folders, joins ->
+        val folderMap = folders.associateBy { it.id }
+        joins.groupBy({ it.videoId }, { folderMap[it.folderId] })
+            .mapValues { (_, list) -> list.filterNotNull() }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+
+    val folderStatsMap: StateFlow<Map<Long, FolderStats>> = combine(
+        folderDao.getAllFolders(),
+        videoFolderDao.getAllJoinsFlow(),
+        videoDao.getAllVideos()
+    ) { folders, joins, videos ->
+        val videoMap = videos.associateBy { it.id }
+        val joinsByFolder = joins.groupBy { it.folderId }
+        val childrenMap = folders.groupBy { it.parentId }
+
+        val stats = mutableMapOf<Long, FolderStats>()
+
+        fun calculateStats(folderId: Long): FolderStats {
+            stats[folderId]?.let { return it }
+
+            var count = 0
+            var size = 0L
+
+            val folderJoins = joinsByFolder[folderId] ?: emptyList()
+            for (join in folderJoins) {
+                val video = videoMap[join.videoId]
+                if (video != null) {
+                    count++
+                    if (video.localFilePath.isNotEmpty()) {
+                        try {
+                            val file = java.io.File(video.localFilePath)
+                            if (file.exists()) {
+                                size += file.length()
+                            }
+                        } catch (e: Exception) {}
+                    }
+                }
+            }
+
+            val subfolders = childrenMap[folderId] ?: emptyList()
+            for (sub in subfolders) {
+                val subStats = calculateStats(sub.id)
+                count += subStats.itemCount
+                size += subStats.totalSizeBytes
+            }
+
+            val result = FolderStats(count, size)
+            stats[folderId] = result
+            return result
+        }
+
+        folders.forEach { folder ->
+            calculateStats(folder.id)
+        }
+
+        stats
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     val allDownloads: StateFlow<List<DownloadEntity>> = downloadRepository.getAllDownloads()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -265,12 +361,44 @@ class LibraryViewModel @Inject constructor(
 
     fun createFolder(name: String, parentId: Long? = null) {
         viewModelScope.launch {
-            folderDao.insert(FolderEntity(name = name, parentId = parentId))
+            folderDao.insert(FolderEntity(name = name.trim(), parentId = parentId))
         }
     }
 
-    fun deleteFolder(folder: FolderEntity) {
+    private suspend fun getVideosInFolderRecursive(folderId: Long): List<VideoEntity> {
+        val videosList = mutableListOf<VideoEntity>()
+        suspend fun recurse(fId: Long) {
+            val directVideos = videoFolderDao.getVideosInFolder(fId).first()
+            videosList.addAll(directVideos)
+            val children = folderDao.getChildFolders(fId).first()
+            children.forEach { child ->
+                recurse(child.id)
+            }
+        }
+        recurse(folderId)
+        return videosList.distinctBy { it.id }
+    }
+
+    fun deleteFolder(folder: FolderEntity, deleteDownloads: Boolean) {
         viewModelScope.launch {
+            if (deleteDownloads) {
+                try {
+                    val videosInFolder = getVideosInFolderRecursive(folder.id)
+                    videosInFolder.forEach { video ->
+                        if (video.localFilePath.isNotEmpty()) {
+                            try {
+                                val file = java.io.File(video.localFilePath)
+                                if (file.exists()) file.delete()
+                            } catch (e: Exception) {}
+                            videoDao.update(video.copy(localFilePath = ""))
+                        }
+                        val downloads = downloadRepository.getLocalDownloadsForVideo(video.id)
+                        downloads.forEach { download ->
+                            downloadRepository.delete(download)
+                        }
+                    }
+                } catch (e: Exception) {}
+            }
             folderDao.delete(folder)
             if (_uiState.value.selectedFolder?.id == folder.id) {
                 _uiState.value = _uiState.value.copy(selectedFolder = null)
@@ -280,7 +408,7 @@ class LibraryViewModel @Inject constructor(
 
     fun renameFolder(id: Long, name: String) {
         viewModelScope.launch {
-            folderDao.rename(id, name)
+            folderDao.rename(id, name.trim())
         }
     }
 

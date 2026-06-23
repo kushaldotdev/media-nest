@@ -41,6 +41,7 @@ import com.example.medianest.data.local.entity.VideoEntity
 import com.example.medianest.ui.viewmodel.LibraryTab
 import com.example.medianest.ui.viewmodel.LibraryViewModel
 import com.example.medianest.ui.viewmodel.ViewMode
+import com.example.medianest.ui.viewmodel.FolderStats
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -56,6 +57,8 @@ fun LibraryScreen(
     val folderVideos by viewModel.folderVideos.collectAsStateWithLifecycle()
     val rootFolders by viewModel.rootFolders.collectAsStateWithLifecycle()
     val childFolders by viewModel.childFolders.collectAsStateWithLifecycle()
+    val videoFolderMap by viewModel.videoFolderMap.collectAsStateWithLifecycle()
+    val folderStatsMap by viewModel.folderStatsMap.collectAsStateWithLifecycle()
     val focusManager = LocalFocusManager.current
 
     val snackbarHostState = remember { SnackbarHostState() }
@@ -63,6 +66,10 @@ fun LibraryScreen(
 
     var showMoveToFolderDialog by remember { mutableStateOf(false) }
     var singleVideoToMove by remember { mutableStateOf<String?>(null) }
+    var folderToDelete by remember { mutableStateOf<FolderEntity?>(null) }
+    var deleteDownloadsWithFolder by remember { mutableStateOf(false) }
+    var folderToRename by remember { mutableStateOf<FolderEntity?>(null) }
+    var renameFolderName by remember { mutableStateOf("") }
 
     val allDownloads by viewModel.allDownloads.collectAsStateWithLifecycle()
     val fetchingStreamsFor by viewModel.fetchingStreamsFor.collectAsStateWithLifecycle()
@@ -81,17 +88,12 @@ fun LibraryScreen(
             TopAppBar(
                 title = { Text(if (uiState.isSelectionMode) "${uiState.selectedVideoIds.size} Selected" else "Library") },
                 actions = {
-                    if (uiState.currentTab != LibraryTab.SUBSCRIPTIONS && uiState.currentTab != LibraryTab.FOLDERS || (uiState.currentTab == LibraryTab.FOLDERS && uiState.selectedFolder != null)) {
+                    if (uiState.currentTab != LibraryTab.SUBSCRIPTIONS && uiState.currentTab != LibraryTab.PLAYLISTS && (uiState.currentTab != LibraryTab.FOLDERS || uiState.selectedFolder != null)) {
                         IconButton(onClick = { viewModel.toggleViewMode() }) {
                             Icon(
                                 if (uiState.viewMode == ViewMode.GRID) Icons.AutoMirrored.Filled.ViewList else Icons.Default.GridView,
                                 contentDescription = "Toggle View"
                             )
-                        }
-                    }
-                    if (uiState.searchQuery.isNotEmpty()) {
-                        TextButton(onClick = { viewModel.setSearchQuery("") }) {
-                            Text("Clear")
                         }
                     }
                 }
@@ -138,6 +140,13 @@ fun LibraryScreen(
                 onValueChange = { viewModel.setSearchQuery(it) },
                 placeholder = { Text("Search videos...") },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                trailingIcon = {
+                    if (uiState.searchQuery.isNotEmpty()) {
+                        IconButton(onClick = { viewModel.setSearchQuery("") }) {
+                            Icon(Icons.Default.Close, contentDescription = "Clear search")
+                        }
+                    }
+                },
                 singleLine = true,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -183,6 +192,7 @@ fun LibraryScreen(
                     } else {
                         VideoListLayout(
                             videos = videos,
+                            videoFolderMap = videoFolderMap,
                             viewMode = uiState.viewMode,
                             isSelectionMode = uiState.isSelectionMode,
                             selectedIds = uiState.selectedVideoIds,
@@ -213,7 +223,10 @@ fun LibraryScreen(
                         folders = rootFolders,
                         childFolders = childFolders,
                         folderVideos = folderVideos,
+                        videoFolderMap = videoFolderMap,
+                        folderStatsMap = folderStatsMap,
                         selectedFolder = uiState.selectedFolder,
+                        searchQuery = uiState.searchQuery,
                         viewMode = uiState.viewMode,
                         isSelectionMode = uiState.isSelectionMode,
                         selectedIds = uiState.selectedVideoIds,
@@ -226,9 +239,13 @@ fun LibraryScreen(
                             viewModel.createFolder(name, uiState.selectedFolder?.id)
                             coroutineScope.launch { snackbarHostState.showSnackbar("Folder created") }
                         },
-                        onDeleteFolder = { 
-                            viewModel.deleteFolder(it)
-                            coroutineScope.launch { snackbarHostState.showSnackbar("Folder deleted") }
+                        onRenameFolder = { folder ->
+                            folderToRename = folder
+                            renameFolderName = folder.name
+                        },
+                        onDeleteFolder = { folder ->
+                            folderToDelete = folder
+                            deleteDownloadsWithFolder = false
                         },
                         onNavigateBack = { viewModel.navigateBackFromFolder() },
                         onVideoClick = onVideoClick,
@@ -254,6 +271,7 @@ fun LibraryScreen(
                     } else {
                         VideoListLayout(
                             videos = favoriteVideos,
+                            videoFolderMap = videoFolderMap,
                             viewMode = uiState.viewMode,
                             isSelectionMode = uiState.isSelectionMode,
                             selectedIds = uiState.selectedVideoIds,
@@ -280,10 +298,10 @@ fun LibraryScreen(
                     }
                 }
                 LibraryTab.PLAYLISTS -> {
-                    SubscriptionsScreen(sourceType = "playlist", onSubscriptionClick = onSubscriptionClick)
+                    SubscriptionsScreen(sourceType = "playlist", searchQuery = uiState.searchQuery, onSubscriptionClick = onSubscriptionClick)
                 }
                 LibraryTab.SUBSCRIPTIONS -> {
-                    SubscriptionsScreen(sourceType = "channel", onSubscriptionClick = onSubscriptionClick)
+                    SubscriptionsScreen(sourceType = "channel", searchQuery = uiState.searchQuery, onSubscriptionClick = onSubscriptionClick)
                 }
                 }
             }
@@ -324,6 +342,78 @@ fun LibraryScreen(
                 }
             )
         }
+
+        folderToDelete?.let { folder ->
+            AlertDialog(
+                onDismissRequest = { folderToDelete = null },
+                title = { Text("Delete Folder?") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Are you sure you want to delete folder '${folder.name}'? This cannot be undone.")
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.clickable { deleteDownloadsWithFolder = !deleteDownloadsWithFolder }
+                        ) {
+                            Checkbox(
+                                checked = deleteDownloadsWithFolder,
+                                onCheckedChange = { deleteDownloadsWithFolder = it }
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text("Delete downloaded videos in this folder", style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            viewModel.deleteFolder(folder, deleteDownloadsWithFolder)
+                            folderToDelete = null
+                            coroutineScope.launch { snackbarHostState.showSnackbar("Folder deleted") }
+                        }
+                    ) {
+                        Text("Delete", color = MaterialTheme.colorScheme.error)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { folderToDelete = null }) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
+
+        folderToRename?.let { folder ->
+            AlertDialog(
+                onDismissRequest = { folderToRename = null },
+                title = { Text("Rename Folder") },
+                text = {
+                    OutlinedTextField(
+                        value = renameFolderName,
+                        onValueChange = { renameFolderName = it },
+                        placeholder = { Text("New folder name") },
+                        singleLine = true
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            if (renameFolderName.isNotBlank()) {
+                                viewModel.renameFolder(folder.id, renameFolderName.trim())
+                                folderToRename = null
+                                coroutineScope.launch { snackbarHostState.showSnackbar("Folder renamed") }
+                            }
+                        }
+                    ) {
+                        Text("Rename")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { folderToRename = null }) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
     }
     }
 }
@@ -331,6 +421,7 @@ fun LibraryScreen(
 @Composable
 private fun VideoListLayout(
     videos: List<VideoEntity>,
+    videoFolderMap: Map<String, List<FolderEntity>>,
     viewMode: ViewMode,
     isSelectionMode: Boolean,
     selectedIds: Set<String>,
@@ -358,6 +449,7 @@ private fun VideoListLayout(
             items(videos, key = { it.id }) { video ->
                 VideoCard(
                     video = video,
+                    folders = videoFolderMap[video.id] ?: emptyList(),
                     isSelectionMode = isSelectionMode,
                     isSelected = selectedIds.contains(video.id),
                     onClick = { if (isSelectionMode) onToggleSelection(video.id) else onVideoClick(video.id) },
@@ -383,6 +475,7 @@ private fun VideoListLayout(
             items(videos, key = { it.id }) { video ->
                 VideoListRow(
                     video = video,
+                    folders = videoFolderMap[video.id] ?: emptyList(),
                     isSelectionMode = isSelectionMode,
                     isSelected = selectedIds.contains(video.id),
                     onClick = { if (isSelectionMode) onToggleSelection(video.id) else onVideoClick(video.id) },
@@ -407,6 +500,7 @@ private fun VideoListLayout(
 @Composable
 private fun VideoCard(
     video: VideoEntity,
+    folders: List<FolderEntity> = emptyList(),
     isSelectionMode: Boolean,
     isSelected: Boolean,
     onClick: () -> Unit,
@@ -457,6 +551,8 @@ private fun VideoCard(
                 }
             }
             Column(modifier = Modifier.padding(12.dp)) {
+                FolderBadges(folders)
+                Spacer(Modifier.height(4.dp))
                 Row(verticalAlignment = Alignment.Top) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(video.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -524,6 +620,7 @@ private fun VideoCard(
 @Composable
 private fun VideoListRow(
     video: VideoEntity,
+    folders: List<FolderEntity> = emptyList(),
     isSelectionMode: Boolean,
     isSelected: Boolean,
     onClick: () -> Unit,
@@ -556,25 +653,31 @@ private fun VideoListRow(
             if (isSelectionMode) {
                 Checkbox(checked = isSelected, onCheckedChange = { onClick() })
             }
-            Box {
-                AsyncImage(
-                    model = video.thumbnailUrl,
-                    contentDescription = video.title,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.size(120.dp, 68.dp).clip(RoundedCornerShape(8.dp))
-                )
-                if (video.localFilePath.isNotEmpty()) {
-                    Icon(
-                        Icons.Default.CheckCircle,
-                        contentDescription = "Downloaded",
-                        tint = Color.Green,
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(4.dp)
-                            .size(16.dp)
-                            .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(50))
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Box {
+                    AsyncImage(
+                        model = video.thumbnailUrl,
+                        contentDescription = video.title,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.size(120.dp, 68.dp).clip(RoundedCornerShape(8.dp))
                     )
+                    if (video.localFilePath.isNotEmpty()) {
+                        Icon(
+                            Icons.Default.CheckCircle,
+                            contentDescription = "Downloaded",
+                            tint = Color.Green,
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(4.dp)
+                                .size(16.dp)
+                                .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(50))
+                        )
+                    }
                 }
+                FolderBadges(folders)
             }
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
@@ -642,12 +745,16 @@ private fun FolderContent(
     folders: List<FolderEntity>,
     childFolders: List<FolderEntity>,
     folderVideos: List<VideoEntity>,
+    videoFolderMap: Map<String, List<FolderEntity>>,
+    folderStatsMap: Map<Long, FolderStats>,
     selectedFolder: FolderEntity?,
+    searchQuery: String,
     viewMode: ViewMode,
     isSelectionMode: Boolean,
     selectedIds: Set<String>,
     onFolderClick: (FolderEntity) -> Unit,
     onCreateFolder: (String) -> Unit,
+    onRenameFolder: (FolderEntity) -> Unit,
     onDeleteFolder: (FolderEntity) -> Unit,
     onNavigateBack: () -> Unit,
     onVideoClick: (String) -> Unit,
@@ -657,7 +764,7 @@ private fun FolderContent(
     expandedDownloadVideoId: String?,
     fetchingStreamsFor: String?,
     fetchedStreams: com.example.medianest.data.model.ExtractedVideoInfo?,
-                    allDownloads: List<com.example.medianest.data.local.entity.DownloadEntity>,
+    allDownloads: List<com.example.medianest.data.local.entity.DownloadEntity>,
     onDownloadIconClick: (String) -> Unit,
     onDismissDownloadMenu: () -> Unit,
     onEnqueueDownload: (com.example.medianest.data.model.ExtractedVideoInfo, com.example.medianest.data.model.StreamSource) -> Unit,
@@ -687,7 +794,7 @@ private fun FolderContent(
             }
         }
 
-        if (selectedFolder == null) {
+        if (selectedFolder == null && searchQuery.isEmpty()) {
             if (folders.isEmpty()) {
                 Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
                     Text("No folders yet", color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -695,14 +802,17 @@ private fun FolderContent(
             } else {
                 LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(folders, key = { it.id }) { folder ->
-                        FolderRow(folder = folder, onClick = { onFolderClick(folder) }, onDelete = { onDeleteFolder(folder) })
+                        FolderRow(folder = folder, stats = folderStatsMap[folder.id], onClick = { onFolderClick(folder) }, onRename = { onRenameFolder(folder) }, onDelete = { onDeleteFolder(folder) })
                     }
                 }
             }
         } else {
-            if (childFolders.isEmpty() && folderVideos.isEmpty()) {
+            val currentFolders = if (selectedFolder == null) folders else childFolders
+            val currentVideos = folderVideos
+
+            if (currentFolders.isEmpty() && currentVideos.isEmpty()) {
                 Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    Text("Folder is empty", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(if (searchQuery.isNotEmpty()) "No results found" else "Folder is empty", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             } else {
                 LazyVerticalGrid(
@@ -711,22 +821,27 @@ private fun FolderContent(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    if (childFolders.isNotEmpty()) {
+                    if (currentFolders.isNotEmpty()) {
                         item(span = { GridItemSpan(maxLineSpan) }) {
-                            Text("Subfolders", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(vertical = 4.dp))
+                            Text(
+                                text = if (searchQuery.isNotEmpty()) "Folders" else "Subfolders",
+                                style = MaterialTheme.typography.titleSmall,
+                                modifier = Modifier.padding(vertical = 4.dp)
+                            )
                         }
-                        items(childFolders, key = { "subfolder_${it.id}" }, span = { GridItemSpan(maxLineSpan) }) { folder ->
-                            FolderRow(folder = folder, onClick = { onFolderClick(folder) }, onDelete = { onDeleteFolder(folder) })
+                        items(currentFolders, key = { "folder_${it.id}" }, span = { GridItemSpan(maxLineSpan) }) { folder ->
+                            FolderRow(folder = folder, stats = folderStatsMap[folder.id], onClick = { onFolderClick(folder) }, onRename = { onRenameFolder(folder) }, onDelete = { onDeleteFolder(folder) })
                         }
                     }
-                    if (folderVideos.isNotEmpty()) {
+                    if (currentVideos.isNotEmpty()) {
                         item(span = { GridItemSpan(maxLineSpan) }) {
                             Text("Videos", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(vertical = 4.dp))
                         }
                         if (viewMode == ViewMode.GRID) {
-                            items(folderVideos, key = { "video_${it.id}" }) { video ->
+                            items(currentVideos, key = { "video_${it.id}" }) { video ->
                                 VideoCard(
                                     video = video,
+                                    folders = videoFolderMap[video.id] ?: emptyList(),
                                     isSelectionMode = isSelectionMode,
                                     isSelected = selectedIds.contains(video.id),
                                     onClick = { if (isSelectionMode) onToggleSelection(video.id) else onVideoClick(video.id) },
@@ -744,9 +859,10 @@ private fun FolderContent(
                                 )
                             }
                         } else {
-                            items(folderVideos, key = { "video_${it.id}" }, span = { GridItemSpan(maxLineSpan) }) { video ->
+                            items(currentVideos, key = { "video_${it.id}" }, span = { GridItemSpan(maxLineSpan) }) { video ->
                                 VideoListRow(
                                     video = video,
+                                    folders = videoFolderMap[video.id] ?: emptyList(),
                                     isSelectionMode = isSelectionMode,
                                     isSelected = selectedIds.contains(video.id),
                                     onClick = { if (isSelectionMode) onToggleSelection(video.id) else onVideoClick(video.id) },
@@ -788,7 +904,49 @@ private fun FolderContent(
 }
 
 @Composable
-private fun FolderRow(folder: FolderEntity, onClick: () -> Unit, onDelete: () -> Unit) {
+private fun FolderBadges(folders: List<FolderEntity>) {
+    if (folders.isNotEmpty()) {
+        Row(
+            modifier = Modifier.padding(top = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            folders.forEach { folder ->
+                Surface(
+                    shape = RoundedCornerShape(4.dp),
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Folder,
+                            contentDescription = null,
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Text(
+                            text = folder.name,
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FolderRow(
+    folder: FolderEntity,
+    stats: FolderStats?,
+    onClick: () -> Unit,
+    onRename: () -> Unit,
+    onDelete: () -> Unit
+) {
+    val context = LocalContext.current
     Card(
         shape = RoundedCornerShape(12.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
@@ -800,7 +958,17 @@ private fun FolderRow(folder: FolderEntity, onClick: () -> Unit, onDelete: () ->
             Spacer(Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(folder.name, style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(2.dp))
+                val itemCount = stats?.itemCount ?: 0
+                val sizeBytes = stats?.totalSizeBytes ?: 0L
+                val sizeText = Formatter.formatShortFileSize(context, sizeBytes)
+                Text(
+                    text = "$itemCount ${if (itemCount == 1) "item" else "items"} • $sizeText",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
+            IconButton(onClick = onRename) { Icon(Icons.Default.Edit, contentDescription = "Rename folder", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
             IconButton(onClick = onDelete) { Icon(Icons.Default.Delete, contentDescription = "Delete folder", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
     }
