@@ -110,6 +110,20 @@ object DatabaseModule {
         }
     }
 
+    private val MIGRATION_9_10 = object : Migration(9, 10) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS watch_sessions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    videoId TEXT NOT NULL REFERENCES videos(id) ON DELETE CASCADE,
+                    watchedAt INTEGER NOT NULL
+                )
+            """)
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_watch_sessions_videoId ON watch_sessions(videoId)")
+            db.execSQL("ALTER TABLE playback_history ADD COLUMN totalWatchTimeMillis INTEGER NOT NULL DEFAULT 0")
+        }
+    }
+
     private val MIGRATION_4_5 = object : Migration(4, 5) {
         override fun migrate(db: SupportSQLiteDatabase) {
             db.execSQL("ALTER TABLE videos ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0")
@@ -150,6 +164,7 @@ object DatabaseModule {
             .addMigrations(MIGRATION_6_7)
             .addMigrations(MIGRATION_7_8)
             .addMigrations(MIGRATION_8_9)
+            .addMigrations(MIGRATION_9_10)
             .fallbackToDestructiveMigration(dropAllTables = true)
             .build()
     }

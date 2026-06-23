@@ -28,7 +28,8 @@ class VideoDetailViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val downloadRepository: DownloadRepository,
     private val videoRepository: com.example.medianest.data.repository.VideoRepository,
-    private val subscriptionRepository: SubscriptionRepository
+    private val subscriptionRepository: SubscriptionRepository,
+    private val historyDao: com.example.medianest.data.local.dao.HistoryDao
 ) : ViewModel() {
     private val _videoDownloads = MutableStateFlow<List<DownloadEntity>>(emptyList())
     val videoDownloads: StateFlow<List<DownloadEntity>> = _videoDownloads
@@ -45,6 +46,12 @@ class VideoDetailViewModel @Inject constructor(
     private val _isSubscribed = MutableStateFlow(false)
     val isSubscribed: StateFlow<Boolean> = _isSubscribed
 
+    private val _videoHistory = MutableStateFlow<com.example.medianest.data.local.entity.HistoryEntity?>(null)
+    val videoHistory: StateFlow<com.example.medianest.data.local.entity.HistoryEntity?> = _videoHistory
+
+    private val _watchSessions = MutableStateFlow<List<com.example.medianest.data.local.entity.WatchSessionEntity>>(emptyList())
+    val watchSessions: StateFlow<List<com.example.medianest.data.local.entity.WatchSessionEntity>> = _watchSessions
+
     fun loadVideoInfo(videoId: String) {
         if (currentVideoId != videoId) {
             currentVideoId = videoId
@@ -52,6 +59,14 @@ class VideoDetailViewModel @Inject constructor(
             downloadsJob = viewModelScope.launch {
                 downloadRepository.getDownloadsForVideoFlow(videoId).collect {
                     _videoDownloads.value = it
+                }
+            }
+            viewModelScope.launch {
+                _videoHistory.value = historyDao.getLatestPlayback(videoId)
+            }
+            viewModelScope.launch {
+                historyDao.getWatchSessions(videoId).collect {
+                    _watchSessions.value = it
                 }
             }
         }

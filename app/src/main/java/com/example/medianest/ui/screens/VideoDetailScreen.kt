@@ -12,9 +12,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.clickable
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
+import androidx.compose.material3.Card
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -22,6 +24,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Subscriptions
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.Subscriptions
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.PlayArrow
@@ -37,6 +41,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 import coil.compose.AsyncImage
@@ -54,7 +60,9 @@ fun VideoDetailScreen(
     onToggleFavorite: () -> Unit = {},
     isFavorite: Boolean = false,
     onSubscribe: () -> Unit = {},
-    isSubscribed: Boolean = false
+    isSubscribed: Boolean = false,
+    videoHistory: com.example.medianest.data.local.entity.HistoryEntity? = null,
+    watchSessions: List<com.example.medianest.data.local.entity.WatchSessionEntity> = emptyList()
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
@@ -123,6 +131,37 @@ fun VideoDetailScreen(
                         coroutineScope.launch { snackbarHostState.showSnackbar("Subscribed to ${videoInfo.channelName}") }
                     }) {
                         Text("Subscribe")
+                    }
+                }
+            }
+
+            if (videoHistory != null || watchSessions.isNotEmpty()) {
+                Spacer(Modifier.height(16.dp))
+                Text("Your Statistics", style = MaterialTheme.typography.titleMedium)
+                Card(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        val totalTimeStr = com.example.medianest.ui.screens.formatWatchTime(videoHistory?.totalWatchTimeMillis ?: 0L)
+                        Text("Total Watch Time: $totalTimeStr", style = MaterialTheme.typography.bodyLarge)
+                        
+                        if (watchSessions.isNotEmpty()) {
+                            Spacer(Modifier.height(8.dp))
+                            var expanded by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.clickable { expanded = !expanded }.padding(vertical = 4.dp)
+                            ) {
+                                Text("View Watch History (Watched ${watchSessions.size} times)", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+                                Icon(if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp))
+                            }
+                            if (expanded) {
+                                Spacer(Modifier.height(4.dp))
+                                val dateFormat = java.text.SimpleDateFormat("MMM dd, yyyy - hh:mm a", java.util.Locale.getDefault())
+                                watchSessions.forEach { session ->
+                                    val dateStr = dateFormat.format(java.util.Date(session.watchedAt))
+                                    Text("• Watched on: $dateStr", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                        }
                     }
                 }
             }

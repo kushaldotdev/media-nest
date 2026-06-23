@@ -67,6 +67,10 @@ class PlayerViewModel @Inject constructor(
     private var currentVideoId: String? = null
     private var currentStreamIndex: Int = 0
     private var videoInfo: ExtractedVideoInfo? = null
+
+    private var sessionTotalWatchTime: Long = 0L
+    private var countedThisSession: Boolean = false
+
     private var pendingInit: (() -> Unit)? = null
     private var maxSavedPositionMs: Long = 0L
 
@@ -173,6 +177,9 @@ class PlayerViewModel @Inject constructor(
                     val startPosition = 0L
                     val savedPosition = lastPlayback?.positionMillis ?: 0L
                     maxSavedPositionMs = savedPosition
+                    
+                    sessionTotalWatchTime = lastPlayback?.totalWatchTimeMillis ?: 0L
+                    countedThisSession = false
 
                     _uiState.value = _uiState.value.copy(
                         title = title,
@@ -256,7 +263,22 @@ class PlayerViewModel @Inject constructor(
                 delay(1_000)
                 val controller = _player.value
                 if (controller != null) {
+                    if (controller.isPlaying) {
+                        sessionTotalWatchTime += 1000L
+                    }
                     val pos = controller.currentPosition
+                    val duration = controller.duration
+                    
+                    if (!countedThisSession && duration > 0 && pos >= duration * 0.8) {
+                        countedThisSession = true
+                        historyDao.insertWatchSession(
+                            com.example.medianest.data.local.entity.WatchSessionEntity(
+                                videoId = currentVideoId ?: "",
+                                watchedAt = System.currentTimeMillis()
+                            )
+                        )
+                    }
+
                     val buf = controller.bufferedPosition
                     _uiState.value = _uiState.value.copy(
                         positionMs = pos,
@@ -286,7 +308,8 @@ class PlayerViewModel @Inject constructor(
                     HistoryEntity(
                         videoId = videoId,
                         positionMillis = pos,
-                        playedAt = System.currentTimeMillis()
+                        playedAt = System.currentTimeMillis(),
+                        totalWatchTimeMillis = sessionTotalWatchTime
                     )
                 )
             }
@@ -305,7 +328,8 @@ class PlayerViewModel @Inject constructor(
                     HistoryEntity(
                         videoId = videoId,
                         positionMillis = duration,
-                        playedAt = System.currentTimeMillis()
+                        playedAt = System.currentTimeMillis(),
+                        totalWatchTimeMillis = sessionTotalWatchTime
                     )
                 )
             }
@@ -337,7 +361,8 @@ class PlayerViewModel @Inject constructor(
                 HistoryEntity(
                     videoId = videoId,
                     positionMillis = pos,
-                    playedAt = System.currentTimeMillis()
+                    playedAt = System.currentTimeMillis(),
+                    totalWatchTimeMillis = sessionTotalWatchTime
                 )
             )
         }

@@ -6,7 +6,7 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 
 @Entity(
-    tableName = "playback_history",
+    tableName = "watch_sessions",
     foreignKeys = [
         ForeignKey(
             entity = VideoEntity::class,
@@ -17,16 +17,8 @@ import androidx.room.PrimaryKey
     ],
     indices = [Index("videoId")]
 )
-data class HistoryEntity(
-    @PrimaryKey val videoId: String,
-    val positionMillis: Long = 0,
-    val playedAt: Long = System.currentTimeMillis(),
-    val totalWatchTimeMillis: Long = 0,
-    val syncVersion: Long = 0
-)
-
-data class MostViewedVideo(
+data class WatchSessionEntity(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val videoId: String,
-    val title: String,
-    val totalWatchTimeMillis: Long
+    val watchedAt: Long
 )

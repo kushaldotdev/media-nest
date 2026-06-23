@@ -22,6 +22,7 @@ import com.example.medianest.ui.screens.PlayerScreen
 import com.example.medianest.ui.screens.SettingsScreen
 import com.example.medianest.ui.screens.SubscriptionsScreen
 import com.example.medianest.ui.screens.VideoDetailScreen
+import com.example.medianest.ui.screens.StatisticsScreen
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.medianest.ui.viewmodel.HomeViewModel
 import com.example.medianest.ui.viewmodel.PlayerViewModel
@@ -45,6 +46,7 @@ object NavigationRoutes {
     const val PLAYER_ONLINE = "player/{videoId}?streamIndex={streamIndex}"
     const val PLAYER_OFFLINE = "downloads/player/{videoId}"
     const val VIDEO_DETAIL = "videoDetail/{videoId}"
+    const val STATISTICS = "statistics"
 }
 
 
@@ -120,6 +122,9 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
             val isFavorite by detailViewModel.isFavorite.collectAsState()
             val isSubscribed by detailViewModel.isSubscribed.collectAsState()
 
+            val videoHistory by detailViewModel.videoHistory.collectAsState()
+            val watchSessions by detailViewModel.watchSessions.collectAsState()
+
             val info = videoInfo
             if (info != null) {
                 VideoDetailScreen(
@@ -127,6 +132,8 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
                     downloads = downloads,
                     isFavorite = isFavorite,
                     isSubscribed = isSubscribed,
+                    videoHistory = videoHistory,
+                    watchSessions = watchSessions,
                     onSubscribe = { detailViewModel.toggleSubscription() },
                     onToggleFavorite = { detailViewModel.toggleFavorite() },
                     onPlay = { stream ->
@@ -198,6 +205,13 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
                 }
             )
         }
-        composable(BottomNavItem.Settings.route) { SettingsScreen() }
+        composable(BottomNavItem.Settings.route) { 
+            SettingsScreen(
+                onNavigateToStatistics = { navController.navigate(NavigationRoutes.STATISTICS) }
+            ) 
+        }
+        composable(NavigationRoutes.STATISTICS) {
+            StatisticsScreen(onBack = { navController.popBackStack() })
+        }
     }
 }

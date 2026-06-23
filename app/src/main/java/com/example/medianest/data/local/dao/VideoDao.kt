@@ -52,4 +52,10 @@ interface VideoDao {
 
     @Query("DELETE FROM videos WHERE favorite = 0 AND (localFilePath = '' OR localFilePath IS NULL) AND id NOT IN (SELECT videoId FROM video_folder_join)")
     suspend fun deleteOrphanHistoryVideos()
+
+    @Query("SELECT COUNT(*) FROM videos")
+    suspend fun getTotalVideoCount(): Int
+
+    @Query("SELECT COUNT(*) FROM videos WHERE localFilePath != '' AND localFilePath IS NOT NULL")
+    suspend fun getDownloadedVideoCount(): Int
 }

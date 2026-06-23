@@ -17,6 +17,7 @@ import com.example.medianest.data.local.entity.FolderEntity
 import com.example.medianest.data.local.entity.HistoryEntity
 import com.example.medianest.data.local.entity.PlaylistEntity
 import com.example.medianest.data.local.entity.VideoFolderJoin
+import com.example.medianest.data.local.entity.WatchSessionEntity
 
 @Database(
     entities = [
@@ -26,9 +27,10 @@ import com.example.medianest.data.local.entity.VideoFolderJoin
         PlaylistEntity::class,
         FolderEntity::class,
         VideoFolderJoin::class,
-        SubscriptionEntity::class
+        SubscriptionEntity::class,
+        WatchSessionEntity::class
     ],
-    version = 9,
+    version = 10,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
