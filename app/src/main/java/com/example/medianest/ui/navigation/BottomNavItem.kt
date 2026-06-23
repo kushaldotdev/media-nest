@@ -15,7 +15,6 @@ sealed class BottomNavItem(
 ) {
     data object Home : BottomNavItem("home", "Home", Icons.Default.Home)
     data object Downloads : BottomNavItem("downloads", "Downloads", Icons.Default.Download)
-    data object Subscriptions : BottomNavItem("subscriptions", "Subscriptions", Icons.Default.Subscriptions)
     data object Library : BottomNavItem("library", "Library", Icons.Default.LibraryMusic)
     data object Settings : BottomNavItem("settings", "Settings", Icons.Default.Settings)
 }

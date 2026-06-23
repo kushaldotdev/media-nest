@@ -72,7 +72,6 @@ fun MainScreen() {
                         listOf(
                             BottomNavItem.Home,
                             BottomNavItem.Downloads,
-                            BottomNavItem.Subscriptions,
                             BottomNavItem.Library,
                             BottomNavItem.Settings
                         ).forEach { item ->

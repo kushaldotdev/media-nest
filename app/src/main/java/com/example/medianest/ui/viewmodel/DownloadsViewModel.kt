@@ -277,8 +277,9 @@ class DownloadsViewModel @Inject constructor(
     fun extractAudio(download: DownloadEntity) {
         if (download.filePath.isEmpty() || download.status != DownloadStatus.COMPLETED) return
         if (_extractingVideoId.value == download.videoId) return
+        android.widget.Toast.makeText(context, "Audio extraction started", android.widget.Toast.LENGTH_SHORT).show()
 
-        viewModelScope.launch {
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO).launch {
             val existing = downloadRepository.getAudioExtraction(download.videoId)
             if (existing != null) return@launch
 

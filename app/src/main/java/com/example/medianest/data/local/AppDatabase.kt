@@ -28,7 +28,7 @@ import com.example.medianest.data.local.entity.VideoFolderJoin
         VideoFolderJoin::class,
         SubscriptionEntity::class
     ],
-    version = 8,
+    version = 9,
     exportSchema = true
 )
 @TypeConverters(Converters::class)

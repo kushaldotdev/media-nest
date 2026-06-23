@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface VideoDao {
-    @Query("SELECT * FROM videos ORDER BY addedAt DESC")
+    @Query("SELECT * FROM videos ORDER BY max(addedAt, COALESCE(lastPlayedAt, 0), COALESCE(downloadedAt, 0)) DESC")
     fun getAllVideos(): Flow<List<VideoEntity>>
 
     @Query("SELECT * FROM videos WHERE id = :videoId")
@@ -26,13 +26,13 @@ interface VideoDao {
     @Update
     suspend fun update(video: VideoEntity)
 
-    @Query("SELECT * FROM videos WHERE title LIKE '%' || :query || '%' OR channelName LIKE '%' || :query || '%' ORDER BY addedAt DESC")
+    @Query("SELECT * FROM videos WHERE title LIKE '%' || :query || '%' OR channelName LIKE '%' || :query || '%' ORDER BY max(addedAt, COALESCE(lastPlayedAt, 0), COALESCE(downloadedAt, 0)) DESC")
     fun searchVideos(query: String): Flow<List<VideoEntity>>
 
-    @Query("SELECT * FROM videos WHERE favorite = 1 ORDER BY addedAt DESC")
+    @Query("SELECT * FROM videos WHERE favorite = 1 ORDER BY max(addedAt, COALESCE(lastPlayedAt, 0), COALESCE(downloadedAt, 0)) DESC")
     fun getFavoriteVideos(): Flow<List<VideoEntity>>
 
-    @Query("SELECT * FROM videos ORDER BY addedAt DESC")
+    @Query("SELECT * FROM videos ORDER BY max(addedAt, COALESCE(lastPlayedAt, 0), COALESCE(downloadedAt, 0)) DESC")
     fun getAllVideosSortedByDate(): Flow<List<VideoEntity>>
 
     @Query("UPDATE videos SET favorite = :favorite WHERE id = :videoId")

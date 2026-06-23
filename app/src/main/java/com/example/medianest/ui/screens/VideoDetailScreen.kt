@@ -16,6 +16,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
@@ -32,6 +34,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import coil.compose.AsyncImage
 import com.example.medianest.data.model.ExtractedVideoInfo
 import com.example.medianest.data.model.StreamSource
@@ -49,7 +54,11 @@ fun VideoDetailScreen(
     onSubscribe: () -> Unit = {},
     isSubscribed: Boolean = false
 ) {
+    val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
+
     Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text(videoInfo.title, maxLines = 1) },
@@ -58,18 +67,11 @@ fun VideoDetailScreen(
                 },
                 actions = {
                     IconToggleButton(
-                        checked = isSubscribed,
-                        onCheckedChange = { onSubscribe() }
-                    ) {
-                        Icon(
-                            imageVector = if (isSubscribed) Icons.Filled.Subscriptions else Icons.Outlined.Subscriptions,
-                            contentDescription = if (isSubscribed) "Unsubscribe" else "Subscribe",
-                            tint = if (isSubscribed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    IconToggleButton(
                         checked = isFavorite,
-                        onCheckedChange = { onToggleFavorite() }
+                        onCheckedChange = { 
+                            onToggleFavorite()
+                            coroutineScope.launch { snackbarHostState.showSnackbar(if (isFavorite) "Removed from favorites" else "Added to favorites") }
+                        }
                     ) {
                         Icon(
                             Icons.Default.Favorite,
@@ -97,7 +99,31 @@ fun VideoDetailScreen(
             )
             Spacer(Modifier.height(12.dp))
             Text(videoInfo.title, style = MaterialTheme.typography.titleLarge)
-            Text(videoInfo.channelName, style = MaterialTheme.typography.bodyMedium)
+            Spacer(Modifier.height(16.dp))
+            
+            // Channel Info Section
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(videoInfo.channelName, style = MaterialTheme.typography.titleMedium)
+                if (isSubscribed) {
+                    androidx.compose.material3.OutlinedButton(onClick = {
+                        onSubscribe()
+                        coroutineScope.launch { snackbarHostState.showSnackbar("Unsubscribed from ${videoInfo.channelName}") }
+                    }) {
+                        Text("Subscribed")
+                    }
+                } else {
+                    androidx.compose.material3.Button(onClick = {
+                        onSubscribe()
+                        coroutineScope.launch { snackbarHostState.showSnackbar("Subscribed to ${videoInfo.channelName}") }
+                    }) {
+                        Text("Subscribe")
+                    }
+                }
+            }
 
             Spacer(Modifier.height(16.dp))
             Text("Available streams:", style = MaterialTheme.typography.titleSmall)
@@ -110,7 +136,7 @@ fun VideoDetailScreen(
                 Spacer(Modifier.height(8.dp))
                 Text("Video (with audio)", style = MaterialTheme.typography.labelLarge)
                 videoStreams.forEach { stream ->
-                    StreamQualityRow(stream, downloads, onPlay, onDownload)
+                    StreamQualityRow(stream, downloads, onPlay, onDownload, { msg -> coroutineScope.launch { snackbarHostState.showSnackbar(msg) } })
                 }
             }
 
@@ -118,7 +144,7 @@ fun VideoDetailScreen(
                 Spacer(Modifier.height(8.dp))
                 Text("Video Only (no audio)", style = MaterialTheme.typography.labelLarge)
                 videoOnlyStreams.forEach { stream ->
-                    StreamQualityRow(stream, downloads, onPlay, onDownload)
+                    StreamQualityRow(stream, downloads, onPlay, onDownload, { msg -> coroutineScope.launch { snackbarHostState.showSnackbar(msg) } })
                 }
             }
 
@@ -126,7 +152,7 @@ fun VideoDetailScreen(
                 Spacer(Modifier.height(8.dp))
                 Text("Audio Only", style = MaterialTheme.typography.labelLarge)
                 audioStreams.forEach { stream ->
-                    StreamQualityRow(stream, downloads, onPlay, onDownload)
+                    StreamQualityRow(stream, downloads, onPlay, onDownload, { msg -> coroutineScope.launch { snackbarHostState.showSnackbar(msg) } })
                 }
             }
 
@@ -145,7 +171,8 @@ private fun StreamQualityRow(
     stream: StreamSource,
     downloads: List<DownloadEntity>,
     onPlay: (StreamSource) -> Unit,
-    onDownload: (StreamSource) -> Unit
+    onDownload: (StreamSource) -> Unit,
+    onShowSnackbar: (String) -> Unit
 ) {
     OutlinedCard(
         modifier = Modifier
@@ -207,13 +234,19 @@ private fun StreamQualityRow(
                         }
                     }
                     DownloadStatus.FAILED, DownloadStatus.CANCELED -> {
-                        TextButton(onClick = { onDownload(stream) }) {
+                        TextButton(onClick = { 
+                            onDownload(stream) 
+                            onShowSnackbar("Added to download queue")
+                        }) {
                             Text("Download")
                         }
                     }
                 }
             } else {
-                TextButton(onClick = { onDownload(stream) }) {
+                TextButton(onClick = { 
+                    onDownload(stream) 
+                    onShowSnackbar("Added to download queue")
+                }) {
                     Text("Download")
                 }
             }

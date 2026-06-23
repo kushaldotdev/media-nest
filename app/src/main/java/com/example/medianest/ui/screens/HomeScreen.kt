@@ -26,11 +26,15 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
+import kotlinx.coroutines.launch
 import com.example.medianest.data.model.ExtractedVideoInfo
 import com.example.medianest.ui.viewmodel.HomeUiState
 import com.example.medianest.ui.viewmodel.HomeViewModel
@@ -55,12 +60,18 @@ fun HomeScreen(
     var urlInput by remember { mutableStateOf("") }
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
+    val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp)
-    ) {
+    Scaffold(
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .padding(16.dp)
+        ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -129,7 +140,10 @@ fun HomeScreen(
                 )
                 Spacer(Modifier.height(4.dp))
                 Button(
-                    onClick = { onSubscribe("playlist", state.playlist.playlistId, state.playlist.name, state.playlist.thumbnailUrl) },
+                    onClick = { 
+                        onSubscribe("playlist", state.playlist.playlistId, state.playlist.name, state.playlist.thumbnailUrl)
+                        coroutineScope.launch { snackbarHostState.showSnackbar("Subscribed to Playlist") }
+                    },
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text("Subscribe to Playlist")
@@ -148,7 +162,10 @@ fun HomeScreen(
                 )
                 Spacer(Modifier.height(4.dp))
                 Button(
-                    onClick = { onSubscribe("channel", state.channel.channelId, state.channel.name, state.channel.avatarUrl) },
+                    onClick = { 
+                        onSubscribe("channel", state.channel.channelId, state.channel.name, state.channel.avatarUrl)
+                        coroutineScope.launch { snackbarHostState.showSnackbar("Subscribed to Channel") }
+                    },
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text("Subscribe to Channel")
@@ -162,6 +179,7 @@ fun HomeScreen(
             }
         }
     }
+}
 }
 
 @Composable

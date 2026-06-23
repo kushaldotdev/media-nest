@@ -22,7 +22,19 @@ class VideoRepository @Inject constructor(
 
     suspend fun searchAndSave(url: String): ExtractedVideoInfo {
         val info = youTubeExtractor.extractVideo(url)
-        videoDao.insert(info.toVideoEntity())
+        val existing = videoDao.getVideoById(info.videoId)
+        if (existing != null) {
+            val updated = info.toVideoEntity().copy(
+                addedAt = existing.addedAt,
+                favorite = existing.favorite,
+                localFilePath = existing.localFilePath,
+                lastPlayedAt = existing.lastPlayedAt,
+                downloadedAt = existing.downloadedAt
+            )
+            videoDao.insert(updated)
+        } else {
+            videoDao.insert(info.toVideoEntity())
+        }
         return info
     }
 

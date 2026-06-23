@@ -166,10 +166,13 @@ class DownloadService : Service() {
         serviceScope.launch {
             val maxConcurrent = preferences.maxConcurrentDownloads.first()
             val queue = repository.getDownloadsByStatus(DownloadStatus.QUEUED).first()
+                .filter { it.format != "audio_extracted" }
             val active = repository.getActiveDownloadCount()
             val paused = repository.getDownloadsByStatus(DownloadStatus.PAUSED).first()
+                .filter { it.format != "audio_extracted" }
 
             val downloading = repository.getDownloadsByStatus(DownloadStatus.DOWNLOADING).first()
+                .filter { it.format != "audio_extracted" }
             if (downloading.size > maxConcurrent) {
                 val excess = downloading.size - maxConcurrent
                 downloading.takeLast(excess).forEach { download ->
@@ -580,7 +583,9 @@ class DownloadService : Service() {
       private fun pauseAllDownloads() {
           serviceScope.launch {
               val downloading = repository.getDownloadsByStatus(DownloadStatus.DOWNLOADING).first()
+                  .filter { it.format != "audio_extracted" }
               val queued = repository.getDownloadsByStatus(DownloadStatus.QUEUED).first()
+                  .filter { it.format != "audio_extracted" }
               
               downloading.forEach { pauseFlags[it.id] = true }
               queued.forEach { pauseFlags[it.id] = true }
@@ -605,6 +610,7 @@ class DownloadService : Service() {
       private fun resumeAllDownloads() {
           serviceScope.launch {
               val paused = repository.getDownloadsByStatus(DownloadStatus.PAUSED).first()
+                  .filter { it.format != "audio_extracted" }
               paused.forEach { download ->
                   pauseFlags.remove(download.id)
                   repository.updateStatus(download.id, DownloadStatus.QUEUED, download.progress)
@@ -618,8 +624,11 @@ class DownloadService : Service() {
       private fun cancelAllDownloads() {
           serviceScope.launch {
               val downloading = repository.getDownloadsByStatus(DownloadStatus.DOWNLOADING).first()
+                  .filter { it.format != "audio_extracted" }
               val queued = repository.getDownloadsByStatus(DownloadStatus.QUEUED).first()
+                  .filter { it.format != "audio_extracted" }
               val paused = repository.getDownloadsByStatus(DownloadStatus.PAUSED).first()
+                  .filter { it.format != "audio_extracted" }
               
               val all = downloading + queued + paused
               all.forEach { download ->

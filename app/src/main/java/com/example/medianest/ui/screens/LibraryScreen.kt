@@ -1,51 +1,37 @@
 package com.example.medianest.ui.screens
 
+import android.text.format.Formatter
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CreateNewFolder
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.IconToggleButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.PrimaryTabRow
-import androidx.compose.material3.Tab
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.automirrored.filled.ViewList
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -54,6 +40,8 @@ import com.example.medianest.data.local.entity.FolderEntity
 import com.example.medianest.data.local.entity.VideoEntity
 import com.example.medianest.ui.viewmodel.LibraryTab
 import com.example.medianest.ui.viewmodel.LibraryViewModel
+import com.example.medianest.ui.viewmodel.ViewMode
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -67,12 +55,39 @@ fun LibraryScreen(
     val folderVideos by viewModel.folderVideos.collectAsStateWithLifecycle()
     val rootFolders by viewModel.rootFolders.collectAsStateWithLifecycle()
     val childFolders by viewModel.childFolders.collectAsStateWithLifecycle()
+    val focusManager = LocalFocusManager.current
 
-    Scaffold(
+    val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
+
+    var showMoveToFolderDialog by remember { mutableStateOf(false) }
+    var singleVideoToMove by remember { mutableStateOf<String?>(null) }
+
+    val allDownloads by viewModel.allDownloads.collectAsStateWithLifecycle()
+    val fetchingStreamsFor by viewModel.fetchingStreamsFor.collectAsStateWithLifecycle()
+    val fetchedStreams by viewModel.fetchedStreams.collectAsStateWithLifecycle()
+    var expandedDownloadVideoId by remember { mutableStateOf<String?>(null) }
+
+    androidx.compose.runtime.CompositionLocalProvider(
+        LocalMoveToFolder provides { videoId ->
+            singleVideoToMove = videoId
+            showMoveToFolderDialog = true
+        }
+    ) {
+        Scaffold(
+            snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text("Library") },
+                title = { Text(if (uiState.isSelectionMode) "${uiState.selectedVideoIds.size} Selected" else "Library") },
                 actions = {
+                    if (uiState.currentTab != LibraryTab.SUBSCRIPTIONS && uiState.currentTab != LibraryTab.FOLDERS || (uiState.currentTab == LibraryTab.FOLDERS && uiState.selectedFolder != null)) {
+                        IconButton(onClick = { viewModel.toggleViewMode() }) {
+                            Icon(
+                                if (uiState.viewMode == ViewMode.GRID) Icons.AutoMirrored.Filled.ViewList else Icons.Default.GridView,
+                                contentDescription = "Toggle View"
+                            )
+                        }
+                    }
                     if (uiState.searchQuery.isNotEmpty()) {
                         TextButton(onClick = { viewModel.setSearchQuery("") }) {
                             Text("Clear")
@@ -80,27 +95,83 @@ fun LibraryScreen(
                     }
                 }
             )
+        },
+        bottomBar = {
+            if (uiState.isSelectionMode) {
+                BottomAppBar {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        TextButton(
+                            onClick = { viewModel.clearSelection() },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Cancel")
+                        }
+                        Button(
+                            onClick = { showMoveToFolderDialog = true },
+                            enabled = uiState.selectedVideoIds.isNotEmpty(),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.Folder, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Move")
+                        }
+                    }
+                }
+            }
         }
     ) { padding ->
-        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .pointerInput(Unit) {
+                    detectTapGestures(onTap = { focusManager.clearFocus() })
+                }
+        ) {
             OutlinedTextField(
                 value = uiState.searchQuery,
                 onValueChange = { viewModel.setSearchQuery(it) },
                 placeholder = { Text("Search videos...") },
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
             )
 
-            val tabs = listOf(LibraryTab.ALL, LibraryTab.FOLDERS, LibraryTab.FAVORITES)
-            val tabLabels = listOf("All", "Folders", "Favorites")
-            PrimaryTabRow(selectedTabIndex = tabs.indexOf(uiState.currentTab)) {
+            val tabs = listOf(LibraryTab.ALL, LibraryTab.FOLDERS, LibraryTab.FAVORITES, LibraryTab.PLAYLISTS, LibraryTab.SUBSCRIPTIONS)
+            val tabLabels = listOf("All", "Folders", "Favorites", "Playlists", "Channels")
+            ScrollableTabRow(
+                selectedTabIndex = tabs.indexOf(uiState.currentTab),
+                edgePadding = 8.dp,
+                divider = {},
+                indicator = {},
+                modifier = Modifier.fillMaxWidth()
+            ) {
                 tabs.forEachIndexed { index, tab ->
+                    val isSelected = uiState.currentTab == tab
                     Tab(
-                        selected = uiState.currentTab == tab,
+                        selected = isSelected,
                         onClick = { viewModel.setTab(tab) },
-                        text = { Text(tabLabels[index]) }
-                    )
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(50))
+                                .background(if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
+                                .padding(horizontal = 16.dp, vertical = 8.dp)
+                        ) {
+                            Text(
+                                tabLabels[index],
+                                color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+                                style = MaterialTheme.typography.labelLarge
+                            )
+                        }
+                    }
                 }
             }
 
@@ -109,9 +180,31 @@ fun LibraryScreen(
                     if (videos.isEmpty()) {
                         EmptyState("No videos in library")
                     } else {
-                        VideoGrid(videos = videos, onVideoClick = onVideoClick, onFavoriteToggle = { video ->
-                            viewModel.toggleFavorite(video.id, video.favorite)
-                        })
+                        VideoListLayout(
+                            videos = videos,
+                            viewMode = uiState.viewMode,
+                            isSelectionMode = uiState.isSelectionMode,
+                            selectedIds = uiState.selectedVideoIds,
+                            expandedDownloadVideoId = expandedDownloadVideoId,
+                            fetchingStreamsFor = fetchingStreamsFor,
+                            fetchedStreams = fetchedStreams,
+                            allDownloads = allDownloads,
+                            onVideoClick = onVideoClick,
+                            onVideoLongClick = { viewModel.toggleSelectionMode(); viewModel.toggleVideoSelection(it) },
+                            onToggleSelection = { viewModel.toggleVideoSelection(it) },
+                            onFavoriteToggle = { video -> 
+                                viewModel.toggleFavorite(video.id, video.favorite)
+                                coroutineScope.launch { snackbarHostState.showSnackbar(if (video.favorite) "Removed from Favorites" else "Added to Favorites") }
+                            },
+                            onDownloadIconClick = { videoId -> 
+                                expandedDownloadVideoId = videoId
+                                viewModel.fetchStreamsFor(videoId)
+                            },
+                            onDismissDownloadMenu = { expandedDownloadVideoId = null },
+                            onEnqueueDownload = { info, stream -> viewModel.enqueueDownload(info, stream) },
+                            onDeleteDownload = { entity -> viewModel.deleteDownload(entity) },
+                            onExtractAudio = { entity -> viewModel.extractAudio(entity) }
+                        )
                     }
                 }
                 LibraryTab.FOLDERS -> {
@@ -120,23 +213,305 @@ fun LibraryScreen(
                         childFolders = childFolders,
                         folderVideos = folderVideos,
                         selectedFolder = uiState.selectedFolder,
+                        viewMode = uiState.viewMode,
+                        isSelectionMode = uiState.isSelectionMode,
+                        selectedIds = uiState.selectedVideoIds,
+                        expandedDownloadVideoId = expandedDownloadVideoId,
+                        fetchingStreamsFor = fetchingStreamsFor,
+                        fetchedStreams = fetchedStreams,
+                        allDownloads = allDownloads,
                         onFolderClick = { viewModel.selectFolder(it) },
-                        onCreateFolder = { name -> viewModel.createFolder(name, uiState.selectedFolder?.id) },
-                        onDeleteFolder = { viewModel.deleteFolder(it) },
+                        onCreateFolder = { name -> 
+                            viewModel.createFolder(name, uiState.selectedFolder?.id)
+                            coroutineScope.launch { snackbarHostState.showSnackbar("Folder created") }
+                        },
+                        onDeleteFolder = { 
+                            viewModel.deleteFolder(it)
+                            coroutineScope.launch { snackbarHostState.showSnackbar("Folder deleted") }
+                        },
                         onNavigateBack = { viewModel.navigateBackFromFolder() },
                         onVideoClick = onVideoClick,
-                        onFavoriteToggle = { video ->
+                        onVideoLongClick = { viewModel.toggleSelectionMode(); viewModel.toggleVideoSelection(it) },
+                        onToggleSelection = { viewModel.toggleVideoSelection(it) },
+                        onFavoriteToggle = { video -> 
                             viewModel.toggleFavorite(video.id, video.favorite)
-                        }
+                            coroutineScope.launch { snackbarHostState.showSnackbar(if (video.favorite) "Removed from Favorites" else "Added to Favorites") }
+                        },
+                        onDownloadIconClick = { videoId -> 
+                            expandedDownloadVideoId = videoId
+                            viewModel.fetchStreamsFor(videoId)
+                        },
+                        onDismissDownloadMenu = { expandedDownloadVideoId = null },
+                        onEnqueueDownload = { info, stream -> viewModel.enqueueDownload(info, stream) },
+                        onDeleteDownload = { entity -> viewModel.deleteDownload(entity) },
+                        onExtractAudio = { entity -> viewModel.extractAudio(entity) }
                     )
                 }
                 LibraryTab.FAVORITES -> {
                     if (favoriteVideos.isEmpty()) {
                         EmptyState("No favorite videos")
                     } else {
-                        VideoGrid(videos = favoriteVideos, onVideoClick = onVideoClick, onFavoriteToggle = { video ->
-                            viewModel.toggleFavorite(video.id, video.favorite)
-                        })
+                        VideoListLayout(
+                            videos = favoriteVideos,
+                            viewMode = uiState.viewMode,
+                            isSelectionMode = uiState.isSelectionMode,
+                            selectedIds = uiState.selectedVideoIds,
+                            expandedDownloadVideoId = expandedDownloadVideoId,
+                            fetchingStreamsFor = fetchingStreamsFor,
+                            fetchedStreams = fetchedStreams,
+                            allDownloads = allDownloads,
+                            onVideoClick = onVideoClick,
+                            onVideoLongClick = { viewModel.toggleSelectionMode(); viewModel.toggleVideoSelection(it) },
+                            onToggleSelection = { viewModel.toggleVideoSelection(it) },
+                            onFavoriteToggle = { video -> 
+                                viewModel.toggleFavorite(video.id, video.favorite)
+                                coroutineScope.launch { snackbarHostState.showSnackbar(if (video.favorite) "Removed from Favorites" else "Added to Favorites") }
+                            },
+                            onDownloadIconClick = { videoId -> 
+                                expandedDownloadVideoId = videoId
+                                viewModel.fetchStreamsFor(videoId)
+                            },
+                            onDismissDownloadMenu = { expandedDownloadVideoId = null },
+                            onEnqueueDownload = { info, stream -> viewModel.enqueueDownload(info, stream) },
+                            onDeleteDownload = { entity -> viewModel.deleteDownload(entity) },
+                            onExtractAudio = { entity -> viewModel.extractAudio(entity) }
+                        )
+                    }
+                }
+                LibraryTab.PLAYLISTS -> {
+                    SubscriptionsScreen(sourceType = "playlist")
+                }
+                LibraryTab.SUBSCRIPTIONS -> {
+                    SubscriptionsScreen(sourceType = "channel")
+                }
+                }
+            }
+
+            if (showMoveToFolderDialog) {
+            AlertDialog(
+                onDismissRequest = { 
+                    showMoveToFolderDialog = false
+                    singleVideoToMove = null
+                },
+                title = { Text("Move to Folder") },
+                text = {
+                    LazyColumn {
+                        items(rootFolders) { folder ->
+                            TextButton(
+                                onClick = {
+                                    if (singleVideoToMove != null) {
+                                        viewModel.moveVideoToFolder(singleVideoToMove!!, folder.id)
+                                        singleVideoToMove = null
+                                    } else {
+                                        viewModel.moveSelectedToFolder(folder.id)
+                                    }
+                                    showMoveToFolderDialog = false
+                                    coroutineScope.launch { snackbarHostState.showSnackbar("Moved to ${folder.name}") }
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(folder.name)
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { 
+                        showMoveToFolderDialog = false
+                        singleVideoToMove = null
+                    }) { Text("Cancel") }
+                }
+            )
+        }
+    }
+    }
+}
+
+@Composable
+private fun VideoListLayout(
+    videos: List<VideoEntity>,
+    viewMode: ViewMode,
+    isSelectionMode: Boolean,
+    selectedIds: Set<String>,
+    onVideoClick: (String) -> Unit,
+    onVideoLongClick: (String) -> Unit,
+    onToggleSelection: (String) -> Unit,
+    onFavoriteToggle: (VideoEntity) -> Unit,
+    expandedDownloadVideoId: String?,
+    fetchingStreamsFor: String?,
+    fetchedStreams: com.example.medianest.data.model.ExtractedVideoInfo?,
+    allDownloads: List<com.example.medianest.data.local.entity.DownloadEntity>,
+    onDownloadIconClick: (String) -> Unit,
+    onDismissDownloadMenu: () -> Unit,
+    onEnqueueDownload: (com.example.medianest.data.model.ExtractedVideoInfo, com.example.medianest.data.model.StreamSource) -> Unit,
+    onDeleteDownload: (com.example.medianest.data.local.entity.DownloadEntity) -> Unit,
+    onExtractAudio: (com.example.medianest.data.local.entity.DownloadEntity) -> Unit
+) {
+    if (viewMode == ViewMode.GRID) {
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(160.dp),
+            modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            items(videos, key = { it.id }) { video ->
+                VideoCard(
+                    video = video,
+                    isSelectionMode = isSelectionMode,
+                    isSelected = selectedIds.contains(video.id),
+                    onClick = { if (isSelectionMode) onToggleSelection(video.id) else onVideoClick(video.id) },
+                    onLongClick = { onVideoLongClick(video.id) },
+                    onFavoriteToggle = { onFavoriteToggle(video) },
+                    isDownloadMenuExpanded = expandedDownloadVideoId == video.id,
+                    isFetchingStreams = fetchingStreamsFor == video.id,
+                    fetchedStreams = fetchedStreams,
+                    allDownloads = allDownloads,
+                    onDownloadIconClick = { onDownloadIconClick(video.id) },
+                    onDismissDownloadMenu = onDismissDownloadMenu,
+                    onEnqueueDownload = onEnqueueDownload,
+                    onDeleteDownload = onDeleteDownload,
+                    onExtractAudio = onExtractAudio
+                )
+            }
+        }
+    } else {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            items(videos, key = { it.id }) { video ->
+                VideoListRow(
+                    video = video,
+                    isSelectionMode = isSelectionMode,
+                    isSelected = selectedIds.contains(video.id),
+                    onClick = { if (isSelectionMode) onToggleSelection(video.id) else onVideoClick(video.id) },
+                    onLongClick = { onVideoLongClick(video.id) },
+                    onFavoriteToggle = { onFavoriteToggle(video) },
+                    isDownloadMenuExpanded = expandedDownloadVideoId == video.id,
+                    isFetchingStreams = fetchingStreamsFor == video.id,
+                    fetchedStreams = fetchedStreams,
+                    allDownloads = allDownloads,
+                    onDownloadIconClick = { onDownloadIconClick(video.id) },
+                    onDismissDownloadMenu = onDismissDownloadMenu,
+                    onEnqueueDownload = onEnqueueDownload,
+                    onDeleteDownload = onDeleteDownload,
+                    onExtractAudio = onExtractAudio
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun VideoCard(
+    video: VideoEntity,
+    isSelectionMode: Boolean,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    onFavoriteToggle: () -> Unit,
+    isDownloadMenuExpanded: Boolean,
+    isFetchingStreams: Boolean,
+    fetchedStreams: com.example.medianest.data.model.ExtractedVideoInfo?,
+    allDownloads: List<com.example.medianest.data.local.entity.DownloadEntity>,
+    onDownloadIconClick: () -> Unit,
+    onDismissDownloadMenu: () -> Unit,
+    onEnqueueDownload: (com.example.medianest.data.model.ExtractedVideoInfo, com.example.medianest.data.model.StreamSource) -> Unit,
+    onDeleteDownload: (com.example.medianest.data.local.entity.DownloadEntity) -> Unit,
+    onExtractAudio: (com.example.medianest.data.local.entity.DownloadEntity) -> Unit
+) {
+    val onMoveToFolderClick = LocalMoveToFolder.current
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick
+            )
+    ) {
+        Column {
+            Box {
+                AsyncImage(
+                    model = video.thumbnailUrl,
+                    contentDescription = video.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxWidth().height(120.dp)
+                )
+                if (video.localFilePath.isNotEmpty()) {
+                    Icon(
+                        Icons.Default.CheckCircle,
+                        contentDescription = "Downloaded",
+                        tint = Color.Green,
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(8.dp)
+                            .size(24.dp)
+                            .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(50))
+                    )
+                }
+            }
+            Column(modifier = Modifier.padding(12.dp)) {
+                Row(verticalAlignment = Alignment.Top) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(video.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Spacer(Modifier.height(4.dp))
+                        Text(video.channelName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                    if (isSelectionMode) {
+                        Checkbox(checked = isSelected, onCheckedChange = { onClick() }, modifier = Modifier.padding(start = 4.dp))
+                    }
+                }
+                if (!isSelectionMode) {
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        IconToggleButton(
+                            checked = video.favorite,
+                            onCheckedChange = { onFavoriteToggle() }
+                        ) {
+                            Icon(
+                                if (video.favorite) Icons.Default.Favorite else Icons.Outlined.FavoriteBorder,
+                                contentDescription = "Favorite",
+                                tint = if (video.favorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        IconButton(onClick = { onMoveToFolderClick(video.id) }) {
+                            Icon(
+                                Icons.Default.DriveFileMove,
+                                contentDescription = "Move to folder",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Box {
+                            IconButton(
+                                onClick = onDownloadIconClick,
+                                enabled = true
+                            ) {
+                                Icon(
+                                    if (video.localFilePath.isEmpty()) Icons.Default.Download else Icons.Default.DownloadDone,
+                                    contentDescription = "Download",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            QuickDownloadMenu(
+                                isExpanded = isDownloadMenuExpanded,
+                                onDismiss = onDismissDownloadMenu,
+                                isFetching = isFetchingStreams,
+                                fetchedStreams = fetchedStreams,
+                                allDownloads = allDownloads,
+                                videoId = video.id,
+                                onEnqueueDownload = onEnqueueDownload,
+                                onDeleteDownload = onDeleteDownload,
+                                onExtractAudio = onExtractAudio
+                            )
+                        }
                     }
                 }
             }
@@ -144,57 +519,117 @@ fun LibraryScreen(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun VideoGrid(
-    videos: List<VideoEntity>,
-    onVideoClick: (String) -> Unit,
-    onFavoriteToggle: (VideoEntity) -> Unit
-) {
-    LazyVerticalGrid(
-        columns = GridCells.Adaptive(160.dp),
-        modifier = Modifier.fillMaxSize().padding(8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        items(videos, key = { it.id }) { video ->
-            VideoCard(video = video, onClick = { onVideoClick(video.id) }, onFavoriteToggle = { onFavoriteToggle(video) })
-        }
-    }
-}
-
-@Composable
-private fun VideoCard(
+private fun VideoListRow(
     video: VideoEntity,
+    isSelectionMode: Boolean,
+    isSelected: Boolean,
     onClick: () -> Unit,
-    onFavoriteToggle: () -> Unit
+    onLongClick: () -> Unit,
+    onFavoriteToggle: () -> Unit,
+    isDownloadMenuExpanded: Boolean,
+    isFetchingStreams: Boolean,
+    fetchedStreams: com.example.medianest.data.model.ExtractedVideoInfo?,
+    allDownloads: List<com.example.medianest.data.local.entity.DownloadEntity>,
+    onDownloadIconClick: () -> Unit,
+    onDismissDownloadMenu: () -> Unit,
+    onEnqueueDownload: (com.example.medianest.data.model.ExtractedVideoInfo, com.example.medianest.data.model.StreamSource) -> Unit,
+    onDeleteDownload: (com.example.medianest.data.local.entity.DownloadEntity) -> Unit,
+    onExtractAudio: (com.example.medianest.data.local.entity.DownloadEntity) -> Unit
 ) {
-    Card(modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
-        Column {
-            AsyncImage(
-                model = video.thumbnailUrl,
-                contentDescription = video.title,
-                modifier = Modifier.fillMaxWidth().height(100.dp)
+    val onMoveToFolderClick = LocalMoveToFolder.current
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick
             )
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(video.title, style = MaterialTheme.typography.bodySmall, maxLines = 2)
-                    Text(video.channelName, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-                IconToggleButton(
-                    checked = video.favorite,
-                    onCheckedChange = { onFavoriteToggle() }
-                ) {
+    ) {
+        Row(modifier = Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.Top) {
+            if (isSelectionMode) {
+                Checkbox(checked = isSelected, onCheckedChange = { onClick() })
+            }
+            Box {
+                AsyncImage(
+                    model = video.thumbnailUrl,
+                    contentDescription = video.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.size(120.dp, 68.dp).clip(RoundedCornerShape(8.dp))
+                )
+                if (video.localFilePath.isNotEmpty()) {
                     Icon(
-                        if (video.favorite) Icons.Default.Favorite else Icons.Outlined.FavoriteBorder,
-                        contentDescription = "Favorite",
-                        tint = if (video.favorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                        Icons.Default.CheckCircle,
+                        contentDescription = "Downloaded",
+                        tint = Color.Green,
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(4.dp)
+                            .size(16.dp)
+                            .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(50))
                     )
                 }
-                IconButton(onClick = { }) {
-                    Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = "Add to playlist")
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(video.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Spacer(Modifier.height(4.dp))
+                Text(video.channelName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                
+                if (!isSelectionMode) {
+                    Spacer(Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(onClick = onFavoriteToggle, modifier = Modifier.size(36.dp)) {
+                            Icon(
+                                if (video.favorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                contentDescription = "Favorite",
+                                tint = if (video.favorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        IconButton(onClick = { onMoveToFolderClick(video.id) }, modifier = Modifier.size(36.dp)) {
+                            Icon(
+                                Icons.Default.DriveFileMove,
+                                contentDescription = "Move to folder",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Box {
+                            IconButton(onClick = onDownloadIconClick, enabled = true, modifier = Modifier.size(36.dp)) {
+                                Icon(
+                                    if (video.localFilePath.isEmpty()) Icons.Default.Download else Icons.Default.DownloadDone,
+                                    contentDescription = "Download Options",
+                                    tint = if (video.localFilePath.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            val context = androidx.compose.ui.platform.LocalContext.current
+                            QuickDownloadMenu(
+                                isExpanded = isDownloadMenuExpanded,
+                                onDismiss = onDismissDownloadMenu,
+                                isFetching = isFetchingStreams,
+                                fetchedStreams = fetchedStreams,
+                                allDownloads = allDownloads,
+                                videoId = video.id,
+                                onEnqueueDownload = onEnqueueDownload,
+                                onDeleteDownload = onDeleteDownload,
+                                onExtractAudio = { 
+                                    onExtractAudio(it)
+                                    android.widget.Toast.makeText(context, "Audio extraction started", android.widget.Toast.LENGTH_SHORT).show()
+                                }
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -207,19 +642,36 @@ private fun FolderContent(
     childFolders: List<FolderEntity>,
     folderVideos: List<VideoEntity>,
     selectedFolder: FolderEntity?,
+    viewMode: ViewMode,
+    isSelectionMode: Boolean,
+    selectedIds: Set<String>,
     onFolderClick: (FolderEntity) -> Unit,
     onCreateFolder: (String) -> Unit,
     onDeleteFolder: (FolderEntity) -> Unit,
     onNavigateBack: () -> Unit,
     onVideoClick: (String) -> Unit,
-    onFavoriteToggle: (VideoEntity) -> Unit
+    onVideoLongClick: (String) -> Unit,
+    onToggleSelection: (String) -> Unit,
+    onFavoriteToggle: (VideoEntity) -> Unit,
+    expandedDownloadVideoId: String?,
+    fetchingStreamsFor: String?,
+    fetchedStreams: com.example.medianest.data.model.ExtractedVideoInfo?,
+                    allDownloads: List<com.example.medianest.data.local.entity.DownloadEntity>,
+    onDownloadIconClick: (String) -> Unit,
+    onDismissDownloadMenu: () -> Unit,
+    onEnqueueDownload: (com.example.medianest.data.model.ExtractedVideoInfo, com.example.medianest.data.model.StreamSource) -> Unit,
+    onDeleteDownload: (com.example.medianest.data.local.entity.DownloadEntity) -> Unit,
+    onExtractAudio: (com.example.medianest.data.local.entity.DownloadEntity) -> Unit
 ) {
     var showCreateDialog by remember { mutableStateOf(false) }
     var newFolderName by remember { mutableStateOf("") }
+    var showMoveToFolderDialog by remember { mutableStateOf(false) }
+    var singleVideoToMove by remember { mutableStateOf<String?>(null) }
+    var expandedDownloadVideoId by remember { mutableStateOf<String?>(null) }
 
-    Column(modifier = Modifier.fillMaxSize().padding(8.dp)) {
+    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp)) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -240,7 +692,7 @@ private fun FolderContent(
                     Text("No folders yet", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             } else {
-                LazyColumn(modifier = Modifier.weight(1f)) {
+                LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(folders, key = { it.id }) { folder ->
                         FolderRow(folder = folder, onClick = { onFolderClick(folder) }, onDelete = { onDeleteFolder(folder) })
                     }
@@ -252,38 +704,63 @@ private fun FolderContent(
                     Text("Folder is empty", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             } else {
-                LazyColumn(modifier = Modifier.weight(1f)) {
+                LazyVerticalGrid(
+                    columns = GridCells.Adaptive(160.dp),
+                    modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
                     if (childFolders.isNotEmpty()) {
-                        item {
+                        item(span = { GridItemSpan(maxLineSpan) }) {
                             Text("Subfolders", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(vertical = 4.dp))
                         }
-                        items(childFolders, key = { "subfolder_${it.id}" }) { folder ->
+                        items(childFolders, key = { "subfolder_${it.id}" }, span = { GridItemSpan(maxLineSpan) }) { folder ->
                             FolderRow(folder = folder, onClick = { onFolderClick(folder) }, onDelete = { onDeleteFolder(folder) })
-                        }
-                        item {
-                            Spacer(modifier = Modifier.height(8.dp))
                         }
                     }
                     if (folderVideos.isNotEmpty()) {
-                        item {
+                        item(span = { GridItemSpan(maxLineSpan) }) {
                             Text("Videos", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(vertical = 4.dp))
                         }
-                        val columns = 2
-                        val chunkedVideos = folderVideos.chunked(columns)
-                        items(chunkedVideos) { rowVideos ->
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                for (video in rowVideos) {
-                                    Box(modifier = Modifier.weight(1f)) {
-                                        VideoCard(video = video, onClick = { onVideoClick(video.id) }, onFavoriteToggle = { onFavoriteToggle(video) })
-                                    }
-                                }
-                                val emptySlots = columns - rowVideos.size
-                                for (i in 0 until emptySlots) {
-                                    Spacer(modifier = Modifier.weight(1f))
-                                }
+                        if (viewMode == ViewMode.GRID) {
+                            items(folderVideos, key = { "video_${it.id}" }) { video ->
+                                VideoCard(
+                                    video = video,
+                                    isSelectionMode = isSelectionMode,
+                                    isSelected = selectedIds.contains(video.id),
+                                    onClick = { if (isSelectionMode) onToggleSelection(video.id) else onVideoClick(video.id) },
+                                    onLongClick = { onVideoLongClick(video.id) },
+                                    onFavoriteToggle = { onFavoriteToggle(video) },
+                                    isDownloadMenuExpanded = expandedDownloadVideoId == video.id,
+                                    isFetchingStreams = fetchingStreamsFor == video.id,
+                                    fetchedStreams = fetchedStreams,
+                                    allDownloads = allDownloads,
+                                    onDownloadIconClick = { onDownloadIconClick(video.id) },
+                                    onDismissDownloadMenu = onDismissDownloadMenu,
+                                    onEnqueueDownload = onEnqueueDownload,
+                                    onDeleteDownload = onDeleteDownload,
+                                    onExtractAudio = onExtractAudio
+                                )
+                            }
+                        } else {
+                            items(folderVideos, key = { "video_${it.id}" }, span = { GridItemSpan(maxLineSpan) }) { video ->
+                                VideoListRow(
+                                    video = video,
+                                    isSelectionMode = isSelectionMode,
+                                    isSelected = selectedIds.contains(video.id),
+                                    onClick = { if (isSelectionMode) onToggleSelection(video.id) else onVideoClick(video.id) },
+                                    onLongClick = { onVideoLongClick(video.id) },
+                                    onFavoriteToggle = { onFavoriteToggle(video) },
+                                    isDownloadMenuExpanded = expandedDownloadVideoId == video.id,
+                                    isFetchingStreams = fetchingStreamsFor == video.id,
+                                    fetchedStreams = fetchedStreams,
+                                    allDownloads = allDownloads,
+                                    onDownloadIconClick = { onDownloadIconClick(video.id) },
+                                    onDismissDownloadMenu = onDismissDownloadMenu,
+                                    onEnqueueDownload = onEnqueueDownload,
+                                    onDeleteDownload = onDeleteDownload,
+                                    onExtractAudio = onExtractAudio
+                                )
                             }
                         }
                     }
@@ -297,28 +774,13 @@ private fun FolderContent(
             onDismissRequest = { showCreateDialog = false; newFolderName = "" },
             title = { Text("New Folder") },
             text = {
-                OutlinedTextField(
-                    value = newFolderName,
-                    onValueChange = { newFolderName = it },
-                    placeholder = { Text("Folder name") },
-                    singleLine = true
-                )
+                OutlinedTextField(value = newFolderName, onValueChange = { newFolderName = it }, placeholder = { Text("Folder name") }, singleLine = true)
             },
             confirmButton = {
-                TextButton(
-                    onClick = {
-                        if (newFolderName.isNotBlank()) {
-                            onCreateFolder(newFolderName.trim())
-                            showCreateDialog = false
-                            newFolderName = ""
-                        }
-                    }
-                ) { Text("Create") }
+                TextButton(onClick = { if (newFolderName.isNotBlank()) { onCreateFolder(newFolderName.trim()); showCreateDialog = false; newFolderName = "" } }) { Text("Create") }
             },
             dismissButton = {
-                TextButton(onClick = { showCreateDialog = false; newFolderName = "" }) {
-                    Text("Cancel")
-                }
+                TextButton(onClick = { showCreateDialog = false; newFolderName = "" }) { Text("Cancel") }
             }
         )
     }
@@ -326,24 +788,105 @@ private fun FolderContent(
 
 @Composable
 private fun FolderRow(folder: FolderEntity, onClick: () -> Unit, onDelete: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable(onClick = onClick)) {
-        Row(
-            modifier = Modifier.padding(12.dp).fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(Icons.Default.Folder, contentDescription = null, modifier = Modifier.size(40.dp))
-            Spacer(Modifier.width(8.dp))
-            Text(folder.name, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-            IconButton(onClick = onDelete) {
-                Icon(Icons.Default.Delete, contentDescription = "Delete folder")
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)
+    ) {
+        Row(modifier = Modifier.padding(16.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.Folder, contentDescription = null, modifier = Modifier.size(40.dp), tint = MaterialTheme.colorScheme.primary)
+            Spacer(Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(folder.name, style = MaterialTheme.typography.titleMedium)
             }
+            IconButton(onClick = onDelete) { Icon(Icons.Default.Delete, contentDescription = "Delete folder", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
     }
 }
+
+val LocalMoveToFolder = androidx.compose.runtime.staticCompositionLocalOf<(String) -> Unit> { {} }
 
 @Composable
 private fun EmptyState(message: String) {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Text(message, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
+private fun QuickDownloadMenu(
+    isExpanded: Boolean,
+    onDismiss: () -> Unit,
+    isFetching: Boolean,
+    fetchedStreams: com.example.medianest.data.model.ExtractedVideoInfo?,
+    allDownloads: List<com.example.medianest.data.local.entity.DownloadEntity>,
+    videoId: String,
+    onEnqueueDownload: (com.example.medianest.data.model.ExtractedVideoInfo, com.example.medianest.data.model.StreamSource) -> Unit,
+    onDeleteDownload: (com.example.medianest.data.local.entity.DownloadEntity) -> Unit,
+    onExtractAudio: (com.example.medianest.data.local.entity.DownloadEntity) -> Unit
+) {
+    val context = LocalContext.current
+    DropdownMenu(
+        expanded = isExpanded,
+        onDismissRequest = onDismiss,
+        modifier = Modifier.heightIn(max = (LocalConfiguration.current.screenHeightDp * 0.5f).dp)
+    ) {
+        if (isFetching) {
+            DropdownMenuItem(
+                text = { Text("Loading formats...") },
+                leadingIcon = { CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp) },
+                onClick = { }
+            )
+        } else if (fetchedStreams != null) {
+            val streams = fetchedStreams.streamSources
+            val downloadedEntities = allDownloads.filter { it.videoId == videoId }
+
+            if (downloadedEntities.isNotEmpty()) {
+                DropdownMenuItem(
+                    text = { Text("Downloaded Formats", style = MaterialTheme.typography.titleSmall) },
+                    onClick = { }
+                )
+                downloadedEntities.forEach { entity ->
+                    DropdownMenuItem(
+                        text = { Text("Delete ${if (entity.format == "audio" || entity.format == "audio_extracted") "Audio" else entity.quality}") },
+                        leadingIcon = { Icon(Icons.Default.Delete, "Delete") },
+                        onClick = { onDeleteDownload(entity); onDismiss() }
+                    )
+                    if (entity.format == "video" && !downloadedEntities.any { it.format == "audio_extracted" }) {
+                        DropdownMenuItem(
+                            text = { Text("Extract Audio from ${entity.quality}") },
+                            leadingIcon = { Icon(Icons.Default.AudioFile, "Extract") },
+                            onClick = { onExtractAudio(entity); onDismiss() }
+                        )
+                    }
+                }
+                androidx.compose.material3.Divider()
+            }
+
+            DropdownMenuItem(
+                text = { Text("Available Formats", style = MaterialTheme.typography.titleSmall) },
+                onClick = { }
+            )
+            streams.forEach { stream ->
+                val isDownloaded = downloadedEntities.any { it.format == stream.format && it.quality == stream.quality }
+                if (!isDownloaded) {
+                    DropdownMenuItem(
+                        text = { 
+                            val sizeStr = stream.contentLength?.let { " • " + Formatter.formatShortFileSize(context, it) } ?: ""
+                            val label = if (stream.format == "audio") {
+                                val bitrate = stream.quality
+                                "Audio Only • $bitrate$sizeStr"
+                            } else {
+                                "${stream.quality} • VIDEO_ONLY$sizeStr"
+                            }
+                            Text(label) 
+                        },
+                        leadingIcon = { Icon(Icons.Default.Download, "Download") },
+                        onClick = { onEnqueueDownload(fetchedStreams, stream); onDismiss() }
+                    )
+                }
+            }
+        }
     }
 }

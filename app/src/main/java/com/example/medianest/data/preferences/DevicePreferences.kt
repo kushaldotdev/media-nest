@@ -19,6 +19,7 @@ class DevicePreferences(private val context: Context) {
         private val KEY_LAST_SYNC_VERSION = stringPreferencesKey("last_sync_version")
         private val KEY_LAST_SYNC_AT = stringPreferencesKey("last_sync_at")
         private val KEY_SYNC_INTERVAL_HOURS = stringPreferencesKey("sync_interval_hours")
+        private val KEY_LIBRARY_VIEW_MODE = stringPreferencesKey("library_view_mode")
     }
 
     val serverUrl: Flow<String> = context.syncStore.data.map { it[KEY_SERVER_URL] ?: "" }
@@ -27,6 +28,7 @@ class DevicePreferences(private val context: Context) {
     val lastSyncVersion: Flow<Long> = context.syncStore.data.map { it[KEY_LAST_SYNC_VERSION]?.toLongOrNull() ?: 0L }
     val lastSyncAt: Flow<Long> = context.syncStore.data.map { it[KEY_LAST_SYNC_AT]?.toLongOrNull() ?: 0L }
     val syncIntervalHours: Flow<Int> = context.syncStore.data.map { it[KEY_SYNC_INTERVAL_HOURS]?.toIntOrNull() ?: 6 }
+    val libraryViewMode: Flow<String> = context.syncStore.data.map { it[KEY_LIBRARY_VIEW_MODE] ?: "GRID" }
 
     suspend fun setServerUrl(url: String) { context.syncStore.edit { it[KEY_SERVER_URL] = url } }
     suspend fun setApiKey(key: String) { context.syncStore.edit { it[KEY_API_KEY] = key } }
@@ -34,6 +36,7 @@ class DevicePreferences(private val context: Context) {
     suspend fun setLastSyncVersion(version: Long) { context.syncStore.edit { it[KEY_LAST_SYNC_VERSION] = version.toString() } }
     suspend fun setLastSyncAt(timestamp: Long) { context.syncStore.edit { it[KEY_LAST_SYNC_AT] = timestamp.toString() } }
     suspend fun setSyncIntervalHours(hours: Int) { context.syncStore.edit { it[KEY_SYNC_INTERVAL_HOURS] = hours.toString() } }
+    suspend fun setLibraryViewMode(mode: String) { context.syncStore.edit { it[KEY_LIBRARY_VIEW_MODE] = mode } }
 
     suspend fun clear() {
         context.syncStore.edit { it.clear() }

@@ -103,6 +103,13 @@ object DatabaseModule {
         }
     }
 
+    private val MIGRATION_8_9 = object : Migration(8, 9) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE videos ADD COLUMN lastPlayedAt INTEGER")
+            db.execSQL("ALTER TABLE videos ADD COLUMN downloadedAt INTEGER")
+        }
+    }
+
     private val MIGRATION_4_5 = object : Migration(4, 5) {
         override fun migrate(db: SupportSQLiteDatabase) {
             db.execSQL("ALTER TABLE videos ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0")
@@ -142,6 +149,7 @@ object DatabaseModule {
             .addMigrations(MIGRATION_5_6)
             .addMigrations(MIGRATION_6_7)
             .addMigrations(MIGRATION_7_8)
+            .addMigrations(MIGRATION_8_9)
             .fallbackToDestructiveMigration(dropAllTables = true)
             .build()
     }

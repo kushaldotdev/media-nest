@@ -33,7 +33,7 @@ interface DownloadDao {
     @Query("SELECT * FROM downloads WHERE status = 'QUEUED' OR status = 'DOWNLOADING'")
     fun getActiveDownloads(): Flow<List<DownloadEntity>>
 
-    @Query("SELECT COUNT(*) FROM downloads WHERE status = 'DOWNLOADING'")
+    @Query("SELECT COUNT(*) FROM downloads WHERE status = 'DOWNLOADING' AND format != 'audio_extracted'")
     suspend fun getActiveDownloadCount(): Int
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -69,6 +69,6 @@ interface DownloadDao {
     @Query("SELECT * FROM downloads WHERE updatedAt > :since")
     suspend fun getDownloadsSince(since: Long): List<DownloadEntity>
 
-    @Query("UPDATE downloads SET status = 'QUEUED' WHERE status = 'DOWNLOADING'")
+    @Query("UPDATE downloads SET status = 'QUEUED' WHERE status = 'DOWNLOADING' AND format != 'audio_extracted'")
     suspend fun resetStaleDownloads()
 }

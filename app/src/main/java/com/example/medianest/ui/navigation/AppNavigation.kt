@@ -139,8 +139,5 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
             )
         }
         composable(BottomNavItem.Settings.route) { SettingsScreen() }
-        composable(BottomNavItem.Subscriptions.route) {
-            SubscriptionsScreen()
-        }
     }
 }
