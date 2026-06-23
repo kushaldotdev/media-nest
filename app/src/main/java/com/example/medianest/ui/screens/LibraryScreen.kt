@@ -946,26 +946,74 @@ private fun FolderBadges(folders: List<FolderEntity>) {
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            folders.forEach { folder ->
-                Surface(
-                    shape = RoundedCornerShape(4.dp),
-                    color = MaterialTheme.colorScheme.secondaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+            val firstFolder = folders.first()
+            Surface(
+                shape = RoundedCornerShape(4.dp),
+                color = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    Icon(
+                        imageVector = Icons.Default.Folder,
+                        contentDescription = null,
+                        modifier = Modifier.size(12.dp)
+                    )
+                    Text(
+                        text = firstFolder.name,
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                }
+            }
+
+            if (folders.size > 1) {
+                var expanded by remember { mutableStateOf(false) }
+                Box {
+                    Surface(
+                        shape = RoundedCornerShape(4.dp),
+                        color = MaterialTheme.colorScheme.secondaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.clickable { expanded = true }
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Folder,
-                            contentDescription = null,
-                            modifier = Modifier.size(12.dp)
-                        )
-                        Text(
-                            text = folder.name,
-                            style = MaterialTheme.typography.labelSmall
-                        )
+                        Row(
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                text = "+${folders.size - 1}",
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        }
+                    }
+                    DropdownMenu(
+                        expanded = expanded,
+                        onDismissRequest = { expanded = false }
+                    ) {
+                        folders.drop(1).forEach { folder ->
+                            DropdownMenuItem(
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.Default.Folder,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp),
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                },
+                                text = {
+                                    Text(
+                                        text = folder.name,
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                },
+                                onClick = {
+                                    expanded = false
+                                }
+                            )
+                        }
                     }
                 }
             }
