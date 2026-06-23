@@ -54,8 +54,19 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
                 onBack = { navController.popBackStack() }
             )
         }
-        composable(BottomNavItem.Home.route) {
+        composable(
+            route = BottomNavItem.Home.route + "?url={url}",
+            arguments = listOf(navArgument("url") { type = NavType.StringType; nullable = true; defaultValue = null })
+        ) { backStackEntry ->
             val homeViewModel: HomeViewModel = hiltViewModel()
+            val urlToLoad = backStackEntry.arguments?.getString("url")
+            
+            LaunchedEffect(urlToLoad) {
+                if (!urlToLoad.isNullOrEmpty()) {
+                    homeViewModel.onUrlSubmitted(java.net.URLDecoder.decode(urlToLoad, "UTF-8"))
+                }
+            }
+
             HomeScreen(
                 onVideoSelected = { videoId ->
                     navController.navigate("videoDetail/$videoId")
@@ -138,6 +149,28 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
             LibraryScreen(
                 onVideoClick = { videoId ->
                     navController.navigate("videoDetail/$videoId")
+                },
+                onSubscriptionClick = { type, id ->
+                    val url = if (id.startsWith("http")) {
+                        id
+                    } else if (id.contains("youtube.com")) {
+                        if (id.startsWith("//")) "https:$id" else "https://$id"
+                    } else if (type == "playlist") {
+                        val cleanId = id.substringAfter("list=")
+                        "https://www.youtube.com/playlist?list=$cleanId"
+                    } else if (id.startsWith("@")) {
+                        "https://www.youtube.com/$id"
+                    } else {
+                        val cleanId = id.removePrefix("/").removePrefix("channel/").removePrefix("c/")
+                        "https://www.youtube.com/channel/$cleanId"
+                    }
+                    navController.navigate(BottomNavItem.Home.route + "?url=${java.net.URLEncoder.encode(url, "UTF-8")}") {
+                        popUpTo(navController.graph.startDestinationId) {
+                            saveState = false
+                        }
+                        launchSingleTop = true
+                        restoreState = false
+                    }
                 }
             )
         }

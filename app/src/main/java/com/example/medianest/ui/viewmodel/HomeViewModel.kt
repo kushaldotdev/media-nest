@@ -111,7 +111,7 @@ class HomeViewModel @Inject constructor(
             }.onSuccess { state ->
                 _uiState.value = state
             }.onFailure { e ->
-                _uiState.value = HomeUiState.Error(e.message ?: "Failed to extract video")
+                _uiState.value = HomeUiState.Error("${e.message ?: "Failed to extract"} \nURL: $sanitizedUrl")
             }
         }
     }

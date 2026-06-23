@@ -47,6 +47,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun LibraryScreen(
     onVideoClick: (String) -> Unit,
+    onSubscriptionClick: (String, String) -> Unit,
     viewModel: LibraryViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -279,10 +280,10 @@ fun LibraryScreen(
                     }
                 }
                 LibraryTab.PLAYLISTS -> {
-                    SubscriptionsScreen(sourceType = "playlist")
+                    SubscriptionsScreen(sourceType = "playlist", onSubscriptionClick = onSubscriptionClick)
                 }
                 LibraryTab.SUBSCRIPTIONS -> {
-                    SubscriptionsScreen(sourceType = "channel")
+                    SubscriptionsScreen(sourceType = "channel", onSubscriptionClick = onSubscriptionClick)
                 }
                 }
             }

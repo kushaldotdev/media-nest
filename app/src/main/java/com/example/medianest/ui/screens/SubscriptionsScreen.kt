@@ -1,5 +1,6 @@
 package com.example.medianest.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -49,6 +50,7 @@ import com.example.medianest.ui.viewmodel.SubscriptionsViewModel
 @Composable
 fun SubscriptionsScreen(
     sourceType: String,
+    onSubscriptionClick: (String, String) -> Unit,
     viewModel: SubscriptionsViewModel = hiltViewModel()
 ) {
     val subscriptions by viewModel.subscriptions.collectAsStateWithLifecycle()
@@ -82,7 +84,8 @@ fun SubscriptionsScreen(
                         coroutineScope.launch {
                             snackbarHostState.showSnackbar("Unsubscribed from ${sub.name}")
                         }
-                    }
+                    },
+                    onClick = { onSubscriptionClick(sub.sourceType, sub.sourceId) }
                 )
             }
         }
@@ -97,9 +100,15 @@ fun SubscriptionsScreen(
 private fun SubscriptionCard(
     subscription: SubscriptionEntity,
     onAutoDownloadChange: (Boolean, Boolean) -> Unit,
-    onUnsubscribe: () -> Unit
+    onUnsubscribe: () -> Unit,
+    onClick: () -> Unit
 ) {
-    Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp)) {
+    Card(
+        onClick = onClick,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp, vertical = 4.dp)
+    ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(16.dp),
             verticalAlignment = Alignment.CenterVertically

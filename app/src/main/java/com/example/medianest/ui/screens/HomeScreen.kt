@@ -172,14 +172,15 @@ fun HomeScreen(
                     style = MaterialTheme.typography.titleMedium
                 )
                 Spacer(Modifier.height(4.dp))
-                val isSubscribed = subscriptions.any { it.sourceId == state.channel.channelId }
+                val isSubscribed = subscriptions.any { it.sourceId == state.channel.url || it.sourceId == state.channel.channelId }
                 Button(
                     onClick = { 
                         if (isSubscribed) {
-                            viewModel.unsubscribe(state.channel.channelId)
+                            val subId = subscriptions.firstOrNull { it.sourceId == state.channel.url || it.sourceId == state.channel.channelId }?.sourceId ?: state.channel.url
+                            viewModel.unsubscribe(subId)
                             coroutineScope.launch { snackbarHostState.showSnackbar("Unsubscribed from Channel") }
                         } else {
-                            viewModel.subscribe("channel", state.channel.channelId, state.channel.name, state.channel.avatarUrl)
+                            viewModel.subscribe("channel", state.channel.url, state.channel.name, state.channel.avatarUrl)
                             coroutineScope.launch { snackbarHostState.showSnackbar("Subscribed to Channel") }
                         }
                     },

@@ -162,6 +162,7 @@ class YouTubeExtractor @Inject constructor() {
 
         ModelChannelInfo(
             channelId = info.id,
+            url = info.url,
             name = info.name ?: "Unknown",
             avatarUrl = info.avatars?.firstOrNull()?.url ?: "",
             subscriberCount = info.subscriberCount,

@@ -79,7 +79,7 @@ fun MainScreen() {
                                 icon = { Icon(item.icon, contentDescription = item.label) },
                                 label = { Text(item.label, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, softWrap = false) },
                                 alwaysShowLabel = false,
-                                selected = currentDestination?.hierarchy?.any { it.route == item.route } == true,
+                                selected = currentDestination?.hierarchy?.any { it.route?.substringBefore("?") == item.route } == true,
                                 onClick = {
                                     navController.navigate(item.route) {
                                         popUpTo(navController.graph.findStartDestination().id) {
