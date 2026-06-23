@@ -20,6 +20,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Forward10
+import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -148,8 +150,8 @@ fun PlayerScreen(
                         horizontalArrangement = Arrangement.SpaceEvenly,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        IconButton(onClick = { }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                        IconButton(onClick = { viewModel.seekRelative(-10_000L) }) {
+                            Icon(Icons.Default.Replay10, contentDescription = "Rewind 10s")
                         }
                         IconButton(
                             onClick = { viewModel.togglePlayPause() },
@@ -161,8 +163,8 @@ fun PlayerScreen(
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
-                        IconButton(onClick = { }) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                        IconButton(onClick = { viewModel.seekRelative(10_000L) }) {
+                            Icon(Icons.Default.Forward10, contentDescription = "Forward 10s")
                         }
                     }
 

@@ -185,7 +185,7 @@ class DownloadsViewModel @Inject constructor(
                 if (remaining.isEmpty()) {
                     val video = videoRepository.getVideoById(download.videoId)
                     if (video != null) {
-                        videoRepository.insertVideo(video.copy(localFilePath = ""))
+                        videoRepository.updateVideo(video.copy(localFilePath = ""))
                     }
                 }
             }

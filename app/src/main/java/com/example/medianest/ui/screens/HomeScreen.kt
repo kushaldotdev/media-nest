@@ -57,6 +57,7 @@ fun HomeScreen(
     onSubscribe: (sourceType: String, sourceId: String, name: String, thumbnailUrl: String?) -> Unit = { _, _, _, _ -> }
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val subscriptions by viewModel.subscriptions.collectAsStateWithLifecycle()
     var urlInput by remember { mutableStateOf("") }
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
@@ -139,14 +140,24 @@ fun HomeScreen(
                     style = MaterialTheme.typography.titleMedium
                 )
                 Spacer(Modifier.height(4.dp))
+                val isSaved = subscriptions.any { it.sourceId == state.playlist.playlistId }
                 Button(
                     onClick = { 
-                        onSubscribe("playlist", state.playlist.playlistId, state.playlist.name, state.playlist.thumbnailUrl)
-                        coroutineScope.launch { snackbarHostState.showSnackbar("Subscribed to Playlist") }
+                        if (isSaved) {
+                            viewModel.unsubscribe(state.playlist.playlistId)
+                            coroutineScope.launch { snackbarHostState.showSnackbar("Removed from Playlist") }
+                        } else {
+                            viewModel.subscribe("playlist", state.playlist.playlistId, state.playlist.name, state.playlist.thumbnailUrl)
+                            coroutineScope.launch { snackbarHostState.showSnackbar("Added to Playlist") }
+                        }
                     },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                        containerColor = if (isSaved) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.primary,
+                        contentColor = if (isSaved) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onPrimary
+                    )
                 ) {
-                    Text("Subscribe to Playlist")
+                    Text(if (isSaved) "Saved to Playlist" else "Add to Playlist")
                 }
                 Spacer(Modifier.height(8.dp))
                 LazyColumn {
@@ -161,14 +172,24 @@ fun HomeScreen(
                     style = MaterialTheme.typography.titleMedium
                 )
                 Spacer(Modifier.height(4.dp))
+                val isSubscribed = subscriptions.any { it.sourceId == state.channel.channelId }
                 Button(
                     onClick = { 
-                        onSubscribe("channel", state.channel.channelId, state.channel.name, state.channel.avatarUrl)
-                        coroutineScope.launch { snackbarHostState.showSnackbar("Subscribed to Channel") }
+                        if (isSubscribed) {
+                            viewModel.unsubscribe(state.channel.channelId)
+                            coroutineScope.launch { snackbarHostState.showSnackbar("Unsubscribed from Channel") }
+                        } else {
+                            viewModel.subscribe("channel", state.channel.channelId, state.channel.name, state.channel.avatarUrl)
+                            coroutineScope.launch { snackbarHostState.showSnackbar("Subscribed to Channel") }
+                        }
                     },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                        containerColor = if (isSubscribed) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.primary,
+                        contentColor = if (isSubscribed) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onPrimary
+                    )
                 ) {
-                    Text("Subscribe to Channel")
+                    Text(if (isSubscribed) "Subscribed" else "Subscribe to Channel")
                 }
                 Spacer(Modifier.height(8.dp))
                 LazyColumn {

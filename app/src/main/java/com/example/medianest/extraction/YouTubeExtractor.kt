@@ -50,11 +50,13 @@ class YouTubeExtractor @Inject constructor() {
         runCatching {
             info.audioStreams?.forEach { track ->
                 val codec = track.format?.name ?: track.format?.mimeType?.substringAfter("/") ?: "audio"
+                val bitrate = if (track.averageBitrate > 0) track.averageBitrate else track.bitrate
+                val qualityStr = if (bitrate > 0) "${bitrate / 1000}kbps" else "Unknown bitrate"
                 streams.add(
                     StreamSource(
                         url = track.content,
                         format = "audio",
-                        quality = "${track.averageBitrate / 1000}kbps",
+                        quality = qualityStr,
                         mimeType = track.format?.mimeType ?: "audio/mpeg",
                         codec = codec,
                         contentLength = if (track.itagItem?.contentLength ?: 0L > 0L) track.itagItem?.contentLength else null

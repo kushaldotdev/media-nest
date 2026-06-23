@@ -864,27 +864,51 @@ private fun QuickDownloadMenu(
                 androidx.compose.material3.Divider()
             }
 
-            DropdownMenuItem(
-                text = { Text("Available Formats", style = MaterialTheme.typography.titleSmall) },
-                onClick = { }
-            )
-            streams.forEach { stream ->
-                val isDownloaded = downloadedEntities.any { it.format == stream.format && it.quality == stream.quality }
-                if (!isDownloaded) {
+            val videoStreams = streams.filter { it.format == "video" || it.format == "video_only" }
+            val bestAudioStream = streams.filter { it.format == "audio" }
+                .maxByOrNull { it.quality.replace("kbps", "").toIntOrNull() ?: 0 }
+            val bestAudioLength = bestAudioStream?.contentLength
+
+            val groupedVideos = videoStreams.groupBy { it.quality }
+            val sortedResolutions = groupedVideos.keys.sortedByDescending { 
+                it.substringBefore("p").toIntOrNull() ?: 0 
+            }
+            
+            if (sortedResolutions.isNotEmpty()) {
+                DropdownMenuItem(
+                    text = { Text("Available Videos", style = MaterialTheme.typography.titleSmall) },
+                    onClick = { }
+                )
+                sortedResolutions.forEach { resolution ->
                     DropdownMenuItem(
-                        text = { 
-                            val sizeStr = stream.contentLength?.let { " • " + Formatter.formatShortFileSize(context, it) } ?: ""
-                            val label = if (stream.format == "audio") {
-                                val bitrate = stream.quality
-                                "Audio Only • $bitrate$sizeStr"
-                            } else {
-                                "${stream.quality} • VIDEO_ONLY$sizeStr"
-                            }
-                            Text(label) 
-                        },
-                        leadingIcon = { Icon(Icons.Default.Download, "Download") },
-                        onClick = { onEnqueueDownload(fetchedStreams, stream); onDismiss() }
+                        text = { Text(resolution, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary) },
+                        onClick = { }
                     )
+                    val streamsInResolution = groupedVideos[resolution] ?: emptyList()
+                    streamsInResolution.forEach { stream ->
+                        val dbQuality = if (stream.format == "audio") stream.quality else "${stream.quality} (${stream.codec})"
+                        val isDownloaded = downloadedEntities.any { it.format == stream.format && it.quality == dbQuality }
+                        if (!isDownloaded) {
+                            DropdownMenuItem(
+                                text = {
+                                    val sizeStr = stream.contentLength?.let { videoLen ->
+                                        val videoSize = Formatter.formatShortFileSize(context, videoLen)
+                                        if (stream.format == "video_only" && bestAudioLength != null && bestAudioLength > 0) {
+                                            val audioSize = Formatter.formatShortFileSize(context, bestAudioLength)
+                                            " • $videoSize + $audioSize"
+                                        } else {
+                                            " • $videoSize"
+                                        }
+                                    } ?: ""
+                                    val typeLabel = "Video"
+                                    val codecLabel = if (stream.codec.isNotEmpty()) " (${stream.codec.uppercase()})" else ""
+                                    Text("$typeLabel$codecLabel$sizeStr")
+                                },
+                                leadingIcon = { Icon(Icons.Default.Download, "Download") },
+                                onClick = { onEnqueueDownload(fetchedStreams, stream); onDismiss() }
+                            )
+                        }
+                    }
                 }
             }
         }

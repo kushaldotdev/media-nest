@@ -60,6 +60,10 @@ class SubscriptionRepository @Inject constructor(
         subscriptionDao.delete(sub)
     }
 
+    suspend fun unsubscribeBySourceId(sourceId: String) {
+        subscriptionDao.deleteBySourceId(sourceId)
+    }
+
     suspend fun updateAutoDownload(id: Long, autoDownload: Boolean, audioOnly: Boolean) {
         subscriptionDao.updateAutoDownload(id, autoDownload, audioOnly)
     }

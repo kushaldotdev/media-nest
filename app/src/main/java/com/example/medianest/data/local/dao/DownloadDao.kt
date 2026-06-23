@@ -54,8 +54,11 @@ interface DownloadDao {
     @Query("UPDATE downloads SET status = :status, errorMessage = :errorMessage, retryCount = :retryCount WHERE id = :id")
     suspend fun markFailed(id: Long, status: DownloadStatus, errorMessage: String, retryCount: Int)
 
-    @Query("UPDATE downloads SET status = 'COMPLETED', progress = 1.0, fileSizeBytes = :fileSize, filePath = :filePath WHERE id = :id")
+    @Query("UPDATE downloads SET status = 'COMPLETED', progress = 1.0, errorMessage = NULL, fileSizeBytes = :fileSize, filePath = :filePath WHERE id = :id")
     suspend fun markCompleted(id: Long, fileSize: Long, filePath: String)
+
+    @Query("UPDATE downloads SET progress = :progress, errorMessage = :errorMessage WHERE id = :id")
+    suspend fun updateProgressAndMessage(id: Long, progress: Float, errorMessage: String?)
 
     @Query("SELECT * FROM downloads WHERE videoId = :videoId AND status = 'COMPLETED'")
     suspend fun getCompletedDownloadsForVideo(videoId: String): List<DownloadEntity>

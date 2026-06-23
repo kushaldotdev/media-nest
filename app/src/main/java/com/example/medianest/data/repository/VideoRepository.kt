@@ -31,7 +31,7 @@ class VideoRepository @Inject constructor(
                 lastPlayedAt = existing.lastPlayedAt,
                 downloadedAt = existing.downloadedAt
             )
-            videoDao.insert(updated)
+            videoDao.update(updated)
         } else {
             videoDao.insert(info.toVideoEntity())
         }
@@ -50,4 +50,6 @@ class VideoRepository @Inject constructor(
         videoDao.setFavorite(videoId, favorite)
 
     suspend fun insertVideo(video: VideoEntity) = videoDao.insert(video)
+
+    suspend fun updateVideo(video: VideoEntity) = videoDao.update(video)
 }

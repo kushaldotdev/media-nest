@@ -167,7 +167,8 @@ class VideoDetailViewModel @Inject constructor(
 
     fun enqueueDownload(videoInfo: ExtractedVideoInfo, stream: StreamSource) {
         viewModelScope.launch {
-            val existing = downloadRepository.getDownload(videoInfo.videoId, stream.format, stream.quality)
+            val dbQuality = if (stream.format == "audio") stream.quality else "${stream.quality} (${stream.codec})"
+            val existing = downloadRepository.getDownload(videoInfo.videoId, stream.format, dbQuality)
             if (existing != null) {
                 android.widget.Toast.makeText(context, "Download already exists in queue", android.widget.Toast.LENGTH_SHORT).show()
                 return@launch
@@ -183,7 +184,7 @@ class VideoDetailViewModel @Inject constructor(
                 url = stream.url,
                 videoUrl = "https://www.youtube.com/watch?v=${videoInfo.videoId}",
                 format = stream.format,
-                quality = stream.quality,
+                quality = dbQuality,
                 status = DownloadStatus.QUEUED,
                 title = videoInfo.title,
                 thumbnailUrl = videoInfo.thumbnailUrl

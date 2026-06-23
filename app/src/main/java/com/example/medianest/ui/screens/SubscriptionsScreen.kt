@@ -137,7 +137,10 @@ private fun SubscriptionCard(
                     contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 4.dp),
                     modifier = Modifier.height(32.dp)
                 ) {
-                    Text("Unsubscribe", style = MaterialTheme.typography.labelMedium)
+                    Text(
+                        if (subscription.sourceType == "playlist") "Delete" else "Unsubscribe", 
+                        style = MaterialTheme.typography.labelMedium
+                    )
                 }
                 Row(
                     verticalAlignment = Alignment.CenterVertically,

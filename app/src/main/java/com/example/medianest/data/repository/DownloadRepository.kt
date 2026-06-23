@@ -43,6 +43,9 @@ class DownloadRepository @Inject constructor(
     suspend fun markCompleted(id: Long, fileSize: Long, filePath: String) =
         downloadDao.markCompleted(id, fileSize, filePath)
 
+    suspend fun updateProgressAndMessage(id: Long, progress: Float, errorMessage: String?) =
+        downloadDao.updateProgressAndMessage(id, progress, errorMessage)
+
     suspend fun getLocalDownloadsForVideo(videoId: String): List<DownloadEntity> =
         downloadDao.getCompletedDownloadsForVideo(videoId)
 

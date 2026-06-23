@@ -24,7 +24,9 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Subscriptions
 import androidx.compose.material.icons.outlined.Subscriptions
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.TextButton
 import com.example.medianest.data.local.entity.DownloadEntity
@@ -128,35 +130,56 @@ fun VideoDetailScreen(
             Spacer(Modifier.height(16.dp))
             Text("Available streams:", style = MaterialTheme.typography.titleSmall)
 
-            val videoStreams = videoInfo.streamSources.filter { it.format == "video" }
-            val videoOnlyStreams = videoInfo.streamSources.filter { it.format == "video_only" }
+            val videoStreams = videoInfo.streamSources.filter { it.format == "video" || it.format == "video_only" }
             val audioStreams = videoInfo.streamSources.filter { it.format == "audio" }
 
-            if (videoStreams.isNotEmpty()) {
-                Spacer(Modifier.height(8.dp))
-                Text("Video (with audio)", style = MaterialTheme.typography.labelLarge)
-                videoStreams.forEach { stream ->
-                    StreamQualityRow(stream, downloads, onPlay, onDownload, { msg -> coroutineScope.launch { snackbarHostState.showSnackbar(msg) } })
-                }
+            val groupedVideos = videoStreams.groupBy { it.quality }
+            val sortedResolutions = groupedVideos.keys.sortedByDescending { 
+                it.replace("p", "").toIntOrNull() ?: 0 
             }
 
-            if (videoOnlyStreams.isNotEmpty()) {
-                Spacer(Modifier.height(8.dp))
-                Text("Video Only (no audio)", style = MaterialTheme.typography.labelLarge)
-                videoOnlyStreams.forEach { stream ->
-                    StreamQualityRow(stream, downloads, onPlay, onDownload, { msg -> coroutineScope.launch { snackbarHostState.showSnackbar(msg) } })
+            val bestAudioStream = audioStreams.maxByOrNull {
+                it.quality.replace("kbps", "").toIntOrNull() ?: 0
+            }
+            val bestAudioLength = bestAudioStream?.contentLength
+
+            if (sortedResolutions.isNotEmpty()) {
+                sortedResolutions.forEach { resolution ->
+                    Spacer(Modifier.height(8.dp))
+                    Text(resolution, style = MaterialTheme.typography.titleMedium)
+                    val streamsInResolution = groupedVideos[resolution] ?: emptyList()
+                    streamsInResolution.forEach { stream ->
+                        StreamQualityRow(
+                            stream = stream,
+                            downloads = downloads,
+                            bestAudioLength = bestAudioLength,
+                            onPlay = onPlay,
+                            onDownload = onDownload,
+                            onShowSnackbar = { msg -> coroutineScope.launch { snackbarHostState.showSnackbar(msg) } }
+                        )
+                    }
                 }
             }
 
             if (audioStreams.isNotEmpty()) {
-                Spacer(Modifier.height(8.dp))
-                Text("Audio Only", style = MaterialTheme.typography.labelLarge)
-                audioStreams.forEach { stream ->
-                    StreamQualityRow(stream, downloads, onPlay, onDownload, { msg -> coroutineScope.launch { snackbarHostState.showSnackbar(msg) } })
+                Spacer(Modifier.height(16.dp))
+                Text("Audio Only", style = MaterialTheme.typography.titleMedium)
+                val sortedAudios = audioStreams.sortedByDescending {
+                    it.quality.replace("kbps", "").toIntOrNull() ?: 0
+                }
+                sortedAudios.forEach { stream ->
+                    StreamQualityRow(
+                        stream = stream,
+                        downloads = downloads,
+                        bestAudioLength = null,
+                        onPlay = onPlay,
+                        onDownload = onDownload,
+                        onShowSnackbar = { msg -> coroutineScope.launch { snackbarHostState.showSnackbar(msg) } }
+                    )
                 }
             }
 
-            if (videoStreams.isEmpty() && videoOnlyStreams.isEmpty() && audioStreams.isEmpty()) {
+            if (videoStreams.isEmpty() && audioStreams.isEmpty()) {
                 Text(
                     "No streams available",
                     color = MaterialTheme.colorScheme.error
@@ -170,6 +193,7 @@ fun VideoDetailScreen(
 private fun StreamQualityRow(
     stream: StreamSource,
     downloads: List<DownloadEntity>,
+    bestAudioLength: Long?,
     onPlay: (StreamSource) -> Unit,
     onDownload: (StreamSource) -> Unit,
     onShowSnackbar: (String) -> Unit
@@ -188,66 +212,88 @@ private fun StreamQualityRow(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
+                val typeLabel = when (stream.format) {
+                    "video_only", "video" -> "Video"
+                    "audio" -> "Audio Only (${stream.quality})"
+                    else -> stream.format
+                }
                 val label = if (stream.codec.isNotEmpty()) {
-                    "${stream.quality} • ${stream.codec.uppercase()}"
+                    "${typeLabel} • ${stream.codec.uppercase()}"
                 } else {
-                    stream.quality
+                    typeLabel
                 }
                 Text(label)
                 val sizeText = when {
-                    stream.contentLength != null && stream.contentLength > 0 ->
-                        "%.1f MB".format(stream.contentLength / (1024f * 1024f))
+                    stream.contentLength != null && stream.contentLength > 0 -> {
+                        val videoSize = "%.1f MB".format(stream.contentLength / (1024f * 1024f))
+                        if (stream.format == "video_only" && bestAudioLength != null && bestAudioLength > 0) {
+                            val audioSize = "%.1f MB".format(bestAudioLength / (1024f * 1024f))
+                            "$videoSize + $audioSize"
+                        } else {
+                            videoSize
+                        }
+                    }
                     else -> "Resolving size…"
                 }
                 Text(sizeText, style = MaterialTheme.typography.bodySmall)
             }
-            val downloadState = downloads.find { it.format == stream.format && it.quality == stream.quality }
-            if (downloadState != null) {
-                when (downloadState.status) {
-                    DownloadStatus.COMPLETED -> {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Check,
-                                contentDescription = "Downloaded",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(Modifier.width(4.dp))
-                            Text(
-                                text = "Downloaded",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    }
-                    DownloadStatus.DOWNLOADING, DownloadStatus.QUEUED -> {
-                        TextButton(onClick = {}, enabled = false) {
-                            Text("Downloading")
-                        }
-                    }
-                    DownloadStatus.PAUSED -> {
-                        TextButton(onClick = {}, enabled = false) {
-                            Text("Paused")
-                        }
-                    }
-                    DownloadStatus.FAILED, DownloadStatus.CANCELED -> {
-                        TextButton(onClick = { 
-                            onDownload(stream) 
-                            onShowSnackbar("Added to download queue")
-                        }) {
-                            Text("Download")
-                        }
-                    }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.End
+            ) {
+                IconButton(onClick = { onPlay(stream) }) {
+                    Icon(Icons.Default.PlayArrow, contentDescription = "Play")
                 }
-            } else {
-                TextButton(onClick = { 
-                    onDownload(stream) 
-                    onShowSnackbar("Added to download queue")
-                }) {
-                    Text("Download")
+                
+                val dbQuality = if (stream.format == "audio") stream.quality else "${stream.quality} (${stream.codec})"
+                val downloadState = downloads.find { it.format == stream.format && it.quality == dbQuality }
+                if (downloadState != null) {
+                    when (downloadState.status) {
+                        DownloadStatus.COMPLETED -> {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = "Downloaded",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(Modifier.width(4.dp))
+                                Text(
+                                    text = "Downloaded",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                        DownloadStatus.DOWNLOADING, DownloadStatus.QUEUED -> {
+                            TextButton(onClick = {}, enabled = false) {
+                                Text("Downloading")
+                            }
+                        }
+                        DownloadStatus.PAUSED -> {
+                            TextButton(onClick = {}, enabled = false) {
+                                Text("Paused")
+                            }
+                        }
+                        DownloadStatus.FAILED, DownloadStatus.CANCELED -> {
+                            TextButton(onClick = { 
+                                onDownload(stream) 
+                                onShowSnackbar("Added to download queue")
+                            }) {
+                                Text("Download")
+                            }
+                        }
+                    }
+                } else {
+                    TextButton(onClick = { 
+                        onDownload(stream) 
+                        onShowSnackbar("Added to download queue")
+                    }) {
+                        Text("Download")
+                    }
                 }
             }
         }

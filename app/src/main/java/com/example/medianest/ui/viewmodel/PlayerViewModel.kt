@@ -179,6 +179,14 @@ class PlayerViewModel @Inject constructor(
         controller.seekTo(positionMs)
     }
 
+    fun seekRelative(offsetMs: Long) {
+        val controller = _player.value ?: return
+        val newPosition = (controller.currentPosition + offsetMs).coerceIn(0L, maxOf(controller.duration, 0L))
+        controller.seekTo(newPosition)
+        _uiState.value = _uiState.value.copy(positionMs = newPosition)
+        savePosition()
+    }
+
     fun setSpeed(speed: Float) {
         val controller = _player.value ?: return
         controller.setPlaybackSpeed(speed)

@@ -369,7 +369,11 @@ private fun DownloadItem(
                                 text = when (download.status) {
                                     DownloadStatus.QUEUED -> "Queued"
                                     DownloadStatus.DOWNLOADING -> {
-                                        if (download.fileSizeBytes > 0L) {
+                                        if (download.errorMessage == "downloading_audio") {
+                                            "Downloading audio..."
+                                        } else if (download.errorMessage == "merging") {
+                                            "Merging video & audio..."
+                                        } else if (download.fileSizeBytes > 0L) {
                                             val downloadedMb = (download.progress * download.fileSizeBytes) / (1024f * 1024f)
                                             val totalMb = download.fileSizeBytes / (1024f * 1024f)
                                             "%.1fMB / %.1fMB (%d%%)".format(downloadedMb, totalMb, (download.progress * 100).toInt())
@@ -415,10 +419,16 @@ private fun DownloadItem(
 
             if (download.status == DownloadStatus.DOWNLOADING || download.status == DownloadStatus.QUEUED) {
                 Spacer(Modifier.height(8.dp))
-                LinearProgressIndicator(
-                    progress = { download.progress },
-                    modifier = Modifier.fillMaxWidth()
-                )
+                if (download.errorMessage == "merging") {
+                    LinearProgressIndicator(
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                } else {
+                    LinearProgressIndicator(
+                        progress = { download.progress },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             }
 
             Spacer(Modifier.height(8.dp))

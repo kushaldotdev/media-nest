@@ -10,6 +10,7 @@ import com.example.medianest.data.repository.VideoRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -127,9 +128,18 @@ class HomeViewModel @Inject constructor(
         }
     }
 
+    val subscriptions: StateFlow<List<com.example.medianest.data.local.entity.SubscriptionEntity>> = subscriptionRepository.getAllSubscriptions()
+        .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000), emptyList())
+
     fun subscribe(sourceType: String, sourceId: String, name: String, thumbnailUrl: String?) {
         viewModelScope.launch {
             subscriptionRepository.subscribe(sourceType, sourceId, name, thumbnailUrl)
+        }
+    }
+
+    fun unsubscribe(sourceId: String) {
+        viewModelScope.launch {
+            subscriptionRepository.unsubscribeBySourceId(sourceId)
         }
     }
 
