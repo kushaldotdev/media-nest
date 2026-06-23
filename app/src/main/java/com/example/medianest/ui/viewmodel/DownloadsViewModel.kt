@@ -15,6 +15,7 @@ import com.example.medianest.data.local.entity.DownloadEntity
 import com.example.medianest.data.local.entity.DownloadStatus
 import com.example.medianest.data.preferences.DownloadPreferences
 import com.example.medianest.data.repository.DownloadRepository
+import com.example.medianest.data.repository.VideoRepository
 import com.example.medianest.service.AudioExtractor
 import com.example.medianest.service.DownloadService
 import com.example.medianest.service.PlaybackService
@@ -41,7 +42,8 @@ class DownloadsViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val downloadRepository: DownloadRepository,
     private val downloadPreferences: DownloadPreferences,
-    private val audioExtractor: AudioExtractor
+    private val audioExtractor: AudioExtractor,
+    private val videoRepository: VideoRepository
 ) : ViewModel() {
 
     private var mediaController: MediaController? = null
@@ -178,6 +180,14 @@ class DownloadsViewModel @Inject constructor(
                     }
                 }
                 downloadRepository.delete(download)
+                
+                val remaining = downloadRepository.getLocalDownloadsForVideo(download.videoId)
+                if (remaining.isEmpty()) {
+                    val video = videoRepository.getVideoById(download.videoId)
+                    if (video != null) {
+                        videoRepository.insertVideo(video.copy(localFilePath = ""))
+                    }
+                }
             }
         }
     }
@@ -270,6 +280,14 @@ class DownloadsViewModel @Inject constructor(
                     }
                 }
                 downloadRepository.delete(download)
+                
+                val remaining = downloadRepository.getLocalDownloadsForVideo(download.videoId)
+                if (remaining.isEmpty()) {
+                    val video = videoRepository.getVideoById(download.videoId)
+                    if (video != null) {
+                        videoRepository.insertVideo(video.copy(localFilePath = ""))
+                    }
+                }
             }
         }
     }
