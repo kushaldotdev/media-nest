@@ -136,6 +136,9 @@ class DownloadService : Service() {
             val slots = (maxConcurrent - active).coerceAtLeast(0)
 
             if (queue.isEmpty() && active == 0 && activeJobs.isEmpty()) {
+                try {
+                    NotificationManagerCompat.from(this@DownloadService).cancel(NOTIFICATION_ID)
+                } catch (_: SecurityException) { }
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()
                 return@launch
@@ -215,6 +218,10 @@ class DownloadService : Service() {
 
                 val responseLength = response.body?.contentLength() ?: -1L
                 val totalLength = if (responseLength > 0) actualExistingBytes + responseLength else -1L
+
+                if (totalLength > 0 && download.fileSizeBytes != totalLength) {
+                    repository.update(download.copy(fileSizeBytes = totalLength))
+                }
 
                 val mimeType = response.body?.contentType()?.toString() ?: "video/mp4"
                 val ext = mimeType.split("/").lastOrNull()?.split(";")?.first() ?: "mp4"
@@ -346,12 +353,12 @@ class DownloadService : Service() {
      }
  
      private fun buildNotification(progress: Int, max: Int): Notification {
+         val title = if (max > 0) "Downloading $progress of $max" else "Preparing download…"
          return NotificationCompat.Builder(this, CHANNEL_ID)
-             .setContentTitle("Downloading...")
-             .setContentText("$progress / $max files")
+             .setContentTitle(title)
              .setSmallIcon(android.R.drawable.stat_sys_download)
              .setOngoing(true)
-             .setProgress(max, progress, false)
+             .setProgress(max, progress, max == 0)
              .setContentIntent(
                  PendingIntent.getActivity(
                      this, 0,
@@ -366,27 +373,36 @@ class DownloadService : Service() {
  
      private fun updateNotification(downloadId: Long, bytesDownloaded: Long = 0, totalBytes: Long = 0) {
          val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-             .setContentTitle("Downloading...")
              .setSmallIcon(android.R.drawable.stat_sys_download)
              .setOngoing(true)
              .apply {
                  if (totalBytes > 0) {
                      val pct = ((bytesDownloaded * 100) / totalBytes).toInt()
+                     val downloadedMb = "%.1f".format(bytesDownloaded / (1024f * 1024f))
+                     val totalMb = "%.1f".format(totalBytes / (1024f * 1024f))
+                     setContentTitle("Downloading… $pct%")
                      setProgress(100, pct, false)
-                     setContentText("${bytesDownloaded / 1024}KB / ${totalBytes / 1024}KB")
+                     setContentText("${downloadedMb}MB / ${totalMb}MB")
                  } else {
+                     setContentTitle("Downloading…")
                      setProgress(0, 0, true)
                  }
              }
              .setContentIntent(
                  PendingIntent.getActivity(
                      this, 0,
-                     Intent(this, MainActivity::class.java),
+                     Intent(this, MainActivity::class.java).apply {
+                         flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
+                     },
                      PendingIntent.FLAG_IMMUTABLE
                  )
              )
              .build()
-         NotificationManagerCompat.from(this).notify(NOTIFICATION_ID, notification)
+         try {
+             NotificationManagerCompat.from(this).notify(NOTIFICATION_ID, notification)
+         } catch (_: SecurityException) {
+             // POST_NOTIFICATIONS permission not granted — silently ignore
+         }
      }
  
      override fun onBind(intent: Intent?): IBinder? = null

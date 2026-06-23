@@ -15,9 +15,12 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import com.example.medianest.data.local.dao.VideoDao
 import com.example.medianest.data.mapper.toVideoEntity
 import com.example.medianest.data.repository.SubscriptionRepository
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import java.net.HttpURLConnection
+import java.net.URL
 import javax.inject.Inject
 
 @HiltViewModel
@@ -43,6 +46,9 @@ class VideoDetailViewModel @Inject constructor(
         val cached = HomeViewModel.lastResultCache.get(videoId)
         if (cached != null && cached.streamSources.isNotEmpty()) {
             _videoInfo.value = cached
+            if (cached.streamSources.any { it.contentLength == null || it.contentLength <= 0L }) {
+                resolveStreamSizes(videoId)
+            }
             return
         }
         
@@ -52,6 +58,7 @@ class VideoDetailViewModel @Inject constructor(
                 val extracted = videoRepository.searchAndSave(videoUrl)
                 HomeViewModel.lastResultCache.put(videoId, extracted)
                 _videoInfo.value = extracted
+                resolveStreamSizes(videoId)
             } catch (e: Exception) {
                 // If it fails, fallback to cached info without streams if available
                 if (cached != null) {
@@ -59,6 +66,44 @@ class VideoDetailViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    private fun resolveStreamSizes(videoId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val currentInfo = _videoInfo.value ?: return@launch
+            val updatedSources = currentInfo.streamSources.map { source ->
+                if (source.contentLength == null || source.contentLength <= 0L) {
+                    val size = getStreamSize(source.url)
+                    source.copy(contentLength = size)
+                } else {
+                    source
+                }
+            }
+            val newInfo = currentInfo.copy(streamSources = updatedSources)
+            _videoInfo.value = newInfo
+            HomeViewModel.lastResultCache.put(videoId, newInfo)
+        }
+    }
+
+    private fun getStreamSize(url: String): Long {
+        var connection: HttpURLConnection? = null
+        try {
+            connection = URL(url).openConnection() as HttpURLConnection
+            connection.requestMethod = "HEAD"
+            connection.connectTimeout = 3000
+            connection.readTimeout = 3000
+            connection.setRequestProperty("User-Agent", "Mozilla/5.0")
+            connection.connect()
+            if (connection.responseCode in 200..299) {
+                val len = connection.contentLengthLong
+                if (len > 0) return len
+            }
+        } catch (e: Exception) {
+            // Ignore resolving failure
+        } finally {
+            connection?.disconnect()
+        }
+        return 0L
     }
 
     private var currentChannelId: String = ""
@@ -111,7 +156,10 @@ class VideoDetailViewModel @Inject constructor(
     fun enqueueDownload(videoInfo: ExtractedVideoInfo, stream: StreamSource) {
         viewModelScope.launch {
             val existing = downloadRepository.getDownload(videoInfo.videoId, stream.format, stream.quality)
-            if (existing != null) return@launch
+            if (existing != null) {
+                android.widget.Toast.makeText(context, "Download already exists in queue", android.widget.Toast.LENGTH_SHORT).show()
+                return@launch
+            }
 
             val video = videoRepository.getVideoById(videoInfo.videoId)
             if (video == null) {
@@ -129,7 +177,12 @@ class VideoDetailViewModel @Inject constructor(
                 thumbnailUrl = videoInfo.thumbnailUrl
             )
             downloadRepository.insert(entity)
-            context.startForegroundService(Intent(context, DownloadService::class.java))
+            try {
+                context.startForegroundService(Intent(context, DownloadService::class.java))
+                android.widget.Toast.makeText(context, "Download started: ${videoInfo.title}", android.widget.Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                android.widget.Toast.makeText(context, "Failed to start downloader service: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+            }
         }
     }
 }

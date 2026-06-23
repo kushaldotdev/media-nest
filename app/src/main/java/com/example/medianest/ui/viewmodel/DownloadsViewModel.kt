@@ -130,14 +130,14 @@ class DownloadsViewModel @Inject constructor(
                         0
                     )
                 }
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 downloadRepository.markFailed(
                     insertId,
-                    e.message ?: "Extraction failed",
+                    e.message ?: "Extraction failed: ${e.javaClass.simpleName}",
                     0
                 )
             } finally {
-                _extractingVideoId.value = null
+                _extractingVideoId.value = ""
             }
         }
     }

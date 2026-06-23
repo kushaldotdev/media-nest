@@ -49,13 +49,15 @@ class YouTubeExtractor @Inject constructor() {
 
         runCatching {
             info.audioStreams?.forEach { track ->
+                val codec = track.format?.name ?: track.format?.mimeType?.substringAfter("/") ?: "audio"
                 streams.add(
                     StreamSource(
                         url = track.content,
                         format = "audio",
                         quality = "${track.averageBitrate / 1000}kbps",
                         mimeType = track.format?.mimeType ?: "audio/mpeg",
-                        contentLength = 0
+                        codec = codec,
+                        contentLength = if (track.itagItem?.contentLength ?: 0L > 0L) track.itagItem?.contentLength else null
                     )
                 )
             }
@@ -63,13 +65,15 @@ class YouTubeExtractor @Inject constructor() {
 
         runCatching {
             info.videoStreams?.forEach { stream ->
+                val codec = stream.format?.name ?: stream.format?.mimeType?.substringAfter("/") ?: "mp4"
                 streams.add(
                     StreamSource(
                         url = stream.content,
                         format = "video",
                         quality = stream.getResolution(),
                         mimeType = stream.format?.mimeType ?: "video/mp4",
-                        contentLength = 0
+                        codec = codec,
+                        contentLength = if (stream.itagItem?.contentLength ?: 0L > 0L) stream.itagItem?.contentLength else null
                     )
                 )
             }
@@ -77,13 +81,15 @@ class YouTubeExtractor @Inject constructor() {
 
         runCatching {
             info.videoOnlyStreams?.forEach { stream ->
+                val codec = stream.format?.name ?: stream.format?.mimeType?.substringAfter("/") ?: "mp4"
                 streams.add(
                     StreamSource(
                         url = stream.content,
-                        format = "video",
+                        format = "video_only",
                         quality = stream.getResolution(),
                         mimeType = stream.format?.mimeType ?: "video/mp4",
-                        contentLength = 0
+                        codec = codec,
+                        contentLength = if (stream.itagItem?.contentLength ?: 0L > 0L) stream.itagItem?.contentLength else null
                     )
                 )
             }

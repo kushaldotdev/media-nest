@@ -98,23 +98,34 @@ fun VideoDetailScreen(
             Text("Available streams:", style = MaterialTheme.typography.titleSmall)
 
             val videoStreams = videoInfo.streamSources.filter { it.format == "video" }
+            val videoOnlyStreams = videoInfo.streamSources.filter { it.format == "video_only" }
             val audioStreams = videoInfo.streamSources.filter { it.format == "audio" }
 
             if (videoStreams.isNotEmpty()) {
-                Text("Video", style = MaterialTheme.typography.labelLarge)
+                Spacer(Modifier.height(8.dp))
+                Text("Video (with audio)", style = MaterialTheme.typography.labelLarge)
                 videoStreams.forEach { stream ->
                     StreamQualityRow(stream, onPlay, onDownload)
                 }
             }
 
+            if (videoOnlyStreams.isNotEmpty()) {
+                Spacer(Modifier.height(8.dp))
+                Text("Video Only (no audio)", style = MaterialTheme.typography.labelLarge)
+                videoOnlyStreams.forEach { stream ->
+                    StreamQualityRow(stream, onPlay, onDownload)
+                }
+            }
+
             if (audioStreams.isNotEmpty()) {
+                Spacer(Modifier.height(8.dp))
                 Text("Audio Only", style = MaterialTheme.typography.labelLarge)
                 audioStreams.forEach { stream ->
                     StreamQualityRow(stream, onPlay, onDownload)
                 }
             }
 
-            if (videoStreams.isEmpty() && audioStreams.isEmpty()) {
+            if (videoStreams.isEmpty() && videoOnlyStreams.isEmpty() && audioStreams.isEmpty()) {
                 Text(
                     "No streams available",
                     color = MaterialTheme.colorScheme.error
@@ -143,12 +154,19 @@ private fun StreamQualityRow(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
-                Text(stream.quality)
-                Text(
-                    stream.contentLength?.let { "${it / 1024 / 1024}MB" } ?: "Unknown size",
-                    style = MaterialTheme.typography.bodySmall
-                )
+            Column(modifier = Modifier.weight(1f)) {
+                val label = if (stream.codec.isNotEmpty()) {
+                    "${stream.quality} • ${stream.codec.uppercase()}"
+                } else {
+                    stream.quality
+                }
+                Text(label)
+                val sizeText = when {
+                    stream.contentLength != null && stream.contentLength > 0 ->
+                        "%.1f MB".format(stream.contentLength / (1024f * 1024f))
+                    else -> "Resolving size…"
+                }
+                Text(sizeText, style = MaterialTheme.typography.bodySmall)
             }
             TextButton(onClick = { onDownload(stream) }) {
                 Text("Download")
