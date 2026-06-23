@@ -42,7 +42,10 @@ data class PlayerUiState(
     val error: String? = null,
     val historyPositionMs: Long = 0L,
     val isBuffering: Boolean = false,
-    val bufferedPositionMs: Long = 0L
+    val bufferedPositionMs: Long = 0L,
+    val videoId: String? = null,
+    val isLocal: Boolean = false,
+    val streamIndex: Int = 0
 )
 
 @HiltViewModel
@@ -178,7 +181,10 @@ class PlayerViewModel @Inject constructor(
                         isAudioOnly = localFile?.format == "audio" || localFile?.format == "audio_extracted",
                         durationMs = if (localFile != null) 0L else (info?.durationSeconds ?: 0L) * 1000,
                         positionMs = startPosition,
-                        historyPositionMs = savedPosition
+                        historyPositionMs = savedPosition,
+                        videoId = videoId,
+                        isLocal = localFile != null,
+                        streamIndex = streamIndex
                     )
 
                     val mediaItemBuilder = MediaItem.Builder()
@@ -335,6 +341,18 @@ class PlayerViewModel @Inject constructor(
                 )
             )
         }
+    }
+
+    fun stopPlayback() {
+        val controller = _player.value
+        if (controller != null) {
+            controller.stop()
+            controller.clearMediaItems()
+        }
+        currentVideoId = null
+        currentStreamIndex = 0
+        videoInfo = null
+        _uiState.value = PlayerUiState() // Reset UI State entirely
     }
 
     override fun onCleared() {

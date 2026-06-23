@@ -24,6 +24,22 @@ import com.example.medianest.ui.screens.SubscriptionsScreen
 import com.example.medianest.ui.screens.VideoDetailScreen
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.medianest.ui.viewmodel.HomeViewModel
+import com.example.medianest.ui.viewmodel.PlayerViewModel
+import androidx.compose.ui.platform.LocalContext
+import android.content.Context
+import android.content.ContextWrapper
+import androidx.activity.ComponentActivity
+
+private fun Context.findActivity(): ComponentActivity? {
+    var currentContext = this
+    while (currentContext is ContextWrapper) {
+        if (currentContext is ComponentActivity) {
+            return currentContext
+        }
+        currentContext = currentContext.baseContext
+    }
+    return null
+}
 
 object NavigationRoutes {
     const val PLAYER_ONLINE = "player/{videoId}?streamIndex={streamIndex}"
@@ -48,9 +64,13 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
         ) { backStackEntry ->
             val videoId = backStackEntry.arguments?.getString("videoId") ?: return@composable
             val streamIndex = backStackEntry.arguments?.getInt("streamIndex") ?: 0
+            val context = LocalContext.current
+            val activity = context.findActivity() ?: error("Activity not found")
+            val playerViewModel: PlayerViewModel = hiltViewModel(activity)
             PlayerScreen(
                 videoId = videoId,
                 streamIndex = streamIndex,
+                viewModel = playerViewModel,
                 onBack = { navController.popBackStack() }
             )
         }
@@ -139,9 +159,13 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
             arguments = listOf(navArgument("videoId") { type = NavType.StringType })
         ) { backStackEntry ->
             val videoId = backStackEntry.arguments?.getString("videoId") ?: return@composable
+            val context = LocalContext.current
+            val activity = context.findActivity() ?: error("Activity not found")
+            val playerViewModel: PlayerViewModel = hiltViewModel(activity)
             PlayerScreen(
                 videoId = videoId,
                 streamIndex = 0,
+                viewModel = playerViewModel,
                 onBack = { navController.popBackStack() }
             )
         }
