@@ -1,5 +1,6 @@
 package com.example.medianest.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -130,7 +131,7 @@ fun HomeScreen(
                 Spacer(Modifier.height(8.dp))
                 LazyColumn {
                     items(state.playlist.videos) { video ->
-                        VideoListItem(video = video)
+                        VideoListItem(video = video, onClick = { onVideoSelected(video.videoId) })
                     }
                 }
             }
@@ -149,7 +150,7 @@ fun HomeScreen(
                 Spacer(Modifier.height(8.dp))
                 LazyColumn {
                     items(state.channel.uploads) { video ->
-                        VideoListItem(video = video)
+                        VideoListItem(video = video, onClick = { onVideoSelected(video.videoId) })
                     }
                 }
             }
@@ -211,10 +212,11 @@ fun VideoResultCard(
 }
 
 @Composable
-fun VideoListItem(video: ExtractedVideoInfo) {
+fun VideoListItem(video: ExtractedVideoInfo, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable(onClick = onClick)
             .padding(8.dp)
     ) {
         AsyncImage(

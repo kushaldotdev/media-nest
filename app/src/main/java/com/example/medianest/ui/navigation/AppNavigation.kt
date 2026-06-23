@@ -1,10 +1,14 @@
 package com.example.medianest.ui.navigation
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -66,33 +70,45 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
             arguments = listOf(navArgument("videoId") { type = NavType.StringType })
         ) { backStackEntry ->
             val videoId = backStackEntry.arguments?.getString("videoId") ?: return@composable
-            val videoInfo = remember { HomeViewModel.lastResultCache.get(videoId) }
-            if (videoInfo != null) {
-                val detailViewModel: com.example.medianest.ui.viewmodel.VideoDetailViewModel = hiltViewModel()
-                LaunchedEffect(videoId) { detailViewModel.loadFavorite(videoId) }
-                LaunchedEffect(videoInfo) {
-                    detailViewModel.initSubscription(videoInfo.channelId ?: "", videoInfo.channelName, videoInfo.thumbnailUrl)
-                    detailViewModel.checkSubscription()
-                }
-                val isFavorite by detailViewModel.isFavorite.collectAsState()
-                val isSubscribed by detailViewModel.isSubscribed.collectAsState()
+            val detailViewModel: com.example.medianest.ui.viewmodel.VideoDetailViewModel = hiltViewModel()
+
+            LaunchedEffect(videoId) {
+                detailViewModel.loadVideoInfo(videoId)
+                detailViewModel.loadFavorite(videoId)
+            }
+
+            val videoInfo by detailViewModel.videoInfo.collectAsState()
+
+            LaunchedEffect(videoInfo) {
+                val info = videoInfo ?: return@LaunchedEffect
+                detailViewModel.initSubscription(info.channelId ?: "", info.channelName, info.thumbnailUrl)
+                detailViewModel.checkSubscription()
+            }
+
+            val isFavorite by detailViewModel.isFavorite.collectAsState()
+            val isSubscribed by detailViewModel.isSubscribed.collectAsState()
+
+            val info = videoInfo
+            if (info != null) {
                 VideoDetailScreen(
-                    videoInfo = videoInfo,
+                    videoInfo = info,
                     isFavorite = isFavorite,
                     isSubscribed = isSubscribed,
                     onSubscribe = { detailViewModel.toggleSubscription() },
                     onToggleFavorite = { detailViewModel.toggleFavorite() },
                     onPlay = { stream ->
-                        val streamIndex = videoInfo.streamSources.indexOf(stream)
+                        val streamIndex = info.streamSources.indexOf(stream)
                         navController.navigate("player/$videoId?streamIndex=$streamIndex")
                     },
                     onDownload = { stream ->
-                        detailViewModel.enqueueDownload(videoInfo, stream)
+                        detailViewModel.enqueueDownload(info, stream)
                     },
                     onBack = { navController.popBackStack() }
                 )
             } else {
-                navController.popBackStack()
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator()
+                }
             }
         }
         composable(BottomNavItem.Downloads.route) {

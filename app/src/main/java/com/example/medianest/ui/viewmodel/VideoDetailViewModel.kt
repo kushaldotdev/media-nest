@@ -29,11 +29,37 @@ class VideoDetailViewModel @Inject constructor(
 ) : ViewModel() {
     private var currentVideoId: String = ""
 
+    private val _videoInfo = MutableStateFlow<ExtractedVideoInfo?>(null)
+    val videoInfo: StateFlow<ExtractedVideoInfo?> = _videoInfo
+
     private val _isFavorite = MutableStateFlow(false)
     val isFavorite: StateFlow<Boolean> = _isFavorite
 
     private val _isSubscribed = MutableStateFlow(false)
     val isSubscribed: StateFlow<Boolean> = _isSubscribed
+
+    fun loadVideoInfo(videoId: String) {
+        currentVideoId = videoId
+        val cached = HomeViewModel.lastResultCache.get(videoId)
+        if (cached != null && cached.streamSources.isNotEmpty()) {
+            _videoInfo.value = cached
+            return
+        }
+        
+        viewModelScope.launch {
+            try {
+                val videoUrl = "https://www.youtube.com/watch?v=$videoId"
+                val extracted = videoRepository.searchAndSave(videoUrl)
+                HomeViewModel.lastResultCache.put(videoId, extracted)
+                _videoInfo.value = extracted
+            } catch (e: Exception) {
+                // If it fails, fallback to cached info without streams if available
+                if (cached != null) {
+                    _videoInfo.value = cached
+                }
+            }
+        }
+    }
 
     private var currentChannelId: String = ""
     private var currentChannelName: String = ""
