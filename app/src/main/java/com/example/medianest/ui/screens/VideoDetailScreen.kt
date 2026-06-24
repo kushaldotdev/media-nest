@@ -39,6 +39,11 @@ import com.example.medianest.data.local.entity.VideoEntity
 import com.example.medianest.ui.utils.UiUtils
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material3.TopAppBar
+import androidx.compose.ui.viewinterop.AndroidView
+import android.widget.TextView
+import android.text.method.LinkMovementMethod
+import androidx.core.text.HtmlCompat
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -176,10 +181,11 @@ fun VideoDetailScreen(
             }
 
             // Collapsible Description Container
-            val cleanedDescription = UiUtils.stripHtml(videoInfo.description)
-            if (cleanedDescription.isNotEmpty()) {
+            if (!videoInfo.description.isNullOrBlank()) {
                 Spacer(Modifier.height(12.dp))
                 var isDescriptionExpanded by remember { mutableStateOf(false) }
+                val textColor = MaterialTheme.colorScheme.onSurfaceVariant.toArgb()
+                val linkColor = MaterialTheme.colorScheme.primary.toArgb()
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
@@ -193,11 +199,24 @@ fun VideoDetailScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(Modifier.height(4.dp))
-                        Text(
-                            text = cleanedDescription,
-                            style = MaterialTheme.typography.bodyMedium,
-                            maxLines = if (isDescriptionExpanded) Int.MAX_VALUE else 3,
-                            overflow = TextOverflow.Ellipsis
+                        AndroidView(
+                            factory = { context ->
+                                TextView(context).apply {
+                                    movementMethod = LinkMovementMethod.getInstance()
+                                    ellipsize = android.text.TextUtils.TruncateAt.END
+                                }
+                            },
+                            update = { textView ->
+                                textView.setTextColor(textColor)
+                                textView.setLinkTextColor(linkColor)
+                                textView.textSize = 14f
+                                textView.maxLines = if (isDescriptionExpanded) Int.MAX_VALUE else 3
+                                textView.text = HtmlCompat.fromHtml(
+                                    videoInfo.description ?: "",
+                                    HtmlCompat.FROM_HTML_MODE_LEGACY
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth()
                         )
                         Spacer(Modifier.height(4.dp))
                         Text(
