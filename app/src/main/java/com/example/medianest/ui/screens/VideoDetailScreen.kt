@@ -142,26 +142,22 @@ fun VideoDetailScreen(
             }
 
             // Duration, Released, and Downloaded Metadata
-            Spacer(Modifier.height(8.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                if (videoInfo.durationSeconds > 0) {
-                    Text(
-                        text = "Duration: ${UiUtils.formatDuration(videoInfo.durationSeconds)}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                if (!videoInfo.uploadDate.isNullOrEmpty()) {
-                    Text(
-                        text = "Released: ${videoInfo.uploadDate}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+            if (videoInfo.durationSeconds > 0) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = "Duration: ${UiUtils.formatDuration(videoInfo.durationSeconds)}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            val formattedReleaseDate = UiUtils.formatReleaseDate(videoInfo.uploadDate)
+            if (!formattedReleaseDate.isNullOrEmpty()) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = "Released: $formattedReleaseDate",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
 
             val completedDownloads = downloads.filter { it.status == DownloadStatus.COMPLETED }
@@ -171,7 +167,7 @@ fun VideoDetailScreen(
                 localVideo?.downloadedAt
             }
             if (overallDownloadTime != null && overallDownloadTime > 0) {
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(6.dp))
                 Text(
                     text = "Downloaded: ${UiUtils.formatAbsoluteDate(overallDownloadTime)}",
                     style = MaterialTheme.typography.bodyMedium,
@@ -180,7 +176,8 @@ fun VideoDetailScreen(
             }
 
             // Collapsible Description Container
-            if (!videoInfo.description.isNullOrBlank()) {
+            val cleanedDescription = UiUtils.stripHtml(videoInfo.description)
+            if (cleanedDescription.isNotEmpty()) {
                 Spacer(Modifier.height(12.dp))
                 var isDescriptionExpanded by remember { mutableStateOf(false) }
                 Card(
@@ -197,7 +194,7 @@ fun VideoDetailScreen(
                         )
                         Spacer(Modifier.height(4.dp))
                         Text(
-                            text = videoInfo.description,
+                            text = cleanedDescription,
                             style = MaterialTheme.typography.bodyMedium,
                             maxLines = if (isDescriptionExpanded) Int.MAX_VALUE else 3,
                             overflow = TextOverflow.Ellipsis
