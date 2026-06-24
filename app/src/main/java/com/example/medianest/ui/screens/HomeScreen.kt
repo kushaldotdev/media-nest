@@ -49,6 +49,8 @@ import com.example.medianest.data.model.ExtractedVideoInfo
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.style.TextOverflow
 import com.example.medianest.ui.utils.UiUtils
 import com.example.medianest.ui.viewmodel.HomeUiState
 import com.example.medianest.ui.viewmodel.HomeViewModel
@@ -216,19 +218,56 @@ fun VideoResultCard(
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(12.dp)) {
-            AsyncImage(
-                model = video.thumbnailUrl,
-                contentDescription = video.title,
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(200.dp)
-            )
+            ) {
+                AsyncImage(
+                    model = video.thumbnailUrl,
+                    contentDescription = video.title,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+                if (video.durationSeconds > 0) {
+                    Text(
+                        text = UiUtils.formatDuration(video.durationSeconds),
+                        color = Color.White,
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(8.dp)
+                            .background(
+                                color = Color.Black.copy(alpha = 0.7f),
+                                shape = RoundedCornerShape(4.dp)
+                            )
+                            .padding(horizontal = 4.dp, vertical = 2.dp)
+                    )
+                }
+            }
             Spacer(Modifier.height(8.dp))
-            Text(video.title, style = MaterialTheme.typography.titleMedium)
-            Text(video.channelName, style = MaterialTheme.typography.bodySmall)
-            val minutes = video.durationSeconds / 60
-            val seconds = video.durationSeconds % 60
-            Text("${minutes}:%02d".format(seconds))
+            Text(
+                text = video.title,
+                style = MaterialTheme.typography.titleMedium,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(Modifier.height(4.dp))
+            val formattedDate = UiUtils.formatReleaseDate(video.uploadDate)
+            val metadataText = buildString {
+                append(video.channelName)
+                if (!formattedDate.isNullOrEmpty()) {
+                    if (isNotEmpty()) append(" • ")
+                    append(formattedDate)
+                }
+            }
+            Text(
+                text = metadataText,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
             Spacer(Modifier.height(8.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -292,21 +331,29 @@ fun VideoListItem(video: ExtractedVideoInfo, onClick: () -> Unit) {
             }
         }
         Spacer(Modifier.width(8.dp))
-        Column {
-            Text(video.title, maxLines = 2)
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    video.channelName,
-                    style = MaterialTheme.typography.bodySmall
-                )
-                if (!video.uploadDate.isNullOrEmpty()) {
-                    Text(
-                        " • ${video.uploadDate}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = video.title,
+                style = MaterialTheme.typography.titleSmall,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(Modifier.height(4.dp))
+            val formattedDate = UiUtils.formatReleaseDate(video.uploadDate)
+            val metadataText = buildString {
+                append(video.channelName)
+                if (!formattedDate.isNullOrEmpty()) {
+                    if (isNotEmpty()) append(" • ")
+                    append(formattedDate)
                 }
             }
+            Text(
+                text = metadataText,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }

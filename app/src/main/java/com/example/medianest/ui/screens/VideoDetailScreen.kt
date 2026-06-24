@@ -1,6 +1,7 @@
 package com.example.medianest.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -13,6 +14,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.background
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
@@ -47,6 +50,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.BorderStroke
 import com.example.medianest.R
 import androidx.compose.ui.viewinterop.AndroidView
@@ -121,13 +125,33 @@ fun VideoDetailScreen(
                 .padding(16.dp)
                 .verticalScroll(rememberScrollState())
         ) {
-            AsyncImage(
-                model = videoInfo.thumbnailUrl,
-                contentDescription = videoInfo.title,
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(220.dp)
-            )
+            ) {
+                AsyncImage(
+                    model = videoInfo.thumbnailUrl,
+                    contentDescription = videoInfo.title,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+                if (videoInfo.durationSeconds > 0) {
+                    Text(
+                        text = UiUtils.formatDuration(videoInfo.durationSeconds),
+                        color = Color.White,
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(8.dp)
+                            .background(
+                                color = Color.Black.copy(alpha = 0.7f),
+                                shape = RoundedCornerShape(4.dp)
+                            )
+                            .padding(horizontal = 4.dp, vertical = 2.dp)
+                    )
+                }
+            }
             Spacer(Modifier.height(12.dp))
             Text(videoInfo.title, style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.height(16.dp))
@@ -156,16 +180,8 @@ fun VideoDetailScreen(
                 }
             }
 
-            // Duration, Released, and Downloaded Metadata
-            if (videoInfo.durationSeconds > 0) {
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    text = "Duration: ${UiUtils.formatDuration(videoInfo.durationSeconds)}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            val formattedReleaseDate = UiUtils.formatReleaseDate(videoInfo.uploadDate)
+            // Released and Downloaded Metadata
+            val formattedReleaseDate = UiUtils.formatAbsoluteReleaseDate(videoInfo.uploadDate)
             if (!formattedReleaseDate.isNullOrEmpty()) {
                 Spacer(Modifier.height(6.dp))
                 Text(
@@ -182,12 +198,20 @@ fun VideoDetailScreen(
                 localVideo?.downloadedAt
             }
             if (overallDownloadTime != null && overallDownloadTime > 0) {
+                val label = if (completedDownloads.size > 1) "Last Downloaded" else "Downloaded"
                 Spacer(Modifier.height(6.dp))
-                Text(
-                    text = "Downloaded: ${UiUtils.formatAbsoluteDate(overallDownloadTime)}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.primary
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = "$label: ",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = UiUtils.formatAbsoluteDate(overallDownloadTime),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
             }
 
             val context = LocalContext.current

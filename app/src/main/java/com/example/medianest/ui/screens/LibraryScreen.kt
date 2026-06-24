@@ -38,6 +38,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.example.medianest.data.local.entity.FolderEntity
 import com.example.medianest.data.local.entity.VideoEntity
+import com.example.medianest.ui.utils.UiUtils
 import com.example.medianest.ui.viewmodel.LibraryTab
 import com.example.medianest.ui.viewmodel.LibraryViewModel
 import com.example.medianest.ui.viewmodel.ViewMode
@@ -607,12 +608,21 @@ private fun VideoCard(
                     Column(modifier = Modifier.weight(1f)) {
                         Text(video.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
                         Spacer(Modifier.height(4.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(video.channelName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                            if (!video.uploadDate.isNullOrEmpty()) {
-                                Text(" • ${video.uploadDate}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                        val formattedDate = UiUtils.formatReleaseDate(video.uploadDate)
+                        val metadataText = buildString {
+                            append(video.channelName)
+                            if (!formattedDate.isNullOrEmpty()) {
+                                if (isNotEmpty()) append(" • ")
+                                append(formattedDate)
                             }
                         }
+                        Text(
+                            text = metadataText,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
                     if (isSelectionMode) {
                         Checkbox(checked = isSelected, onCheckedChange = { onClick() }, modifier = Modifier.padding(start = 4.dp))
@@ -753,12 +763,21 @@ private fun VideoListRow(
             Column(modifier = Modifier.weight(1f)) {
                 Text(video.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(4.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(video.channelName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
-                    if (!video.uploadDate.isNullOrEmpty()) {
-                        Text(" • ${video.uploadDate}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                val formattedDate = UiUtils.formatReleaseDate(video.uploadDate)
+                val metadataText = buildString {
+                    append(video.channelName)
+                    if (!formattedDate.isNullOrEmpty()) {
+                        if (isNotEmpty()) append(" • ")
+                        append(formattedDate)
                     }
                 }
+                Text(
+                    text = metadataText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
                 
                 if (!isSelectionMode) {
                     Spacer(Modifier.height(8.dp))

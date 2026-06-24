@@ -35,23 +35,84 @@ object UiUtils {
         }
     }
 
-    fun formatReleaseDate(rawDate: String?): String? {
+    private fun parseUploadDate(rawDate: String?): Date? {
         if (rawDate.isNullOrBlank()) return null
         if (rawDate.contains("T")) {
             try {
-                val odt = java.time.OffsetDateTime.parse(rawDate)
-                val formatter = java.time.format.DateTimeFormatter.ofPattern("MMM dd, yyyy", Locale.US)
-                return odt.format(formatter)
+                val dateTimeStr = if (rawDate.length >= 19) rawDate.substring(0, 19) else rawDate
+                val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US)
+                return sdf.parse(dateTimeStr)
             } catch (e: Exception) {
                 // fallback
             }
         }
         try {
-            val ld = java.time.LocalDate.parse(rawDate)
-            val formatter = java.time.format.DateTimeFormatter.ofPattern("MMM dd, yyyy", Locale.US)
-            return ld.format(formatter)
+            val dateStr = if (rawDate.length >= 10) rawDate.substring(0, 10) else rawDate
+            val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+            return sdf.parse(dateStr)
         } catch (e: Exception) {
+            // fallback
+        }
+        return null
+    }
+
+    private fun getRelativeTimeString(date: Date): String {
+        val diffMs = System.currentTimeMillis() - date.time
+        if (diffMs < 0) {
+            return "just now"
+        }
+        val diffSec = diffMs / 1000
+        val diffMin = diffSec / 60
+        val diffHour = diffMin / 60
+        val diffDay = diffHour / 24
+
+        return when {
+            diffDay < 1 -> {
+                when {
+                    diffHour < 1 -> {
+                        if (diffMin <= 1) "1 minute ago" else "$diffMin minutes ago"
+                    }
+                    else -> {
+                        if (diffHour == 1L) "1 hour ago" else "$diffHour hours ago"
+                    }
+                }
+            }
+            diffDay < 7 -> {
+                if (diffDay == 1L) "1 day ago" else "$diffDay days ago"
+            }
+            diffDay < 30 -> {
+                val weeks = diffDay / 7
+                if (weeks <= 1L) "1 week ago" else "$weeks weeks ago"
+            }
+            diffDay < 365 -> {
+                val months = diffDay / 30
+                if (months <= 1L) "1 month ago" else "$months months ago"
+            }
+            else -> {
+                val years = diffDay / 365
+                if (years <= 1L) "1 year ago" else "$years years ago"
+            }
+        }
+    }
+
+    fun formatReleaseDate(rawDate: String?): String? {
+        if (rawDate.isNullOrBlank()) return null
+        if (rawDate.contains("ago", ignoreCase = true) || rawDate.contains("now", ignoreCase = true)) {
             return rawDate
+        }
+        val date = parseUploadDate(rawDate) ?: return rawDate
+        return getRelativeTimeString(date)
+    }
+
+    fun formatAbsoluteReleaseDate(rawDate: String?): String? {
+        if (rawDate.isNullOrBlank()) return null
+        val date = parseUploadDate(rawDate) ?: return rawDate
+        return if (rawDate.contains("T")) {
+            val formatter = SimpleDateFormat("MMM dd, yyyy 'at' h:mm a", Locale.US)
+            formatter.format(date)
+        } else {
+            val formatter = SimpleDateFormat("MMM dd, yyyy", Locale.US)
+            formatter.format(date)
         }
     }
 }
