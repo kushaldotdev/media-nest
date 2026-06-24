@@ -19,6 +19,9 @@ import com.example.medianest.data.local.entity.PlaylistEntity
 import com.example.medianest.data.local.entity.VideoFolderJoin
 import com.example.medianest.data.local.entity.WatchSessionEntity
 
+import com.example.medianest.data.local.dao.LinkHistoryDao
+import com.example.medianest.data.local.entity.LinkHistoryEntity
+
 @Database(
     entities = [
         VideoEntity::class,
@@ -28,9 +31,10 @@ import com.example.medianest.data.local.entity.WatchSessionEntity
         FolderEntity::class,
         VideoFolderJoin::class,
         SubscriptionEntity::class,
-        WatchSessionEntity::class
+        WatchSessionEntity::class,
+        LinkHistoryEntity::class
     ],
-    version = 10,
+    version = 11,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -42,4 +46,5 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun folderDao(): FolderDao
     abstract fun videoFolderDao(): VideoFolderDao
     abstract fun subscriptionDao(): SubscriptionDao
+    abstract fun linkHistoryDao(): LinkHistoryDao
 }

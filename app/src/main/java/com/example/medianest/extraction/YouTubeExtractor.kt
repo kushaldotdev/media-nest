@@ -9,8 +9,10 @@ import kotlinx.coroutines.withContext
 import org.schabi.newpipe.extractor.NewPipe
 import org.schabi.newpipe.extractor.StreamingService
 import org.schabi.newpipe.extractor.channel.ChannelInfo as NewPipeChannelInfo
+import org.schabi.newpipe.extractor.channel.tabs.ChannelTabInfo
 import org.schabi.newpipe.extractor.playlist.PlaylistInfo as NewPipePlaylistInfo
 import org.schabi.newpipe.extractor.stream.StreamInfo as NewPipeStreamInfo
+import org.schabi.newpipe.extractor.stream.StreamInfoItem
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -106,6 +108,7 @@ class YouTubeExtractor @Inject constructor() {
             thumbnailUrl = info.thumbnails?.firstOrNull()?.url ?: "",
             description = info.description?.content?.take(1000),
             uploadDate = info.textualUploadDate,
+            isShort = info.url?.contains("/shorts/") == true || info.duration <= 180,
             streamSources = streams
         )
     }
@@ -123,7 +126,8 @@ class YouTubeExtractor @Inject constructor() {
                     durationSeconds = item.duration,
                     thumbnailUrl = item.thumbnails?.firstOrNull()?.url ?: "",
                     description = null,
-                    uploadDate = null
+                    uploadDate = null,
+                    isShort = item.url.contains("/shorts/") || item.streamType.name.contains("SHORT") || item.duration <= 180
                 )
             }.getOrNull()
         } ?: emptyList()
@@ -137,13 +141,69 @@ class YouTubeExtractor @Inject constructor() {
         )
     }
 
-    suspend fun extractChannel(url: String): ModelChannelInfo = withContext(Dispatchers.IO) {
-        val info = NewPipeChannelInfo.getInfo(service, url)
+    private fun stripChannelTab(url: String): String {
+        val baseWithoutQuery = url.substringBefore("?")
+        val trimmed = baseWithoutQuery.trim().removeSuffix("/")
+        val lastSegment = trimmed.substringAfterLast("/")
+        val knownTabs = listOf("videos", "playlists", "shorts", "streams", "community", "featured", "about", "store")
+        if (lastSegment in knownTabs) {
+            val stripped = trimmed.substringBeforeLast("/")
+            val query = url.substringAfter("?", "")
+            return if (query.isEmpty()) stripped else "$stripped?$query"
+        }
+        return url
+    }
 
+    private fun sanitizeChannelUrl(url: String): String {
+        val baseWithoutQuery = url.substringBefore("?")
+        val trimmed = baseWithoutQuery.trim().removeSuffix("/")
+        val isChannel = trimmed.contains("/channel/") || trimmed.contains("/c/") || trimmed.contains("/user/") || trimmed.contains("/@")
+        if (!isChannel) return url
+        
+        val lastSegment = trimmed.substringAfterLast("/")
+        val knownTabs = listOf("videos", "playlists", "shorts", "streams", "community", "featured", "about", "store")
+        if (lastSegment in knownTabs) {
+            return url
+        }
+        
+        return "$trimmed/videos"
+    }
+
+    suspend fun extractChannel(url: String): ModelChannelInfo = withContext(Dispatchers.IO) {
+        val cleanChannelUrl = stripChannelTab(url)
+        val info = NewPipeChannelInfo.getInfo(service, cleanChannelUrl)
+        
         val uploads = runCatching {
-            service.getFeedExtractor(url)?.let { feed ->
-                feed.fetchPage()
-                feed.initialPage.items?.mapNotNull { item ->
+            val sanitizedUrl = sanitizeChannelUrl(info.url ?: cleanChannelUrl)
+            val tabLinkHandler = service.getChannelTabLHFactory().fromUrl(sanitizedUrl)
+            val tabInfo = ChannelTabInfo.getInfo(service, tabLinkHandler)
+            tabInfo.relatedItems?.mapNotNull { item ->
+                if (item !is StreamInfoItem) return@mapNotNull null
+                runCatching {
+                    ExtractedVideoInfo(
+                        videoId = extractVideoIdFromUrl(item.url),
+                        title = item.name ?: "Unknown",
+                        channelName = info.name ?: "Unknown",
+                        channelId = extractChannelIdFromUrl(info.url) ?: "",
+                        durationSeconds = item.duration,
+                        thumbnailUrl = item.thumbnails?.firstOrNull()?.url ?: "",
+                        description = null,
+                        uploadDate = item.textualUploadDate,
+                        isShort = item.url.contains("/shorts/") || item.streamType.name.contains("SHORT") || item.duration <= 180
+                    )
+                }.getOrNull()
+            }
+        }.getOrElse { tabError ->
+            runCatching {
+                val uploadsPlaylistId = if (info.id.startsWith("UC")) {
+                    "UU" + info.id.substring(2)
+                } else {
+                    info.id
+                }
+                val playlistUrl = "https://www.youtube.com/playlist?list=$uploadsPlaylistId"
+                val playlistInfo = NewPipePlaylistInfo.getInfo(service, playlistUrl)
+                playlistInfo.relatedItems?.mapNotNull { item ->
+                    if (item !is StreamInfoItem) return@mapNotNull null
                     runCatching {
                         ExtractedVideoInfo(
                             videoId = extractVideoIdFromUrl(item.url),
@@ -153,12 +213,13 @@ class YouTubeExtractor @Inject constructor() {
                             durationSeconds = item.duration,
                             thumbnailUrl = item.thumbnails?.firstOrNull()?.url ?: "",
                             description = null,
-                            uploadDate = null
+                            uploadDate = item.textualUploadDate,
+                            isShort = item.url.contains("/shorts/") || item.streamType.name.contains("SHORT") || item.duration <= 180
                         )
                     }.getOrNull()
-                } ?: emptyList()
-            } ?: emptyList()
-        }.getOrDefault(emptyList())
+                }
+            }.getOrNull()
+        } ?: emptyList()
 
         ModelChannelInfo(
             channelId = info.id,

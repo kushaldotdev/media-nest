@@ -26,6 +26,9 @@ interface HistoryDao {
     @Query("DELETE FROM playback_history")
     suspend fun clearAllHistory()
 
+    @Query("DELETE FROM watch_sessions")
+    suspend fun clearAllWatchSessions()
+
     @Query("SELECT SUM(totalWatchTimeMillis) FROM playback_history")
     suspend fun getTotalWatchTime(): Long?
 

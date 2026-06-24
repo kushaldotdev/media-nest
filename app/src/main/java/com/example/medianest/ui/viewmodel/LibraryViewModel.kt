@@ -478,6 +478,7 @@ class LibraryViewModel @Inject constructor(
         viewModelScope.launch {
             videoDao.clearAllLastPlayed()
             historyDao.clearAllHistory()
+            historyDao.clearAllWatchSessions()
             videoDao.deleteOrphanHistoryVideos()
         }
     }

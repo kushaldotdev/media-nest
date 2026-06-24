@@ -12,6 +12,7 @@ import com.example.medianest.data.local.dao.DownloadDao
 import com.example.medianest.data.local.dao.FolderDao
 import com.example.medianest.data.local.dao.HistoryDao
 import com.example.medianest.data.local.dao.PlaylistDao
+import com.example.medianest.data.local.dao.LinkHistoryDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -124,6 +125,18 @@ object DatabaseModule {
         }
     }
 
+    private val MIGRATION_10_11 = object : Migration(10, 11) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS link_history (
+                    url TEXT PRIMARY KEY NOT NULL,
+                    title TEXT NOT NULL,
+                    extractedAt INTEGER NOT NULL
+                )
+            """)
+        }
+    }
+
     private val MIGRATION_4_5 = object : Migration(4, 5) {
         override fun migrate(db: SupportSQLiteDatabase) {
             db.execSQL("ALTER TABLE videos ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0")
@@ -165,6 +178,7 @@ object DatabaseModule {
             .addMigrations(MIGRATION_7_8)
             .addMigrations(MIGRATION_8_9)
             .addMigrations(MIGRATION_9_10)
+            .addMigrations(MIGRATION_10_11)
             .fallbackToDestructiveMigration(dropAllTables = true)
             .build()
     }
@@ -189,6 +203,9 @@ object DatabaseModule {
 
     @Provides
     fun provideSubscriptionDao(database: AppDatabase): SubscriptionDao = database.subscriptionDao()
+
+    @Provides
+    fun provideLinkHistoryDao(database: AppDatabase): LinkHistoryDao = database.linkHistoryDao()
 
     @Provides @Singleton
     fun provideJson(): Json = Json { ignoreUnknownKeys = true }

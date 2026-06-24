@@ -7,6 +7,8 @@ import com.example.medianest.data.model.ExtractedPlaylistInfo
 import com.example.medianest.data.model.ExtractedVideoInfo
 import com.example.medianest.data.repository.SubscriptionRepository
 import com.example.medianest.data.repository.VideoRepository
+import com.example.medianest.data.local.dao.LinkHistoryDao
+import com.example.medianest.data.local.entity.LinkHistoryEntity
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -26,7 +28,8 @@ sealed class HomeUiState {
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val repository: VideoRepository,
-    private val subscriptionRepository: SubscriptionRepository
+    private val subscriptionRepository: SubscriptionRepository,
+    private val linkHistoryDao: LinkHistoryDao
 ) : ViewModel() {
 
     companion object {
@@ -35,6 +38,13 @@ class HomeViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow<HomeUiState>(HomeUiState.Idle)
     val uiState: StateFlow<HomeUiState> = _uiState
+
+    private val _showShorts = MutableStateFlow(true)
+    val showShorts: StateFlow<Boolean> = _showShorts
+
+    fun toggleShorts(show: Boolean) {
+        _showShorts.value = show
+    }
 
     fun onUrlSubmitted(inputUrl: String) {
         val url = inputUrl.trim()
@@ -110,6 +120,7 @@ class HomeViewModel @Inject constructor(
                 }
             }.onSuccess { state ->
                 _uiState.value = state
+                saveLinkToHistory(url, state)
             }.onFailure { e ->
                 _uiState.value = HomeUiState.Error("${e.message ?: "Failed to extract"} \nURL: $sanitizedUrl")
             }
@@ -130,6 +141,27 @@ class HomeViewModel @Inject constructor(
 
     val subscriptions: StateFlow<List<com.example.medianest.data.local.entity.SubscriptionEntity>> = subscriptionRepository.getAllSubscriptions()
         .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val linkHistory: StateFlow<List<LinkHistoryEntity>> = linkHistoryDao.getAllLinkHistory()
+        .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000), emptyList())
+
+    private fun saveLinkToHistory(url: String, state: HomeUiState) {
+        val title = when (state) {
+            is HomeUiState.Success -> state.video.title
+            is HomeUiState.PlaylistResult -> state.playlist.name
+            is HomeUiState.ChannelResult -> state.channel.name
+            else -> return
+        }
+        viewModelScope.launch {
+            linkHistoryDao.insert(LinkHistoryEntity(url = url, title = title))
+        }
+    }
+
+    fun deleteHistoryItem(url: String) {
+        viewModelScope.launch {
+            linkHistoryDao.deleteByUrl(url)
+        }
+    }
 
     fun subscribe(sourceType: String, sourceId: String, name: String, thumbnailUrl: String?) {
         viewModelScope.launch {
