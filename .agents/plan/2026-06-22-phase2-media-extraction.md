@@ -14,7 +14,7 @@
 2. **2.2** — Create `data/model/` DTOs for extraction results
 3. **2.3** — Create `data/mapper/` to map extraction results → Room entities
 4. **2.4** — Create `data/repository/VideoRepository` (extraction + DB persistence)
-5. **2.5** — Create `WorkerUtil.kt` helper for yt-dlp CLI fallback (dev/emulator)
+5. **2.5** — Create `WorkerUtil.kt` helper for NewPipeExtractor CLI fallback (dev/emulator)
 6. **2.6** — Create `extraction/YouTubeExtractor.kt` (NewPipeExtractor wrapper)
 7. **2.7** — Create `ui/viewmodel/HomeViewModel.kt`
 8. **2.8** — Update `HomeScreen.kt` with URL input + search results

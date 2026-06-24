@@ -159,7 +159,7 @@ Use for:
 
 # YouTube Extraction
 
-## yt-dlp
+## NewPipeExtractor
 
 Use for:
 - metadata extraction
@@ -167,7 +167,7 @@ Use for:
 - stream URLs
 - audio extraction
 
-Do NOT build custom YouTube parsers.
+(Integrated directly as a gradle library).
 
 ---
 
@@ -185,10 +185,8 @@ Use for:
 # Optional VPS Stack
 
 ## Recommended Option
-- PocketBase
-
-## Alternative
-- Node.js + PostgreSQL
+- Custom Python FastAPI Server
+- Hosted via Docker or systemd (uv)
 
 ---
 
@@ -271,10 +269,10 @@ Responsible for:
 
 ## Download Engine
 Responsible for:
-- yt-dlp execution
-- queue management
-- retries
-- progress tracking
+- NewPipeExtractor execution
+- FFmpeg audio/video merging
+- throttled DB progress updates
+- local retry loops
 
 ---
 
@@ -368,7 +366,7 @@ Implement basic navigation:
 # Phase 2 — Media Extraction
 
 ## Step 4
-Integrate yt-dlp.
+Integrate NewPipeExtractor.
 
 Features:
 - fetch metadata
@@ -433,6 +431,7 @@ States:
 - paused
 - completed
 - failed
+- canceled
 
 ---
 
@@ -442,7 +441,9 @@ Implement foreground download service.
 Features:
 - persistent notifications
 - pause/resume
-- retries
+- split audio/video downloads
+- local audio retry loops
+- throttled progress database updates
 
 ---
 
@@ -452,6 +453,7 @@ Integrate ffmpeg.
 Support:
 - audio extraction
 - mp3/m4a conversion
+- video/audio stream merging
 
 ---
 
@@ -591,33 +593,40 @@ device_id
 ```sql
 videos
 --------
-id (UUID)
-youtube_id
+id (String, YouTube ID)
 title
+channelName
+channelId
+durationSeconds
+thumbnailUrl
 description
-uploader
-duration
-thumbnail_url
-local_path
-media_type
-created_at
-updated_at
+uploadDate
+localFilePath
+favorite
+addedAt
+lastPlayedAt
+downloadedAt
+syncVersion
 ```
 
 ---
 
-# history
+# playback_history & watch_sessions
 
 ```sql
-history
+playback_history
 --------
-id (UUID)
-video_id
-position_ms
-completed
-last_watched_at
-updated_at
-device_id
+videoId (PK)
+positionMillis
+playedAt
+totalWatchTimeMillis
+syncVersion
+
+watch_sessions
+--------
+id (Long, AutoGen)
+videoId
+watchedAt
 ```
 
 ---
@@ -627,14 +636,24 @@ device_id
 ```sql
 downloads
 --------
-id (UUID)
-video_id
+id (Long, AutoGen)
+videoId
+url
+videoUrl
+format
+quality
+title
+thumbnailUrl
+filePath
+fileSizeBytes
+downloadedAt
+lastPlayedAt
 status
 progress
-download_type
-quality
-created_at
-updated_at
+errorMessage
+retryCount
+updatedAt
+syncVersion
 ```
 
 ---
@@ -644,11 +663,12 @@ updated_at
 ```sql
 folders
 --------
-id (UUID)
+id (Long, AutoGen)
 name
-parent_id
-created_at
-updated_at
+parentId
+createdAt
+updatedAt
+syncVersion
 ```
 
 ---
@@ -658,8 +678,8 @@ updated_at
 ```sql
 video_folder_map
 ----------------
-video_id
-folder_id
+videoId
+folderId
 ```
 
 ---
@@ -669,14 +689,18 @@ folder_id
 ```sql
 subscriptions
 --------------
-id (UUID)
-source_type
-source_id
-title
-auto_download
-audio_only
-last_checked_at
-created_at
+id (Long, AutoGen)
+sourceType
+sourceId
+name
+thumbnailUrl
+uploaderName
+autoDownload
+audioOnly
+lastCheckedAt
+createdAt
+updatedAt
+syncVersion
 ```
 
 ---
@@ -686,12 +710,16 @@ created_at
 ```sql
 playlists
 ----------
-id (UUID)
-youtube_playlist_id
-title
+id (Long, AutoGen)
+name
 description
-created_at
-updated_at
+thumbnailUrl
+youtubePlaylistId
+uploaderName
+videoCount
+createdAt
+updatedAt
+syncVersion
 ```
 
 ---
@@ -793,13 +821,13 @@ Handling:
 
 ---
 
-# yt-dlp Breakage
+# NewPipeExtractor Breakage
 
 Issue:
 YouTube changes internals.
 
 Handling:
-- version updater
+- update JitPack dependency version
 - fallback extraction
 - update notifications
 
@@ -919,12 +947,9 @@ Test:
 
 # 8. Open Questions
 
-# 1. yt-dlp Integration Method
+# 1. Extraction Method
 
-Need decision:
-- bundled binary
-- external install
-- dynamically downloaded binary
+Resolved: Use NewPipeExtractor directly as a Gradle library.
 
 ---
 
