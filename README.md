@@ -54,6 +54,23 @@ Android requires all APKs to be digitally signed with a certificate before they 
 5. **Upload the APK**: Drag and drop your **signed** `.apk` file into the assets upload box.
 6. Click **Publish release**.
 
+### 3. Automated Publishing (Using GitHub CLI)
+
+To quickly build and publish an APK to GitHub releases (which also triggers the app's in-app updater), you can use the included `publish.bat` script.
+
+**Requirements:**
+- GitHub CLI (`gh`) must be installed and authenticated (`gh auth login`).
+
+**Usage:**
+```cmd
+.\publish.bat v1.0.1
+```
+
+This script will automatically:
+1. Run `build.bat` to build a fresh APK.
+2. Create a new GitHub Release with the specified version tag.
+3. Upload the APK as a release asset.
+
 ---
 
 ## Hosting the Optional Sync Server (VPS)
