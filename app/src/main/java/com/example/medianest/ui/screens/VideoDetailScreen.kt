@@ -39,6 +39,16 @@ import com.example.medianest.data.local.entity.VideoEntity
 import com.example.medianest.ui.utils.UiUtils
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material3.TopAppBar
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.graphics.Color
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.foundation.BorderStroke
+import com.example.medianest.R
 import androidx.compose.ui.viewinterop.AndroidView
 import android.widget.TextView
 import android.text.method.LinkMovementMethod
@@ -178,6 +188,52 @@ fun VideoDetailScreen(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.primary
                 )
+            }
+
+            val context = LocalContext.current
+            Spacer(Modifier.height(12.dp))
+            Button(
+                onClick = {
+                    try {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=${videoInfo.videoId}"))
+                        context.startActivity(intent)
+                    } catch (e: Exception) {
+                        coroutineScope.launch {
+                            snackbarHostState.showSnackbar("Unable to open YouTube link")
+                        }
+                    }
+                },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color.White,
+                    contentColor = Color(0xFFFF0000)
+                ),
+                border = BorderStroke(1.dp, Color(0xFFFF0000)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_youtube),
+                        contentDescription = "YouTube Logo",
+                        tint = Color.Unspecified,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = "Open in YouTube",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = Color(0xFFFF0000)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.OpenInNew,
+                        contentDescription = "Open Externally",
+                        tint = Color(0xFFFF0000),
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
             }
 
             // Collapsible Description Container
