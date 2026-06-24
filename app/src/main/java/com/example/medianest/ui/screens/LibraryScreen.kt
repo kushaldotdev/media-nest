@@ -578,10 +578,25 @@ private fun VideoCard(
                         contentDescription = "Downloaded",
                         tint = Color.Green,
                         modifier = Modifier
-                            .align(Alignment.BottomEnd)
+                            .align(Alignment.BottomStart)
                             .padding(8.dp)
                             .size(24.dp)
                             .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(50))
+                    )
+                }
+                if (video.durationSeconds > 0) {
+                    Text(
+                        text = com.example.medianest.ui.utils.UiUtils.formatDuration(video.durationSeconds),
+                        color = Color.White,
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(8.dp)
+                            .background(
+                                color = Color.Black.copy(alpha = 0.7f),
+                                shape = RoundedCornerShape(4.dp)
+                            )
+                            .padding(horizontal = 4.dp, vertical = 2.dp)
                     )
                 }
             }
@@ -592,7 +607,12 @@ private fun VideoCard(
                     Column(modifier = Modifier.weight(1f)) {
                         Text(video.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
                         Spacer(Modifier.height(4.dp))
-                        Text(video.channelName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(video.channelName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                            if (!video.uploadDate.isNullOrEmpty()) {
+                                Text(" • ${video.uploadDate}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                            }
+                        }
                     }
                     if (isSelectionMode) {
                         Checkbox(checked = isSelected, onCheckedChange = { onClick() }, modifier = Modifier.padding(start = 4.dp))
@@ -705,10 +725,25 @@ private fun VideoListRow(
                             contentDescription = "Downloaded",
                             tint = Color.Green,
                             modifier = Modifier
-                                .align(Alignment.BottomEnd)
+                                .align(Alignment.BottomStart)
                                 .padding(4.dp)
                                 .size(16.dp)
                                 .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(50))
+                        )
+                    }
+                    if (video.durationSeconds > 0) {
+                        Text(
+                            text = com.example.medianest.ui.utils.UiUtils.formatDuration(video.durationSeconds),
+                            color = Color.White,
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(4.dp)
+                                .background(
+                                    color = Color.Black.copy(alpha = 0.7f),
+                                    shape = RoundedCornerShape(4.dp)
+                                )
+                                .padding(horizontal = 4.dp, vertical = 2.dp)
                         )
                     }
                 }
@@ -718,7 +753,12 @@ private fun VideoListRow(
             Column(modifier = Modifier.weight(1f)) {
                 Text(video.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(4.dp))
-                Text(video.channelName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(video.channelName, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+                    if (!video.uploadDate.isNullOrEmpty()) {
+                        Text(" • ${video.uploadDate}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                    }
+                }
                 
                 if (!isSelectionMode) {
                     Spacer(Modifier.height(8.dp))

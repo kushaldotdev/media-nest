@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import com.example.medianest.data.local.entity.DownloadEntity
 import com.example.medianest.data.local.entity.DownloadStatus
+import com.example.medianest.data.local.entity.VideoEntity
 import com.example.medianest.data.model.ExtractedVideoInfo
 import com.example.medianest.data.model.StreamSource
 import com.example.medianest.data.repository.DownloadRepository
@@ -34,7 +35,11 @@ class VideoDetailViewModel @Inject constructor(
     private val _videoDownloads = MutableStateFlow<List<DownloadEntity>>(emptyList())
     val videoDownloads: StateFlow<List<DownloadEntity>> = _videoDownloads
 
+    private val _localVideo = MutableStateFlow<VideoEntity?>(null)
+    val localVideo: StateFlow<VideoEntity?> = _localVideo
+
     private var downloadsJob: kotlinx.coroutines.Job? = null
+    private var localVideoJob: kotlinx.coroutines.Job? = null
     private var currentVideoId: String = ""
 
     private val _videoInfo = MutableStateFlow<ExtractedVideoInfo?>(null)
@@ -59,6 +64,12 @@ class VideoDetailViewModel @Inject constructor(
             downloadsJob = viewModelScope.launch {
                 downloadRepository.getDownloadsForVideoFlow(videoId).collect {
                     _videoDownloads.value = it
+                }
+            }
+            localVideoJob?.cancel()
+            localVideoJob = viewModelScope.launch {
+                videoRepository.getVideoByIdFlow(videoId).collect {
+                    _localVideo.value = it
                 }
             }
             viewModelScope.launch {

@@ -35,6 +35,9 @@ import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.TextButton
 import com.example.medianest.data.local.entity.DownloadEntity
 import com.example.medianest.data.local.entity.DownloadStatus
+import com.example.medianest.data.local.entity.VideoEntity
+import com.example.medianest.ui.utils.UiUtils
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -43,6 +46,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.material3.CardDefaults
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 import coil.compose.AsyncImage
@@ -53,6 +58,7 @@ import com.example.medianest.data.model.StreamSource
 @Composable
 fun VideoDetailScreen(
     videoInfo: ExtractedVideoInfo,
+    localVideo: VideoEntity? = null,
     downloads: List<DownloadEntity> = emptyList(),
     onPlay: (StreamSource) -> Unit,
     onDownload: (StreamSource) -> Unit,
@@ -131,6 +137,80 @@ fun VideoDetailScreen(
                         coroutineScope.launch { snackbarHostState.showSnackbar("Subscribed to ${videoInfo.channelName}") }
                     }) {
                         Text("Subscribe")
+                    }
+                }
+            }
+
+            // Duration, Released, and Downloaded Metadata
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (videoInfo.durationSeconds > 0) {
+                    Text(
+                        text = "Duration: ${UiUtils.formatDuration(videoInfo.durationSeconds)}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                if (!videoInfo.uploadDate.isNullOrEmpty()) {
+                    Text(
+                        text = "Released: ${videoInfo.uploadDate}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            val completedDownloads = downloads.filter { it.status == DownloadStatus.COMPLETED }
+            val overallDownloadTime = if (completedDownloads.isNotEmpty()) {
+                completedDownloads.maxOfOrNull { it.downloadedAt }
+            } else {
+                localVideo?.downloadedAt
+            }
+            if (overallDownloadTime != null && overallDownloadTime > 0) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "Downloaded: ${UiUtils.formatAbsoluteDate(overallDownloadTime)}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            // Collapsible Description Container
+            if (!videoInfo.description.isNullOrBlank()) {
+                Spacer(Modifier.height(12.dp))
+                var isDescriptionExpanded by remember { mutableStateOf(false) }
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                    )
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text(
+                            text = "Description",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = videoInfo.description,
+                            style = MaterialTheme.typography.bodyMedium,
+                            maxLines = if (isDescriptionExpanded) Int.MAX_VALUE else 3,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = if (isDescriptionExpanded) "Show less" else "Show more",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier
+                                .clickable { isDescriptionExpanded = !isDescriptionExpanded }
+                                .padding(vertical = 4.dp)
+                        )
                     }
                 }
             }
@@ -289,22 +369,31 @@ private fun StreamQualityRow(
                 if (downloadState != null) {
                     when (downloadState.status) {
                         DownloadStatus.COMPLETED -> {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                            Column(
+                                horizontalAlignment = Alignment.End,
+                                modifier = Modifier.padding(horizontal = 12.dp)
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Check,
-                                    contentDescription = "Downloaded",
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(Modifier.width(4.dp))
-                                Text(
-                                    text = "Downloaded",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = "Downloaded",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(Modifier.width(4.dp))
+                                    Text(
+                                        text = "Downloaded",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                                if (downloadState.downloadedAt > 0) {
+                                    Text(
+                                        text = UiUtils.formatAbsoluteDate(downloadState.downloadedAt),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                             }
                         }
                         DownloadStatus.DOWNLOADING, DownloadStatus.QUEUED -> {

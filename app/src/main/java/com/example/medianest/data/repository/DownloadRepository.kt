@@ -41,7 +41,7 @@ class DownloadRepository @Inject constructor(
         downloadDao.markFailed(id, DownloadStatus.FAILED, errorMessage, retryCount)
 
     suspend fun markCompleted(id: Long, fileSize: Long, filePath: String) =
-        downloadDao.markCompleted(id, fileSize, filePath)
+        downloadDao.markCompleted(id, fileSize, filePath, System.currentTimeMillis())
 
     suspend fun updateProgressAndMessage(id: Long, progress: Float, errorMessage: String?) =
         downloadDao.updateProgressAndMessage(id, progress, errorMessage)

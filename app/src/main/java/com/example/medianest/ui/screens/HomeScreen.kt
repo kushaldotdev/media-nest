@@ -46,6 +46,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
 import com.example.medianest.data.model.ExtractedVideoInfo
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.Color
+import com.example.medianest.ui.utils.UiUtils
 import com.example.medianest.ui.viewmodel.HomeUiState
 import com.example.medianest.ui.viewmodel.HomeViewModel
 
@@ -265,18 +269,44 @@ fun VideoListItem(video: ExtractedVideoInfo, onClick: () -> Unit) {
             .clickable(onClick = onClick)
             .padding(8.dp)
     ) {
-        AsyncImage(
-            model = video.thumbnailUrl,
-            contentDescription = video.title,
-            modifier = Modifier.size(120.dp, 68.dp)
-        )
+        Box(modifier = Modifier.size(120.dp, 68.dp)) {
+            AsyncImage(
+                model = video.thumbnailUrl,
+                contentDescription = video.title,
+                modifier = Modifier.fillMaxSize()
+            )
+            if (video.durationSeconds > 0) {
+                Text(
+                    text = UiUtils.formatDuration(video.durationSeconds),
+                    color = Color.White,
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(4.dp)
+                        .background(
+                            color = Color.Black.copy(alpha = 0.7f),
+                            shape = RoundedCornerShape(4.dp)
+                        )
+                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                )
+            }
+        }
         Spacer(Modifier.width(8.dp))
         Column {
             Text(video.title, maxLines = 2)
-            Text(
-                video.channelName,
-                style = MaterialTheme.typography.bodySmall
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    video.channelName,
+                    style = MaterialTheme.typography.bodySmall
+                )
+                if (!video.uploadDate.isNullOrEmpty()) {
+                    Text(
+                        " • ${video.uploadDate}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
         }
     }
 }

@@ -684,11 +684,15 @@ class DownloadService : Service() {
                     channelName = "",
                     durationSeconds = 0,
                     thumbnailUrl = download.thumbnailUrl,
-                    localFilePath = outputFile.absolutePath
+                    localFilePath = outputFile.absolutePath,
+                    downloadedAt = System.currentTimeMillis()
                 )
             )
         } else {
-            videoDao.update(existing.copy(localFilePath = outputFile.absolutePath))
+            videoDao.update(existing.copy(
+                localFilePath = outputFile.absolutePath,
+                downloadedAt = System.currentTimeMillis()
+            ))
         }
     }
       private fun isPaused(id: Long): Boolean = pauseFlags[id] == true

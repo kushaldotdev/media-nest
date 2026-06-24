@@ -17,6 +17,9 @@ interface VideoDao {
     @Query("SELECT * FROM videos WHERE id = :videoId")
     suspend fun getVideoById(videoId: String): VideoEntity?
 
+    @Query("SELECT * FROM videos WHERE id = :videoId")
+    fun getVideoByIdFlow(videoId: String): Flow<VideoEntity?>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(video: VideoEntity)
 

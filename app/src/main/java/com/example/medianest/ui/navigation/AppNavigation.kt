@@ -124,11 +124,13 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
 
             val videoHistory by detailViewModel.videoHistory.collectAsState()
             val watchSessions by detailViewModel.watchSessions.collectAsState()
+            val localVideo by detailViewModel.localVideo.collectAsState()
 
             val info = videoInfo
             if (info != null) {
                 VideoDetailScreen(
                     videoInfo = info,
+                    localVideo = localVideo,
                     downloads = downloads,
                     isFavorite = isFavorite,
                     isSubscribed = isSubscribed,

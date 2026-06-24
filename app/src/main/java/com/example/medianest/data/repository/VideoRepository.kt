@@ -20,6 +20,8 @@ class VideoRepository @Inject constructor(
 
     suspend fun getVideoById(videoId: String): VideoEntity? = videoDao.getVideoById(videoId)
 
+    fun getVideoByIdFlow(videoId: String): Flow<VideoEntity?> = videoDao.getVideoByIdFlow(videoId)
+
     suspend fun searchAndSave(url: String): ExtractedVideoInfo {
         val info = youTubeExtractor.extractVideo(url)
         val existing = videoDao.getVideoById(info.videoId)
