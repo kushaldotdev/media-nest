@@ -72,7 +72,10 @@ private fun FolderBadges(folders: List<FolderEntity>) {
                     )
                     Text(
                         text = firstFolder.name,
-                        style = MaterialTheme.typography.labelSmall
+                        style = MaterialTheme.typography.labelSmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.widthIn(max = 70.dp)
                     )
                 }
             }
@@ -395,67 +398,79 @@ fun UnifiedVideoRow(
                 .padding(8.dp),
             verticalAlignment = Alignment.Top
         ) {
-            // Thumbnail Box on the Left
-            Box(
+            // Left Column: Thumbnail Box + Folder Badges
+            Column(
                 modifier = Modifier
-                    .padding(top = 4.dp)
-                    .size(width = 120.dp, height = 68.dp)
-                    .clip(RoundedCornerShape(8.dp))
+                    .width(120.dp)
+                    .padding(top = 4.dp),
+                horizontalAlignment = Alignment.Start,
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                AsyncImage(
-                    model = thumbnailUrl,
-                    contentDescription = title,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-
-                // Green Downloaded badge - TOP LEFT corner on thumbnail
-                if (config.showDownloadedBadge && isDownloaded) {
-                    Icon(
-                        imageVector = Icons.Default.CheckCircle,
-                        contentDescription = "Downloaded",
-                        tint = Color(0xFF4CAF50),
-                        modifier = Modifier
-                            .align(Alignment.TopStart)
-                            .padding(4.dp)
-                            .size(16.dp)
-                            .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(50))
+                Box(
+                    modifier = Modifier
+                        .size(width = 120.dp, height = 68.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                ) {
+                    AsyncImage(
+                        model = thumbnailUrl,
+                        contentDescription = title,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
                     )
-                }
 
-                // Duration badge - BOTTOM RIGHT corner
-                if (durationSeconds > 0) {
-                    Text(
-                        text = UiUtils.formatDuration(durationSeconds),
-                        color = Color.White,
-                        style = MaterialTheme.typography.labelSmall,
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(4.dp)
-                            .background(
-                                color = Color.Black.copy(alpha = 0.7f),
-                                shape = RoundedCornerShape(4.dp)
-                            )
-                            .padding(horizontal = 4.dp, vertical = 1.dp)
-                    )
-                }
-
-                // Playback progress bar (bottom edge of thumbnail)
-                if (config.showPlaybackProgress && playbackProgressFraction > 0f) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(2.dp)
-                            .align(Alignment.BottomCenter)
-                            .background(Color.Gray.copy(alpha = 0.3f))
-                    ) {
-                        Box(
+                    // Green Downloaded badge - TOP LEFT corner on thumbnail
+                    if (config.showDownloadedBadge && isDownloaded) {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = "Downloaded",
+                            tint = Color(0xFF4CAF50),
                             modifier = Modifier
-                                .fillMaxWidth(playbackProgressFraction.coerceIn(0f, 1f))
-                                .height(2.dp)
-                                .background(Color.Red)
+                                .align(Alignment.TopStart)
+                                .padding(4.dp)
+                                .size(16.dp)
+                                .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(50))
                         )
                     }
+
+                    // Duration badge - BOTTOM RIGHT corner
+                    if (durationSeconds > 0) {
+                        Text(
+                            text = UiUtils.formatDuration(durationSeconds),
+                            color = Color.White,
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(4.dp)
+                                .background(
+                                    color = Color.Black.copy(alpha = 0.7f),
+                                    shape = RoundedCornerShape(4.dp)
+                                )
+                                .padding(horizontal = 4.dp, vertical = 1.dp)
+                        )
+                    }
+
+                    // Playback progress bar (bottom edge of thumbnail)
+                    if (config.showPlaybackProgress && playbackProgressFraction > 0f) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(2.dp)
+                                .align(Alignment.BottomCenter)
+                                .background(Color.Gray.copy(alpha = 0.3f))
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth(playbackProgressFraction.coerceIn(0f, 1f))
+                                    .height(2.dp)
+                                    .background(Color.Red)
+                            )
+                        }
+                    }
+                }
+
+                // Folder badges placed under the thumbnail
+                if (config.showFolderBadges) {
+                    FolderBadges(folders)
                 }
             }
 
@@ -467,10 +482,6 @@ fun UnifiedVideoRow(
                     .weight(1f)
                     .animateContentSize()
             ) {
-                if (config.showFolderBadges && folders.isNotEmpty()) {
-                    FolderBadges(folders)
-                    Spacer(modifier = Modifier.height(2.dp))
-                }
 
                 Row(
                     verticalAlignment = Alignment.Top,
