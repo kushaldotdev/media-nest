@@ -19,5 +19,6 @@ data class StreamSource(
     val quality: String,
     val mimeType: String,
     val codec: String = "",
-    val contentLength: Long?
+    val contentLength: Long?,
+    val language: String? = null
 )

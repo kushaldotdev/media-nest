@@ -429,7 +429,10 @@ private fun StreamQualityRow(
             Column(modifier = Modifier.weight(1f)) {
                 val typeLabel = when (stream.format) {
                     "video_only", "video" -> "Video"
-                    "audio" -> "Audio Only (${stream.quality})"
+                    "audio" -> {
+                        val langSuffix = if (!stream.language.isNullOrBlank()) " [${stream.language}]" else ""
+                        "Audio Only (${stream.quality})$langSuffix"
+                    }
                     else -> stream.format
                 }
                 val label = if (stream.codec.isNotEmpty()) {

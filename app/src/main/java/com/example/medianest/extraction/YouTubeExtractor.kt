@@ -50,7 +50,11 @@ class YouTubeExtractor @Inject constructor() {
         val streams = mutableListOf<StreamSource>()
 
         runCatching {
+            val hasNonDubbed = info.audioStreams?.any { it.audioTrackType != org.schabi.newpipe.extractor.stream.AudioTrackType.DUBBED } ?: false
             info.audioStreams?.forEach { track ->
+                if (hasNonDubbed && track.audioTrackType == org.schabi.newpipe.extractor.stream.AudioTrackType.DUBBED) {
+                    return@forEach
+                }
                 val codec = track.format?.name ?: track.format?.mimeType?.substringAfter("/") ?: "audio"
                 val rawBitrate = if (track.averageBitrate > 0) track.averageBitrate else track.bitrate
                 val bitrateKbps = if (rawBitrate > 0) {
@@ -66,7 +70,8 @@ class YouTubeExtractor @Inject constructor() {
                         quality = qualityStr,
                         mimeType = track.format?.mimeType ?: "audio/mpeg",
                         codec = codec,
-                        contentLength = if (track.itagItem?.contentLength ?: 0L > 0L) track.itagItem?.contentLength else null
+                        contentLength = if (track.itagItem?.contentLength ?: 0L > 0L) track.itagItem?.contentLength else null,
+                        language = if (!track.audioTrackName.isNullOrBlank()) track.audioTrackName else track.audioLocale?.displayLanguage
                     )
                 )
             }
