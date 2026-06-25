@@ -29,14 +29,14 @@ interface VideoDao {
     @Update
     suspend fun update(video: VideoEntity)
 
-    @Query("SELECT * FROM videos WHERE (title LIKE '%' || :query || '%' OR channelName LIKE '%' || :query || '%') AND (favorite = 1 OR (localFilePath != '' AND localFilePath IS NOT NULL) OR lastPlayedAt IS NOT NULL OR id IN (SELECT videoId FROM video_folder_join)) ORDER BY max(addedAt, COALESCE(lastPlayedAt, 0), COALESCE(downloadedAt, 0)) DESC")
-    fun searchVideos(query: String): Flow<List<VideoEntity>>
+    @Query("SELECT * FROM videos WHERE (title LIKE '%' || :query || '%' OR channelName LIKE '%' || :query || '%') AND lastPlayedAt IS NOT NULL ORDER BY lastPlayedAt DESC LIMIT 100")
+    fun searchHistoryVideos(query: String): Flow<List<VideoEntity>>
 
     @Query("SELECT * FROM videos WHERE favorite = 1 ORDER BY max(addedAt, COALESCE(lastPlayedAt, 0), COALESCE(downloadedAt, 0)) DESC")
     fun getFavoriteVideos(): Flow<List<VideoEntity>>
 
-    @Query("SELECT * FROM videos WHERE favorite = 1 OR (localFilePath != '' AND localFilePath IS NOT NULL) OR lastPlayedAt IS NOT NULL OR id IN (SELECT videoId FROM video_folder_join) ORDER BY max(addedAt, COALESCE(lastPlayedAt, 0), COALESCE(downloadedAt, 0)) DESC")
-    fun getAllVideosSortedByDate(): Flow<List<VideoEntity>>
+    @Query("SELECT * FROM videos WHERE lastPlayedAt IS NOT NULL ORDER BY lastPlayedAt DESC LIMIT 100")
+    fun getWatchHistoryVideos(): Flow<List<VideoEntity>>
 
     @Query("UPDATE videos SET favorite = :favorite WHERE id = :videoId")
     suspend fun setFavorite(videoId: String, favorite: Boolean)
@@ -52,6 +52,9 @@ interface VideoDao {
 
     @Query("UPDATE videos SET lastPlayedAt = NULL")
     suspend fun clearAllLastPlayed()
+
+    @Query("UPDATE videos SET lastPlayedAt = :lastPlayedAt WHERE id = :videoId")
+    suspend fun updateLastPlayedAt(videoId: String, lastPlayedAt: Long)
 
     @Query("DELETE FROM videos WHERE favorite = 0 AND (localFilePath = '' OR localFilePath IS NULL) AND id NOT IN (SELECT videoId FROM video_folder_join)")
     suspend fun deleteOrphanHistoryVideos()

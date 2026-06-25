@@ -71,7 +71,6 @@ fun LibraryScreen(
     var deleteDownloadsWithFolder by remember { mutableStateOf(false) }
     var folderToRename by remember { mutableStateOf<FolderEntity?>(null) }
     var renameFolderName by remember { mutableStateOf("") }
-    var showClearHistoryDialog by remember { mutableStateOf(false) }
 
     val allDownloads by viewModel.allDownloads.collectAsStateWithLifecycle()
     val fetchingStreamsFor by viewModel.fetchingStreamsFor.collectAsStateWithLifecycle()
@@ -90,14 +89,6 @@ fun LibraryScreen(
             TopAppBar(
                 title = { Text(if (uiState.isSelectionMode) "${uiState.selectedVideoIds.size} Selected" else "Library") },
                 actions = {
-                    if (uiState.currentTab == LibraryTab.ALL && videos.isNotEmpty()) {
-                        IconButton(onClick = { showClearHistoryDialog = true }) {
-                            Icon(
-                                Icons.Default.DeleteSweep,
-                                contentDescription = "Clear History"
-                            )
-                        }
-                    }
                     if (uiState.currentTab != LibraryTab.SUBSCRIPTIONS && uiState.currentTab != LibraryTab.PLAYLISTS && (uiState.currentTab != LibraryTab.FOLDERS || uiState.selectedFolder != null)) {
                         IconButton(onClick = { viewModel.toggleViewMode() }) {
                             Icon(
@@ -163,8 +154,8 @@ fun LibraryScreen(
                     .padding(horizontal = 16.dp, vertical = 8.dp)
             )
 
-            val tabs = listOf(LibraryTab.ALL, LibraryTab.FOLDERS, LibraryTab.FAVORITES, LibraryTab.PLAYLISTS, LibraryTab.SUBSCRIPTIONS)
-            val tabLabels = listOf("All", "Folders", "Favorites", "Playlists", "Channels")
+            val tabs = listOf(LibraryTab.HISTORY, LibraryTab.FOLDERS, LibraryTab.FAVORITES, LibraryTab.PLAYLISTS, LibraryTab.SUBSCRIPTIONS)
+            val tabLabels = listOf("History", "Folders", "Favorites", "Playlists", "Channels")
             ScrollableTabRow(
                 selectedTabIndex = tabs.indexOf(uiState.currentTab),
                 edgePadding = 8.dp,
@@ -196,9 +187,9 @@ fun LibraryScreen(
             }
 
             when (uiState.currentTab) {
-                LibraryTab.ALL -> {
+                LibraryTab.HISTORY -> {
                     if (videos.isEmpty()) {
-                        EmptyState("No videos in library")
+                        EmptyState("No watch history yet")
                     } else {
                         VideoListLayout(
                             videos = videos,
@@ -316,31 +307,7 @@ fun LibraryScreen(
                 }
             }
 
-            if (showClearHistoryDialog) {
-                AlertDialog(
-                    onDismissRequest = { showClearHistoryDialog = false },
-                    title = { Text("Clear Watch History?") },
-                    text = { Text("This will clear all watch history and progress. Saved videos, favorites, and folders will not be affected.") },
-                    confirmButton = {
-                        TextButton(
-                            onClick = {
-                                viewModel.clearHistory()
-                                showClearHistoryDialog = false
-                                coroutineScope.launch {
-                                    snackbarHostState.showSnackbar("History cleared")
-                                }
-                            }
-                        ) {
-                            Text("Clear", color = MaterialTheme.colorScheme.error)
-                        }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = { showClearHistoryDialog = false }) {
-                            Text("Cancel")
-                        }
-                    }
-                )
-            }
+
 
             if (showMoveToFolderDialog) {
             AlertDialog(

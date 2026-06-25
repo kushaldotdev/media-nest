@@ -33,13 +33,13 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-enum class LibraryTab { ALL, FOLDERS, FAVORITES, PLAYLISTS, SUBSCRIPTIONS }
+enum class LibraryTab { HISTORY, FOLDERS, FAVORITES, PLAYLISTS, SUBSCRIPTIONS }
 
 enum class ViewMode { GRID, LIST }
 
 data class LibraryUiState(
     val searchQuery: String = "",
-    val currentTab: LibraryTab = LibraryTab.ALL,
+    val currentTab: LibraryTab = LibraryTab.HISTORY,
     val selectedFolder: FolderEntity? = null,
     val viewMode: ViewMode = ViewMode.GRID,
     val isSelectionMode: Boolean = false,
@@ -72,9 +72,9 @@ class LibraryViewModel @Inject constructor(
     @OptIn(ExperimentalCoroutinesApi::class)
     val videos: StateFlow<List<VideoEntity>> = _searchQuery.flatMapLatest { query ->
         if (query.isBlank()) {
-            videoDao.getAllVideosSortedByDate()
+            videoDao.getWatchHistoryVideos()
         } else {
-            videoDao.searchVideos(query)
+            videoDao.searchHistoryVideos(query)
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 

@@ -12,6 +12,7 @@ import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.example.medianest.data.local.dao.HistoryDao
+import com.example.medianest.data.local.dao.VideoDao
 import com.example.medianest.data.local.entity.HistoryEntity
 import com.example.medianest.data.model.ExtractedVideoInfo
 import com.example.medianest.data.model.StreamSource
@@ -53,6 +54,7 @@ data class PlayerUiState(
 class PlayerViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val historyDao: HistoryDao,
+    private val videoDao: VideoDao,
     private val playbackPreferences: PlaybackPreferences,
     private val downloadRepository: DownloadRepository
 ) : ViewModel() {
@@ -181,6 +183,7 @@ class PlayerViewModel @Inject constructor(
                     
                     sessionTotalWatchTime = lastPlayback?.totalWatchTimeMillis ?: 0L
                     countedThisSession = false
+                    videoDao.updateLastPlayedAt(videoId, System.currentTimeMillis())
 
                     _uiState.value = _uiState.value.copy(
                         title = title,
@@ -318,6 +321,7 @@ class PlayerViewModel @Inject constructor(
                         totalWatchTimeMillis = sessionTotalWatchTime
                     )
                 )
+                videoDao.updateLastPlayedAt(videoId, System.currentTimeMillis())
             }
         }
     }
@@ -338,6 +342,7 @@ class PlayerViewModel @Inject constructor(
                         totalWatchTimeMillis = sessionTotalWatchTime
                     )
                 )
+                videoDao.updateLastPlayedAt(videoId, System.currentTimeMillis())
             }
         }
     }
@@ -371,6 +376,7 @@ class PlayerViewModel @Inject constructor(
                     totalWatchTimeMillis = sessionTotalWatchTime
                 )
             )
+            videoDao.updateLastPlayedAt(videoId, System.currentTimeMillis())
         }
     }
 
