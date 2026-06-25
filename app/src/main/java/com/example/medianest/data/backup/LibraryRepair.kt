@@ -32,6 +32,7 @@ class LibraryRepair @Inject constructor(
         return withContext(Dispatchers.IO) {
             val errors = mutableListOf<String>()
             val details = mutableListOf<String>()
+            val repairActions = mutableListOf<String>()
             
             val customFolder = downloadPreferences.downloadFolder.first()
             val dirs = mutableListOf<File>()
@@ -50,8 +51,20 @@ class LibraryRepair @Inject constructor(
                 dirs.add(File(File(customFolder), "audio"))
             }
 
+            // Log Directories Scanned
+            details.add("Directories Scanned:")
+            val distinctDirs = dirs.distinct()
+            distinctDirs.forEach { dir ->
+                if (dir.exists()) {
+                    details.add("  • ${dir.absolutePath}")
+                } else {
+                    details.add("  • ${dir.absolutePath} (not found on disk)")
+                }
+            }
+            details.add("") // Spacer
+
             val mediaFiles = mutableMapOf<String, File>()
-            for (dir in dirs.distinct()) {
+            for (dir in distinctDirs) {
                 if (dir.exists()) {
                     dir.listFiles()?.forEach { file ->
                         mediaFiles[file.name] = file
@@ -60,8 +73,24 @@ class LibraryRepair @Inject constructor(
             }
             progress(0.3f)
 
+            // Log Files Found
             val filesFound = mediaFiles.size
-            details.add("Scanned $filesFound media files on disk.")
+            details.add("Files Found on Disk ($filesFound):")
+            if (filesFound > 0) {
+                val listToLog = mediaFiles.keys.sorted()
+                val limit = 50
+                val loggedFiles = listToLog.take(limit)
+                loggedFiles.forEach { fileName ->
+                    details.add("  • $fileName")
+                }
+                if (filesFound > limit) {
+                    details.add("  • ... and ${filesFound - limit} more files.")
+                }
+            } else {
+                details.add("  • No media files found on disk.")
+            }
+            details.add("") // Spacer
+
             var pathsFixed = 0
             var pathsCleared = 0
 
@@ -77,13 +106,13 @@ class LibraryRepair @Inject constructor(
                             val oldPath = video.localFilePath
                             videoDao.update(video.copy(localFilePath = matchingFile.absolutePath))
                             pathsFixed++
-                            details.add("Fixed path for video '${video.title}': found file at '${matchingFile.absolutePath}' (was '$oldPath')")
+                            repairActions.add("Fixed path for video '${video.title}': found file at '${matchingFile.absolutePath}' (was '$oldPath')")
                         }
                     } else if (video.localFilePath.isNotEmpty()) {
                         val oldPath = video.localFilePath
                         videoDao.update(video.copy(localFilePath = ""))
                         pathsCleared++
-                        details.add("Cleared missing path for video '${video.title}': file not found on disk at '$oldPath'")
+                        repairActions.add("Cleared missing path for video '${video.title}': file not found at '$oldPath'")
                     }
                 }
             } catch (e: Exception) {
@@ -98,7 +127,7 @@ class LibraryRepair @Inject constructor(
                     if (download.filePath.isNotEmpty() && !File(download.filePath).exists()) {
                         val oldPath = download.filePath
                         downloadDao.update(download.copy(filePath = ""))
-                        details.add("Cleared missing path for download '${download.title}': file not found on disk at '$oldPath'")
+                        repairActions.add("Cleared missing path for download '${download.title}': file not found at '$oldPath'")
                     }
                 }
             } catch (e: Exception) {
@@ -129,10 +158,20 @@ class LibraryRepair @Inject constructor(
                     val fileName = file.name
                     file.delete()
                     orphansRemoved++
-                    details.add("Removed orphan media file: '$fileName'")
+                    repairActions.add("Removed orphan media file: '$fileName'")
                 }
             }
             progress(1.0f)
+
+            // Log Repairs Performed
+            details.add("Repairs Performed:")
+            if (repairActions.isNotEmpty()) {
+                repairActions.forEach { action ->
+                    details.add("  • $action")
+                }
+            } else {
+                details.add("  • No repairs were needed. Library is in sync.")
+            }
 
             RepairResult(
                 filesFound = filesFound,

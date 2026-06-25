@@ -1264,13 +1264,22 @@ fun SettingsScreen(
                         } else {
                             LazyColumn(
                                 modifier = Modifier.fillMaxWidth().heightIn(max = 300.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
                                 items(details) { detail ->
-                                    Text(
-                                        text = "• $detail",
-                                        style = MaterialTheme.typography.bodySmall
-                                    )
+                                    if (detail.isEmpty()) {
+                                        Spacer(Modifier.height(8.dp))
+                                    } else {
+                                        val isHeader = !detail.startsWith(" ")
+                                        Text(
+                                            text = detail,
+                                            style = if (isHeader) {
+                                                MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold)
+                                            } else {
+                                                MaterialTheme.typography.bodySmall
+                                            }
+                                        )
+                                    }
                                 }
                             }
                         }
