@@ -330,7 +330,7 @@ fun HistoryItemRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 12.dp, top = 12.dp, bottom = 12.dp, end = 0.dp),
+                .padding(start = 16.dp, top = 16.dp, bottom = 16.dp, end = 0.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
@@ -350,7 +350,9 @@ fun HistoryItemRow(
                 )
             }
             Spacer(Modifier.width(8.dp))
-            IconButton(onClick = onDelete) {
+            IconButton(
+                onClick = onDelete
+            ) {
                 Icon(
                     imageVector = Icons.Default.Delete,
                     contentDescription = "Delete history item",
