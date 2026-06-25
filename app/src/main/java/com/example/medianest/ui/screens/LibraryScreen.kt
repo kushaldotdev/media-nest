@@ -60,6 +60,7 @@ fun LibraryScreen(
     val childFolders by viewModel.childFolders.collectAsStateWithLifecycle()
     val videoFolderMap by viewModel.videoFolderMap.collectAsStateWithLifecycle()
     val folderStatsMap by viewModel.folderStatsMap.collectAsStateWithLifecycle()
+    val playbackHistory by viewModel.playbackHistory.collectAsStateWithLifecycle()
     val focusManager = LocalFocusManager.current
 
     val snackbarHostState = remember { SnackbarHostState() }
@@ -201,6 +202,7 @@ fun LibraryScreen(
                             fetchingStreamsFor = fetchingStreamsFor,
                             fetchedStreams = fetchedStreams,
                             allDownloads = allDownloads,
+                            playbackHistory = playbackHistory,
                             onVideoClick = onVideoClick,
                             onVideoLongClick = { viewModel.toggleSelectionMode(); viewModel.toggleVideoSelection(it) },
                             onToggleSelection = { viewModel.toggleVideoSelection(it) },
@@ -235,6 +237,7 @@ fun LibraryScreen(
                         fetchingStreamsFor = fetchingStreamsFor,
                         fetchedStreams = fetchedStreams,
                         allDownloads = allDownloads,
+                        playbackHistory = playbackHistory,
                         onFolderClick = { viewModel.selectFolder(it) },
                         onCreateFolder = { name -> 
                             viewModel.createFolder(name, uiState.selectedFolder?.id)
@@ -280,6 +283,7 @@ fun LibraryScreen(
                             fetchingStreamsFor = fetchingStreamsFor,
                             fetchedStreams = fetchedStreams,
                             allDownloads = allDownloads,
+                            playbackHistory = playbackHistory,
                             onVideoClick = onVideoClick,
                             onVideoLongClick = { viewModel.toggleSelectionMode(); viewModel.toggleVideoSelection(it) },
                             onToggleSelection = { viewModel.toggleVideoSelection(it) },
@@ -436,6 +440,7 @@ private fun VideoListLayout(
     fetchingStreamsFor: String?,
     fetchedStreams: com.example.medianest.data.model.ExtractedVideoInfo?,
     allDownloads: List<com.example.medianest.data.local.entity.DownloadEntity>,
+    playbackHistory: List<com.example.medianest.data.local.entity.HistoryEntity>,
     onDownloadIconClick: (String) -> Unit,
     onDismissDownloadMenu: () -> Unit,
     onEnqueueDownload: (com.example.medianest.data.model.ExtractedVideoInfo, com.example.medianest.data.model.StreamSource) -> Unit,
@@ -462,6 +467,7 @@ private fun VideoListLayout(
                     isFetchingStreams = fetchingStreamsFor == video.id,
                     fetchedStreams = fetchedStreams,
                     allDownloads = allDownloads,
+                    playbackHistory = playbackHistory,
                     onDownloadIconClick = { onDownloadIconClick(video.id) },
                     onDismissDownloadMenu = onDismissDownloadMenu,
                     onEnqueueDownload = onEnqueueDownload,
@@ -488,6 +494,7 @@ private fun VideoListLayout(
                     isFetchingStreams = fetchingStreamsFor == video.id,
                     fetchedStreams = fetchedStreams,
                     allDownloads = allDownloads,
+                    playbackHistory = playbackHistory,
                     onDownloadIconClick = { onDownloadIconClick(video.id) },
                     onDismissDownloadMenu = onDismissDownloadMenu,
                     onEnqueueDownload = onEnqueueDownload,
@@ -513,6 +520,7 @@ private fun VideoCard(
     isFetchingStreams: Boolean,
     fetchedStreams: com.example.medianest.data.model.ExtractedVideoInfo?,
     allDownloads: List<com.example.medianest.data.local.entity.DownloadEntity>,
+    playbackHistory: List<com.example.medianest.data.local.entity.HistoryEntity>,
     onDownloadIconClick: () -> Unit,
     onDismissDownloadMenu: () -> Unit,
     onEnqueueDownload: (com.example.medianest.data.model.ExtractedVideoInfo, com.example.medianest.data.model.StreamSource) -> Unit,
@@ -566,6 +574,28 @@ private fun VideoCard(
                             )
                             .padding(horizontal = 4.dp, vertical = 2.dp)
                     )
+                }
+
+                // Red progress bar at the bottom edge of thumbnail
+                val history = playbackHistory.find { it.videoId == video.id }
+                val positionMillis = history?.positionMillis ?: 0L
+                if (video.durationSeconds > 0 && positionMillis > 0) {
+                    val progress = (positionMillis.toFloat() / 1000f) / video.durationSeconds.toFloat()
+                    val coercedProgress = progress.coerceIn(0f, 1f)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(2.dp)
+                            .align(Alignment.BottomCenter)
+                            .background(Color.Gray.copy(alpha = 0.3f))
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(coercedProgress)
+                                .height(2.dp)
+                                .background(Color.Red)
+                        )
+                    }
                 }
             }
             Column(modifier = Modifier.padding(12.dp)) {
@@ -662,6 +692,7 @@ private fun VideoListRow(
     isFetchingStreams: Boolean,
     fetchedStreams: com.example.medianest.data.model.ExtractedVideoInfo?,
     allDownloads: List<com.example.medianest.data.local.entity.DownloadEntity>,
+    playbackHistory: List<com.example.medianest.data.local.entity.HistoryEntity>,
     onDownloadIconClick: () -> Unit,
     onDismissDownloadMenu: () -> Unit,
     onEnqueueDownload: (com.example.medianest.data.model.ExtractedVideoInfo, com.example.medianest.data.model.StreamSource) -> Unit,
@@ -689,12 +720,16 @@ private fun VideoListRow(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                Box {
+                Box(
+                    modifier = Modifier
+                        .size(120.dp, 68.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                ) {
                     AsyncImage(
                         model = video.thumbnailUrl,
                         contentDescription = video.title,
                         contentScale = ContentScale.Crop,
-                        modifier = Modifier.size(120.dp, 68.dp).clip(RoundedCornerShape(8.dp))
+                        modifier = Modifier.fillMaxSize()
                     )
                     if (video.localFilePath.isNotEmpty()) {
                         Icon(
@@ -722,6 +757,28 @@ private fun VideoListRow(
                                 )
                                 .padding(horizontal = 4.dp, vertical = 2.dp)
                         )
+                    }
+
+                    // Red progress bar at the bottom edge of thumbnail
+                    val history = playbackHistory.find { it.videoId == video.id }
+                    val positionMillis = history?.positionMillis ?: 0L
+                    if (video.durationSeconds > 0 && positionMillis > 0) {
+                        val progress = (positionMillis.toFloat() / 1000f) / video.durationSeconds.toFloat()
+                        val coercedProgress = progress.coerceIn(0f, 1f)
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(2.dp)
+                                .align(Alignment.BottomCenter)
+                                .background(Color.Gray.copy(alpha = 0.3f))
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth(coercedProgress)
+                                    .height(2.dp)
+                                    .background(Color.Red)
+                            )
+                        }
                     }
                 }
                 FolderBadges(folders)
@@ -826,6 +883,7 @@ private fun FolderContent(
     fetchingStreamsFor: String?,
     fetchedStreams: com.example.medianest.data.model.ExtractedVideoInfo?,
     allDownloads: List<com.example.medianest.data.local.entity.DownloadEntity>,
+    playbackHistory: List<com.example.medianest.data.local.entity.HistoryEntity>,
     onDownloadIconClick: (String) -> Unit,
     onDismissDownloadMenu: () -> Unit,
     onEnqueueDownload: (com.example.medianest.data.model.ExtractedVideoInfo, com.example.medianest.data.model.StreamSource) -> Unit,
@@ -912,6 +970,7 @@ private fun FolderContent(
                                     isFetchingStreams = fetchingStreamsFor == video.id,
                                     fetchedStreams = fetchedStreams,
                                     allDownloads = allDownloads,
+                                    playbackHistory = playbackHistory,
                                     onDownloadIconClick = { onDownloadIconClick(video.id) },
                                     onDismissDownloadMenu = onDismissDownloadMenu,
                                     onEnqueueDownload = onEnqueueDownload,
@@ -933,6 +992,7 @@ private fun FolderContent(
                                     isFetchingStreams = fetchingStreamsFor == video.id,
                                     fetchedStreams = fetchedStreams,
                                     allDownloads = allDownloads,
+                                    playbackHistory = playbackHistory,
                                     onDownloadIconClick = { onDownloadIconClick(video.id) },
                                     onDismissDownloadMenu = onDismissDownloadMenu,
                                     onEnqueueDownload = onEnqueueDownload,

@@ -56,6 +56,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.example.medianest.data.local.entity.DownloadEntity
 import com.example.medianest.data.local.entity.DownloadStatus
+import com.example.medianest.data.local.entity.VideoEntity
+import androidx.compose.ui.graphics.Color
 import com.example.medianest.ui.viewmodel.DownloadsViewModel
 
 import androidx.compose.runtime.LaunchedEffect
@@ -71,6 +73,7 @@ fun DownloadsScreen(
     val playingVideoId by viewModel.playingVideoId.collectAsStateWithLifecycle()
     val playingUri by viewModel.playingUri.collectAsStateWithLifecycle()
     val isPlaying by viewModel.isPlaying.collectAsStateWithLifecycle()
+    val videosMap by viewModel.videosMap.collectAsStateWithLifecycle()
     var showDeleteDialogFor by remember { mutableStateOf<DownloadEntity?>(null) }
     var showRestartDialogFor by remember { mutableStateOf<DownloadEntity?>(null) }
     var pendingDialogId by remember { mutableStateOf<Long?>(null) }
@@ -150,6 +153,7 @@ fun DownloadsScreen(
                 items(downloads, key = { it.id }) { download ->
                     DownloadItem(
                         download = download,
+                        videosMap = videosMap,
                         onPlayDownload = onPlayDownload,
                         onVideoClick = onVideoClick,
                         viewModel = viewModel,
@@ -303,6 +307,7 @@ fun DownloadsScreen(
 @Composable
 private fun DownloadItem(
     download: DownloadEntity,
+    videosMap: Map<String, VideoEntity>,
     onPlayDownload: (DownloadEntity) -> Unit,
     onVideoClick: (String) -> Unit,
     viewModel: DownloadsViewModel,
@@ -321,6 +326,9 @@ private fun DownloadItem(
         "audio_extracted" -> "Extracted Audio"
         else -> download.format.replaceFirstChar { it.uppercase() }
     }
+
+    val videoEntity = videosMap[download.videoId]
+    val durationSeconds = videoEntity?.durationSeconds ?: 0L
 
     Card(
         modifier = Modifier
@@ -357,6 +365,21 @@ private fun DownloadItem(
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
                     )
+                    if (durationSeconds > 0) {
+                        Text(
+                            text = com.example.medianest.ui.utils.UiUtils.formatDuration(durationSeconds),
+                            color = Color.White,
+                            style = MaterialTheme.typography.labelSmall,
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(4.dp)
+                                .background(
+                                    color = Color.Black.copy(alpha = 0.7f),
+                                    shape = RoundedCornerShape(4.dp)
+                                )
+                                .padding(horizontal = 4.dp, vertical = 2.dp)
+                        )
+                    }
                 }
 
                 Spacer(Modifier.width(12.dp))

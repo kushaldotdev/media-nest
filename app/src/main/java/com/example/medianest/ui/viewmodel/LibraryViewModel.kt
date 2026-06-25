@@ -78,6 +78,9 @@ class LibraryViewModel @Inject constructor(
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val playbackHistory: StateFlow<List<com.example.medianest.data.local.entity.HistoryEntity>> = historyDao.getAllHistory()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     @OptIn(ExperimentalCoroutinesApi::class)
     val favoriteVideos: StateFlow<List<VideoEntity>> = combine(_uiState, _searchQuery) { state, query ->
         state.currentTab to query

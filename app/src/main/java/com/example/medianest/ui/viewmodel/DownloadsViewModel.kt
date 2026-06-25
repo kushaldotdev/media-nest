@@ -13,10 +13,12 @@ import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
 import com.example.medianest.data.local.entity.DownloadEntity
 import com.example.medianest.data.local.entity.DownloadStatus
+import com.example.medianest.data.local.entity.VideoEntity
 import com.example.medianest.data.preferences.DownloadPreferences
 import com.example.medianest.data.repository.DownloadRepository
 import com.example.medianest.data.repository.VideoRepository
 import com.example.medianest.service.AudioExtractor
+import kotlinx.coroutines.flow.map
 import com.example.medianest.service.DownloadService
 import com.example.medianest.service.PlaybackService
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -59,6 +61,10 @@ class DownloadsViewModel @Inject constructor(
 
     val downloads: StateFlow<List<DownloadEntity>> = downloadRepository.getAllDownloads()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val videosMap: StateFlow<Map<String, VideoEntity>> = videoRepository.getAllVideos()
+        .map { list -> list.associateBy { it.id } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     private val _uiState = MutableStateFlow(DownloadsUiState())
     val uiState: StateFlow<DownloadsUiState> = _uiState
