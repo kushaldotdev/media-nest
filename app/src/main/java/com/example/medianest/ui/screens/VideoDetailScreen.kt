@@ -80,6 +80,7 @@ fun VideoDetailScreen(
     localVideo: VideoEntity? = null,
     downloads: List<DownloadEntity> = emptyList(),
     onPlay: (StreamSource) -> Unit,
+    onPlayDownload: (DownloadEntity) -> Unit = {},
     onDownload: (StreamSource) -> Unit,
     onBack: () -> Unit,
     onToggleFavorite: () -> Unit = {},
@@ -136,6 +137,63 @@ fun VideoDetailScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
                 )
+
+                // Play overlay button in the center of the thumbnail
+                IconButton(
+                    onClick = {
+                        val completedVideoDownloads = downloads.filter { it.status == DownloadStatus.COMPLETED && it.format != "audio" }
+                        if (completedVideoDownloads.isNotEmpty()) {
+                            val highestDownloaded = completedVideoDownloads.maxByOrNull { download ->
+                                download.quality.substringBefore("p").toIntOrNull() ?: 0
+                            }
+                            if (highestDownloaded != null) {
+                                onPlayDownload(highestDownloaded)
+                            }
+                        } else {
+                            val videoStreams = videoInfo.streamSources.filter { it.format == "video" || it.format == "video_only" }
+                            val targetStream = videoStreams.find { it.quality.startsWith("1080p") }
+                                ?: videoStreams.maxByOrNull { it.quality.substringBefore("p").toIntOrNull() ?: 0 }
+                            if (targetStream != null) {
+                                onPlay(targetStream)
+                            } else {
+                                coroutineScope.launch {
+                                    snackbarHostState.showSnackbar("No playable video streams available")
+                                }
+                            }
+                        }
+                    },
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .size(64.dp)
+                        .background(Color.Black.copy(alpha = 0.5f), shape = androidx.compose.foundation.shape.CircleShape)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PlayArrow,
+                        contentDescription = "Play Video",
+                        tint = Color.White,
+                        modifier = Modifier.size(40.dp)
+                    )
+                }
+
+                // Playback progress (watched position in the same row as duration at BottomStart)
+                val positionMillis = videoHistory?.positionMillis ?: 0L
+                if (positionMillis > 0) {
+                    val watchedSeconds = positionMillis / 1000L
+                    Text(
+                        text = UiUtils.formatDuration(watchedSeconds),
+                        color = Color.White,
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(8.dp)
+                            .background(
+                                color = Color.Black.copy(alpha = 0.7f),
+                                shape = RoundedCornerShape(4.dp)
+                            )
+                            .padding(horizontal = 4.dp, vertical = 2.dp)
+                    )
+                }
+
                 if (videoInfo.durationSeconds > 0) {
                     Text(
                         text = UiUtils.formatDuration(videoInfo.durationSeconds),
@@ -150,6 +208,26 @@ fun VideoDetailScreen(
                             )
                             .padding(horizontal = 4.dp, vertical = 2.dp)
                     )
+                }
+
+                // Red progress strip at the absolute bottom
+                if (videoInfo.durationSeconds > 0 && positionMillis > 0) {
+                    val progress = (positionMillis.toFloat() / 1000f) / videoInfo.durationSeconds.toFloat()
+                    val coercedProgress = progress.coerceIn(0f, 1f)
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(4.dp)
+                            .align(Alignment.BottomCenter)
+                            .background(Color.Gray.copy(alpha = 0.3f))
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(coercedProgress)
+                                .height(4.dp)
+                                .background(Color.Red)
+                        )
+                    }
                 }
             }
             Spacer(Modifier.height(12.dp))

@@ -142,6 +142,9 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
                         val streamIndex = info.streamSources.indexOf(stream)
                         navController.navigate("player/$videoId?streamIndex=$streamIndex")
                     },
+                    onPlayDownload = { download ->
+                        navController.navigate("downloads/player/${download.videoId}?downloadId=${download.id}")
+                    },
                     onDownload = { stream ->
                         detailViewModel.enqueueDownload(info, stream)
                     },
