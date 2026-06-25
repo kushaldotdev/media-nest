@@ -35,6 +35,7 @@ import com.example.medianest.data.model.StreamSource
 data class VideoCardConfig(
     val showFavoriteButton: Boolean = false,
     val showMoveToFolderButton: Boolean = false,
+    val showRemoveFromFolderButton: Boolean = false,
     val showDownloadButton: Boolean = false,
     val showSelectionCheckbox: Boolean = false,
     val showFolderBadges: Boolean = false,
@@ -149,6 +150,7 @@ fun UnifiedVideoCard(
     onLongClick: () -> Unit = {},
     onFavoriteToggle: () -> Unit = {},
     onMoveToFolder: () -> Unit = {},
+    onRemoveFromFolder: () -> Unit = {},
     onDownloadClick: () -> Unit = {},
     onSelectionToggle: () -> Unit = {},
     downloadMenuContent: (@Composable () -> Unit)? = null,
@@ -289,7 +291,7 @@ fun UnifiedVideoCard(
 
                 // Action buttons row (if selection mode is disabled)
                 if (!config.showSelectionCheckbox &&
-                    (config.showFavoriteButton || config.showMoveToFolderButton || config.showDownloadButton)
+                    (config.showFavoriteButton || config.showMoveToFolderButton || config.showRemoveFromFolderButton || config.showDownloadButton)
                 ) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Row(
@@ -332,6 +334,16 @@ fun UnifiedVideoCard(
                                 downloadMenuContent?.invoke()
                             }
                         }
+
+                        if (config.showRemoveFromFolderButton) {
+                            IconButton(onClick = onRemoveFromFolder) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Remove from folder",
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -360,6 +372,7 @@ fun UnifiedVideoRow(
     onLongClick: () -> Unit = {},
     onFavoriteToggle: () -> Unit = {},
     onMoveToFolder: () -> Unit = {},
+    onRemoveFromFolder: () -> Unit = {},
     onDownloadClick: () -> Unit = {},
     onSelectionToggle: () -> Unit = {},
     downloadMenuContent: (@Composable () -> Unit)? = null,
@@ -380,11 +393,12 @@ fun UnifiedVideoRow(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(8.dp),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.Top
         ) {
             // Thumbnail Box on the Left
             Box(
                 modifier = Modifier
+                    .padding(top = 4.dp)
                     .size(width = 120.dp, height = 68.dp)
                     .clip(RoundedCornerShape(8.dp))
             ) {
@@ -453,7 +467,7 @@ fun UnifiedVideoRow(
                     .weight(1f)
                     .animateContentSize()
             ) {
-                if (config.showFolderBadges) {
+                if (config.showFolderBadges && folders.isNotEmpty()) {
                     FolderBadges(folders)
                     Spacer(modifier = Modifier.height(2.dp))
                 }
@@ -507,7 +521,7 @@ fun UnifiedVideoRow(
 
                 // Action buttons row (if selection mode is disabled)
                 if (!config.showSelectionCheckbox &&
-                    (config.showFavoriteButton || config.showMoveToFolderButton || config.showDownloadButton)
+                    (config.showFavoriteButton || config.showMoveToFolderButton || config.showRemoveFromFolderButton || config.showDownloadButton)
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -550,6 +564,17 @@ fun UnifiedVideoRow(
                                     )
                                 }
                                 downloadMenuContent?.invoke()
+                            }
+                        }
+
+                        if (config.showRemoveFromFolderButton) {
+                            IconButton(onClick = onRemoveFromFolder, modifier = Modifier.size(32.dp)) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Remove from folder",
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(20.dp)
+                                )
                             }
                         }
                     }

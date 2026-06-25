@@ -264,6 +264,10 @@ fun LibraryScreen(
                             viewModel.toggleFavorite(video.id, video.favorite)
                             coroutineScope.launch { snackbarHostState.showSnackbar(if (video.favorite) "Removed from Favorites" else "Added to Favorites") }
                         },
+                        onRemoveFromFolder = { videoId, folderId ->
+                            viewModel.removeVideoFromFolder(videoId, folderId)
+                            coroutineScope.launch { snackbarHostState.showSnackbar("Removed from folder") }
+                        },
                         onDownloadIconClick = { videoId -> 
                             expandedDownloadVideoId = videoId
                             viewModel.fetchStreamsFor(videoId)
@@ -604,6 +608,7 @@ private fun FolderContent(
     onVideoLongClick: (String) -> Unit,
     onToggleSelection: (String) -> Unit,
     onFavoriteToggle: (VideoEntity) -> Unit,
+    onRemoveFromFolder: (String, Long) -> Unit,
     expandedDownloadVideoId: String?,
     fetchingStreamsFor: String?,
     fetchedStreams: com.example.medianest.data.model.ExtractedVideoInfo?,
@@ -704,6 +709,7 @@ private fun FolderContent(
                                     config = VideoCardConfig(
                                         showFavoriteButton = !isSelectionMode,
                                         showMoveToFolderButton = !isSelectionMode,
+                                        showRemoveFromFolderButton = !isSelectionMode && selectedFolder != null,
                                         showDownloadButton = !isSelectionMode,
                                         showSelectionCheckbox = isSelectionMode,
                                         showFolderBadges = true,
@@ -714,6 +720,7 @@ private fun FolderContent(
                                     onLongClick = { onVideoLongClick(video.id) },
                                     onFavoriteToggle = { onFavoriteToggle(video) },
                                     onMoveToFolder = { onMoveToFolderClick(video.id) },
+                                    onRemoveFromFolder = { selectedFolder?.let { onRemoveFromFolder(video.id, it.id) } },
                                     onDownloadClick = { onDownloadIconClick(video.id) },
                                     onSelectionToggle = { onToggleSelection(video.id) },
                                     downloadMenuContent = {
@@ -755,6 +762,7 @@ private fun FolderContent(
                                     config = VideoCardConfig(
                                         showFavoriteButton = !isSelectionMode,
                                         showMoveToFolderButton = !isSelectionMode,
+                                        showRemoveFromFolderButton = !isSelectionMode && selectedFolder != null,
                                         showDownloadButton = !isSelectionMode,
                                         showSelectionCheckbox = isSelectionMode,
                                         showFolderBadges = true,
@@ -765,6 +773,7 @@ private fun FolderContent(
                                     onLongClick = { onVideoLongClick(video.id) },
                                     onFavoriteToggle = { onFavoriteToggle(video) },
                                     onMoveToFolder = { onMoveToFolderClick(video.id) },
+                                    onRemoveFromFolder = { selectedFolder?.let { onRemoveFromFolder(video.id, it.id) } },
                                     onDownloadClick = { onDownloadIconClick(video.id) },
                                     onSelectionToggle = { onToggleSelection(video.id) },
                                     downloadMenuContent = {
