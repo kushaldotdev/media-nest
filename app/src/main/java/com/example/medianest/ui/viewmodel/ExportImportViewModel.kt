@@ -20,9 +20,14 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
 import java.io.OutputStream
 import javax.inject.Inject
+import androidx.work.WorkInfo
+import androidx.work.WorkManager
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import kotlinx.serialization.json.Json
@@ -80,6 +85,14 @@ data class GitHubAsset(
     val browser_download_url: String
 )
 
+@Serializable
+data class LocalBackupInfo(
+    val name: String,
+    val sizeBytes: Long,
+    val lastModified: Long,
+    val absolutePath: String
+)
+
 @HiltViewModel
 class ExportImportViewModel @Inject constructor(
     private val backupRepository: BackupRepository,
@@ -116,6 +129,37 @@ class ExportImportViewModel @Inject constructor(
     val syncIntervalHours = devicePreferences.syncIntervalHours.stateIn(viewModelScope, SharingStarted.Eagerly, 6)
 
     val downloadFolder = downloadPreferences.downloadFolder.stateIn(viewModelScope, SharingStarted.Eagerly, "")
+
+    private val _localBackups = MutableStateFlow<List<LocalBackupInfo>>(emptyList())
+    val localBackups: StateFlow<List<LocalBackupInfo>> = _localBackups
+
+    val autoBackupIntervalHours = downloadPreferences.autoBackupIntervalHours.stateIn(viewModelScope, SharingStarted.Eagerly, 0)
+
+    val nextBackupTime: Flow<Long?> = WorkManager.getInstance(appContext)
+        .getWorkInfosForUniqueWorkFlow("auto_backup")
+        .map { workInfos ->
+            val workInfo = workInfos.firstOrNull { it.state == WorkInfo.State.ENQUEUED }
+            workInfo?.nextScheduleTimeMillis
+        }
+        .flowOn(Dispatchers.IO)
+
+    val missingDownloadsCount: StateFlow<Int> = downloadRepository.getAllDownloads()
+        .map { list ->
+            list.count { download ->
+                download.status == DownloadStatus.COMPLETED &&
+                (download.filePath.isEmpty() || !File(download.filePath).exists())
+            }
+        }
+        .flowOn(Dispatchers.IO)
+        .stateIn(viewModelScope, SharingStarted.Eagerly, 0)
+
+    init {
+        viewModelScope.launch {
+            downloadFolder.collect {
+                loadLocalBackups()
+            }
+        }
+    }
 
     private val _migrationState = MutableStateFlow<MigrationState>(MigrationState.Idle)
     val migrationState: StateFlow<MigrationState> = _migrationState
@@ -463,5 +507,157 @@ class ExportImportViewModel @Inject constructor(
             if (currVal > lateVal) return false
         }
         return false
+    }
+
+    fun loadLocalBackups() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val path = downloadFolder.value
+            if (path.isEmpty()) {
+                _localBackups.value = emptyList()
+                return@launch
+            }
+            val backupDir = File(path, "backup")
+            if (!backupDir.exists() || !backupDir.isDirectory) {
+                _localBackups.value = emptyList()
+                return@launch
+            }
+            val files = backupDir.listFiles { file ->
+                file.isFile && file.name.startsWith("backup_") && file.name.endsWith(".zip")
+            }
+            if (files == null) {
+                _localBackups.value = emptyList()
+                return@launch
+            }
+            _localBackups.value = files.map { file ->
+                LocalBackupInfo(
+                    name = file.name,
+                    sizeBytes = file.length(),
+                    lastModified = file.lastModified(),
+                    absolutePath = file.absolutePath
+                )
+            }.sortedByDescending { it.lastModified }
+        }
+    }
+
+    fun setAutoBackupIntervalHours(hours: Int) {
+        viewModelScope.launch {
+            downloadPreferences.setAutoBackupIntervalHours(hours)
+            WorkScheduler.updateAutoBackupInterval(appContext, hours.toLong())
+        }
+    }
+
+    fun createLocalBackup(includeMedia: Boolean = false) {
+        _state.value = ExportImportState.InProgress("Exporting", 0f)
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val path = downloadFolder.value
+                if (path.isEmpty()) {
+                    _state.value = ExportImportState.Error("Export failed: Download folder is not set")
+                    return@launch
+                }
+                val backupDir = File(path, "backup")
+                if (!backupDir.exists() && !backupDir.mkdirs()) {
+                    _state.value = ExportImportState.Error("Export failed: Could not create backup directory")
+                    return@launch
+                }
+                val timestamp = java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US).format(java.util.Date())
+                val prefix = if (includeMedia) "backup_full_" else "backup_metadata_"
+                val backupFile = File(backupDir, "${prefix}${timestamp}.zip")
+
+                backupFile.outputStream().use { fos ->
+                    backupRepository.exportToZip(fos, includeMedia) { progress ->
+                        _state.value = ExportImportState.InProgress("Exporting", progress)
+                    }
+                }
+
+                // Prune files to keep only up to 3 files
+                val files = backupDir.listFiles { file ->
+                    file.isFile && file.name.startsWith("backup_") && file.name.endsWith(".zip")
+                }
+                if (files != null && files.size > 3) {
+                    val sortedFiles = files.sortedBy { it.lastModified() }
+                    for (i in 0 until (sortedFiles.size - 3)) {
+                        sortedFiles[i].delete()
+                    }
+                }
+
+                _state.value = ExportImportState.Success("Export complete")
+                loadLocalBackups()
+            } catch (e: Exception) {
+                _state.value = ExportImportState.Error("Export failed: ${e.message}")
+            }
+        }
+    }
+
+    fun restoreFromLocalBackup(backup: LocalBackupInfo, restoreMedia: Boolean) {
+        _state.value = ExportImportState.InProgress("Restoring", 0f)
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    val file = File(backup.absolutePath)
+                    if (!file.exists()) throw Exception("Backup file does not exist")
+                    file.inputStream().use { fis ->
+                        restoreRepository.restoreFromZip(fis, restoreMedia) { progress ->
+                            _state.value = ExportImportState.InProgress("Restoring", progress)
+                        }
+                    }
+                }
+                _state.value = ExportImportState.Success("Restore complete")
+            } catch (e: Exception) {
+                _state.value = ExportImportState.Error("Restore failed: ${e.message}")
+            }
+        }
+    }
+
+    fun deleteLocalBackup(backup: LocalBackupInfo) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val file = File(backup.absolutePath)
+                if (file.exists()) {
+                    file.delete()
+                }
+                loadLocalBackups()
+            } catch (_: Exception) {}
+        }
+    }
+
+    fun redownloadMissingFiles() {
+        _state.value = ExportImportState.InProgress("Queueing downloads", 0f)
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val allDownloads = downloadRepository.getAllDownloadsOnce()
+                var queuedCount = 0
+                for (download in allDownloads) {
+                    if (download.status == DownloadStatus.COMPLETED) {
+                        val file = if (download.filePath.isNotEmpty()) File(download.filePath) else null
+                        if (file == null || !file.exists()) {
+                            val reset = download.copy(
+                                status = DownloadStatus.QUEUED,
+                                filePath = "",
+                                progress = 0f,
+                                errorMessage = null,
+                                retryCount = 0
+                            )
+                            downloadRepository.update(reset)
+
+                            val video = videoRepository.getVideoById(download.videoId)
+                            if (video != null) {
+                                videoRepository.updateVideo(video.copy(localFilePath = ""))
+                            }
+                            queuedCount++
+                        }
+                    }
+                }
+                if (queuedCount > 0) {
+                    val intent = Intent(appContext, com.example.medianest.service.DownloadService::class.java)
+                    appContext.startForegroundService(intent)
+                    _state.value = ExportImportState.Success("Queued $queuedCount missing files for re-download")
+                } else {
+                    _state.value = ExportImportState.Success("No missing files found to download")
+                }
+            } catch (e: Exception) {
+                _state.value = ExportImportState.Error("Failed to queue re-downloads: ${e.message}")
+            }
+        }
     }
 }

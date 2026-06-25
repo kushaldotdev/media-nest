@@ -17,6 +17,7 @@ class DownloadPreferences(private val context: Context) {
     companion object {
         private val MAX_CONCURRENT = intPreferencesKey("max_concurrent")
         private val KEY_DOWNLOAD_FOLDER = stringPreferencesKey("download_folder")
+        private val KEY_AUTO_BACKUP_INTERVAL_HOURS = intPreferencesKey("auto_backup_interval_hours")
         const val DEFAULT_MAX = 2
     }
 
@@ -32,6 +33,10 @@ class DownloadPreferences(private val context: Context) {
         }
     }
 
+    val autoBackupIntervalHours: Flow<Int> = context.downloadStore.data.map { prefs ->
+        prefs[KEY_AUTO_BACKUP_INTERVAL_HOURS] ?: 0
+    }
+
     suspend fun setMaxConcurrentDownloads(max: Int) {
         context.downloadStore.edit { prefs ->
             prefs[MAX_CONCURRENT] = max.coerceIn(1, 5)
@@ -41,6 +46,12 @@ class DownloadPreferences(private val context: Context) {
     suspend fun setDownloadFolder(path: String) {
         context.downloadStore.edit { prefs ->
             prefs[KEY_DOWNLOAD_FOLDER] = path
+        }
+    }
+
+    suspend fun setAutoBackupIntervalHours(hours: Int) {
+        context.downloadStore.edit { prefs ->
+            prefs[KEY_AUTO_BACKUP_INTERVAL_HOURS] = hours
         }
     }
 }

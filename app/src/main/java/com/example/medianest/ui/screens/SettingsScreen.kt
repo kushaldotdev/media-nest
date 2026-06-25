@@ -39,8 +39,10 @@ import com.example.medianest.data.sync.SyncLogEntry
 import com.example.medianest.data.sync.SyncState
 import com.example.medianest.ui.viewmodel.ExportImportState
 import com.example.medianest.ui.viewmodel.ExportImportViewModel
+import com.example.medianest.ui.viewmodel.LocalBackupInfo
 import com.example.medianest.ui.viewmodel.MigrationState
 import com.example.medianest.ui.viewmodel.ImportInspectionState
+import androidx.compose.ui.text.font.FontWeight
 import com.example.medianest.ui.viewmodel.UpdateState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -102,6 +104,13 @@ fun SettingsScreen(
     var showExportDialog by remember { mutableStateOf(false) }
     var exportIncludeMedia by remember { mutableStateOf(false) }
     var showRepairDetailsDialog by remember { mutableStateOf(false) }
+
+    var showLocalRestoreDialog by remember { mutableStateOf(false) }
+    var localRestoreIncludeMedia by remember { mutableStateOf(false) }
+    var localBackupToRestore by remember { mutableStateOf<LocalBackupInfo?>(null) }
+
+    var showLocalDeleteDialog by remember { mutableStateOf(false) }
+    var localBackupToDelete by remember { mutableStateOf<LocalBackupInfo?>(null) }
 
     val folderPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree()
@@ -562,6 +571,172 @@ fun SettingsScreen(
                             else -> {}
                         }
                     }
+
+                    val missingCount by viewModel.missingDownloadsCount.collectAsStateWithLifecycle()
+                    if (missingCount > 0) {
+                        Spacer(Modifier.height(12.dp))
+                        Button(
+                            onClick = { viewModel.redownloadMissingFiles() },
+                            enabled = state !is ExportImportState.InProgress,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                        ) {
+                            Text("Download Missing Files ($missingCount)")
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = "Tip: Re-download missing media files that are completed in the database but not present on disk. Running 'Repair Library' will clear these missing paths, preventing auto-redownloading.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+
+                    Text("Auto-Backup Settings", style = MaterialTheme.typography.titleSmall)
+                    Spacer(Modifier.height(4.dp))
+                    Text("Automatically saves metadata-only backups in the 'backup' folder in your download directory.", style = MaterialTheme.typography.bodySmall)
+                    Spacer(Modifier.height(8.dp))
+
+                    val autoInterval by viewModel.autoBackupIntervalHours.collectAsStateWithLifecycle()
+                    val autoIntervalOptions = listOf(0, 6, 12, 24, 168)
+                    var autoIntervalExpanded by remember { mutableStateOf(false) }
+
+                    ExposedDropdownMenuBox(
+                        expanded = autoIntervalExpanded,
+                        onExpandedChange = { autoIntervalExpanded = it }
+                    ) {
+                        OutlinedTextField(
+                            value = when (autoInterval) {
+                                0 -> "Disabled (Off)"
+                                168 -> "Every 7 days"
+                                else -> "Every $autoInterval hours"
+                            },
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Auto-backup interval") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = autoIntervalExpanded) },
+                            modifier = Modifier.fillMaxWidth().menuAnchor(
+                                ExposedDropdownMenuAnchorType.PrimaryNotEditable,
+                                enabled = true
+                            ),
+                            singleLine = true
+                        )
+                        ExposedDropdownMenu(
+                            expanded = autoIntervalExpanded,
+                            onDismissRequest = { autoIntervalExpanded = false }
+                        ) {
+                            autoIntervalOptions.forEach { option ->
+                                val text = when (option) {
+                                    0 -> "Disabled (Off)"
+                                    168 -> "Every 7 days"
+                                    else -> "Every $option hours"
+                                }
+                                DropdownMenuItem(
+                                    text = { Text(text) },
+                                    onClick = {
+                                        viewModel.setAutoBackupIntervalHours(option)
+                                        autoIntervalExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    val nextBackupTime by viewModel.nextBackupTime.collectAsStateWithLifecycle(initialValue = null)
+                    var countdownText by remember { mutableStateOf("") }
+
+                    if (autoInterval > 0) {
+                        LaunchedEffect(nextBackupTime) {
+                            while (true) {
+                                val nextTime = nextBackupTime
+                                if (nextTime != null && nextTime > 0) {
+                                    val diff = nextTime - System.currentTimeMillis()
+                                    if (diff <= 0) {
+                                        countdownText = "Imminent / Running"
+                                    } else {
+                                        val hours = diff / (1000 * 60 * 60)
+                                        val minutes = (diff % (1000 * 60 * 60)) / (1000 * 60)
+                                        val seconds = (diff % (1000 * 60)) / 1000
+                                        countdownText = String.format(Locale.getDefault(), "%d hr %d min %d sec", hours, minutes, seconds)
+                                    }
+                                } else {
+                                    countdownText = "Disabled"
+                                }
+                                delay(1000)
+                            }
+                        }
+
+                        Spacer(Modifier.height(8.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text("Status: Active", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                            if (nextBackupTime != null && nextBackupTime!! > 0) {
+                                val dateStr = SimpleDateFormat("h:mm:ss a", Locale.getDefault()).format(Date(nextBackupTime!!))
+                                Text("Next: $dateStr (in $countdownText)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                    } else {
+                        Spacer(Modifier.height(8.dp))
+                        Text("Status: Disabled", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+
+                    val localBackups by viewModel.localBackups.collectAsStateWithLifecycle()
+                    if (localBackups.isNotEmpty()) {
+                        Spacer(Modifier.height(12.dp))
+                        Text("Backup Log (Max 3 retained):", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.height(4.dp))
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            localBackups.forEach { backup ->
+                                val isFull = backup.name.startsWith("backup_full_")
+                                val backupType = if (isFull) "Full Backup" else "Metadata"
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = backup.name,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                        val formattedTime = remember(backup.lastModified) {
+                                            SimpleDateFormat("MMM d, yyyy, h:mm a", Locale.getDefault()).format(Date(backup.lastModified))
+                                        }
+                                        Text(
+                                            text = "Created: $formattedTime ($backupType, ${viewModel.formatSize(backup.sizeBytes)})",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    IconButton(
+                                        onClick = {
+                                            localBackupToRestore = backup
+                                            localRestoreIncludeMedia = isFull
+                                            showLocalRestoreDialog = true
+                                        },
+                                        enabled = state !is ExportImportState.InProgress
+                                    ) {
+                                        Icon(Icons.Default.History, contentDescription = "Restore")
+                                    }
+                                    IconButton(
+                                        onClick = {
+                                            localBackupToDelete = backup
+                                            showLocalDeleteDialog = true
+                                        },
+                                        enabled = state !is ExportImportState.InProgress
+                                    ) {
+                                        Icon(Icons.Default.Delete, contentDescription = "Delete", tint = MaterialTheme.colorScheme.error)
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
@@ -1002,6 +1177,75 @@ fun SettingsScreen(
                     },
                     confirmButton = {
                         TextButton(onClick = { viewModel.cancelMigration() }) {
+                            Text("Cancel")
+                        }
+                    }
+                )
+            }
+
+            if (showLocalRestoreDialog && localBackupToRestore != null) {
+                val backup = localBackupToRestore!!
+                val isFullBackup = backup.name.startsWith("backup_full_")
+                var restoreMedia by remember { mutableStateOf(isFullBackup) }
+                AlertDialog(
+                    onDismissRequest = { showLocalRestoreDialog = false },
+                    title = { Text("Restore Local Backup") },
+                    text = {
+                        Column {
+                            Text("Are you sure you want to restore from ${backup.name}?")
+                            Spacer(Modifier.height(8.dp))
+                            Text("This will overwrite your current library database records.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                            if (isFullBackup) {
+                                Spacer(Modifier.height(12.dp))
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.clickable { restoreMedia = !restoreMedia }
+                                ) {
+                                    Checkbox(checked = restoreMedia, onCheckedChange = { restoreMedia = it })
+                                    Spacer(Modifier.width(8.dp))
+                                    Text("Restore and overwrite media files", style = MaterialTheme.typography.bodyMedium)
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                showLocalRestoreDialog = false
+                                viewModel.restoreFromLocalBackup(backup, restoreMedia)
+                            }
+                        ) {
+                            Text("Restore")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showLocalRestoreDialog = false }) {
+                            Text("Cancel")
+                        }
+                    }
+                )
+            }
+
+            if (showLocalDeleteDialog && localBackupToDelete != null) {
+                val backup = localBackupToDelete!!
+                AlertDialog(
+                    onDismissRequest = { showLocalDeleteDialog = false },
+                    title = { Text("Delete Local Backup") },
+                    text = {
+                        Text("Are you sure you want to delete ${backup.name}? This cannot be undone.")
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                showLocalDeleteDialog = false
+                                viewModel.deleteLocalBackup(backup)
+                            }
+                        ) {
+                            Text("Delete", color = MaterialTheme.colorScheme.error)
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showLocalDeleteDialog = false }) {
                             Text("Cancel")
                         }
                     }

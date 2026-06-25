@@ -45,4 +45,31 @@ object WorkScheduler {
         WorkManager.getInstance(context).cancelUniqueWork("sync_check")
         scheduleSync(context, intervalHours)
     }
+
+    fun scheduleAutoBackup(context: Context, intervalHours: Long) {
+        if (intervalHours <= 0) {
+            cancelAutoBackup(context)
+            return
+        }
+        val request = PeriodicWorkRequestBuilder<AutoBackupWorker>(
+            intervalHours, TimeUnit.HOURS
+        ).build()
+
+        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+            "auto_backup",
+            ExistingPeriodicWorkPolicy.KEEP,
+            request
+        )
+    }
+
+    fun cancelAutoBackup(context: Context) {
+        WorkManager.getInstance(context).cancelUniqueWork("auto_backup")
+    }
+
+    fun updateAutoBackupInterval(context: Context, intervalHours: Long) {
+        cancelAutoBackup(context)
+        if (intervalHours > 0) {
+            scheduleAutoBackup(context, intervalHours)
+        }
+    }
 }
