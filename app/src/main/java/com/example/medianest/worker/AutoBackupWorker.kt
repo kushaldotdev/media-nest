@@ -49,7 +49,11 @@ class AutoBackupWorker @AssistedInject constructor(
             if (files != null && files.size > 3) {
                 val sortedFiles = files.sortedBy { it.lastModified() }
                 for (i in 0 until (sortedFiles.size - 3)) {
-                    sortedFiles[i].delete()
+                    val fileToDelete = sortedFiles[i]
+                    val deleted = fileToDelete.delete()
+                    if (!deleted) {
+                        android.util.Log.w("AutoBackupWorker", "Failed to delete old backup: ${fileToDelete.name}")
+                    }
                 }
             }
 

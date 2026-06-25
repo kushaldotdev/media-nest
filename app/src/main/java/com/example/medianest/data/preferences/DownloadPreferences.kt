@@ -5,6 +5,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
@@ -18,6 +19,7 @@ class DownloadPreferences(private val context: Context) {
         private val MAX_CONCURRENT = intPreferencesKey("max_concurrent")
         private val KEY_DOWNLOAD_FOLDER = stringPreferencesKey("download_folder")
         private val KEY_AUTO_BACKUP_INTERVAL_HOURS = intPreferencesKey("auto_backup_interval_hours")
+        private val KEY_AUTO_BACKUP_SCHEDULED_AT = longPreferencesKey("auto_backup_scheduled_at")
         const val DEFAULT_MAX = 2
     }
 
@@ -37,6 +39,10 @@ class DownloadPreferences(private val context: Context) {
         prefs[KEY_AUTO_BACKUP_INTERVAL_HOURS] ?: 0
     }
 
+    val autoBackupScheduledAt: Flow<Long> = context.downloadStore.data.map { prefs ->
+        prefs[KEY_AUTO_BACKUP_SCHEDULED_AT] ?: 0L
+    }
+
     suspend fun setMaxConcurrentDownloads(max: Int) {
         context.downloadStore.edit { prefs ->
             prefs[MAX_CONCURRENT] = max.coerceIn(1, 5)
@@ -52,6 +58,11 @@ class DownloadPreferences(private val context: Context) {
     suspend fun setAutoBackupIntervalHours(hours: Int) {
         context.downloadStore.edit { prefs ->
             prefs[KEY_AUTO_BACKUP_INTERVAL_HOURS] = hours
+            if (hours > 0) {
+                prefs[KEY_AUTO_BACKUP_SCHEDULED_AT] = System.currentTimeMillis()
+            } else {
+                prefs[KEY_AUTO_BACKUP_SCHEDULED_AT] = 0L
+            }
         }
     }
 }

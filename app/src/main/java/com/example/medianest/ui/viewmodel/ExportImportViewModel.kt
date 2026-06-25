@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import java.io.OutputStream
 import javax.inject.Inject
@@ -135,13 +136,34 @@ class ExportImportViewModel @Inject constructor(
 
     val autoBackupIntervalHours = downloadPreferences.autoBackupIntervalHours.stateIn(viewModelScope, SharingStarted.Eagerly, 0)
 
-    val nextBackupTime: Flow<Long?> = WorkManager.getInstance(appContext)
-        .getWorkInfosForUniqueWorkFlow("auto_backup")
-        .map { workInfos ->
-            val workInfo = workInfos.firstOrNull { it.state == WorkInfo.State.ENQUEUED }
-            workInfo?.nextScheduleTimeMillis
+    val nextBackupTime: Flow<Long?> = combine(
+        WorkManager.getInstance(appContext).getWorkInfosForUniqueWorkFlow("auto_backup"),
+        localBackups,
+        autoBackupIntervalHours,
+        downloadPreferences.autoBackupScheduledAt
+    ) { workInfos, backups, interval, scheduledAt ->
+        if (interval <= 0) return@combine null
+
+        val info = workInfos.firstOrNull()
+        val wmNextTime = if (info != null && info.state != WorkInfo.State.CANCELLED) {
+            info.nextScheduleTimeMillis
+        } else {
+            0L
         }
-        .flowOn(Dispatchers.IO)
+
+        if (wmNextTime > 0 && wmNextTime < Long.MAX_VALUE) {
+            wmNextTime
+        } else {
+            val lastBackup = backups.firstOrNull()
+            if (lastBackup != null) {
+                lastBackup.lastModified + (interval.toLong() * 60 * 60 * 1000)
+            } else if (scheduledAt > 0) {
+                scheduledAt + (interval.toLong() * 60 * 60 * 1000)
+            } else {
+                System.currentTimeMillis() + (interval.toLong() * 60 * 60 * 1000)
+            }
+        }
+    }.flowOn(Dispatchers.IO)
 
     val missingDownloadsCount: StateFlow<Int> = downloadRepository.getAllDownloads()
         .map { list ->
@@ -577,7 +599,11 @@ class ExportImportViewModel @Inject constructor(
                 if (files != null && files.size > 3) {
                     val sortedFiles = files.sortedBy { it.lastModified() }
                     for (i in 0 until (sortedFiles.size - 3)) {
-                        sortedFiles[i].delete()
+                        val fileToDelete = sortedFiles[i]
+                        val deleted = fileToDelete.delete()
+                        if (!deleted) {
+                            android.util.Log.w("ExportImportViewModel", "Failed to delete old backup: ${fileToDelete.name}")
+                        }
                     }
                 }
 

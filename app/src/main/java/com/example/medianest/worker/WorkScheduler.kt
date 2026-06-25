@@ -25,7 +25,11 @@ object WorkScheduler {
         )
     }
 
-    fun scheduleSync(context: Context, intervalHours: Long = 6) {
+    fun scheduleSync(
+        context: Context,
+        intervalHours: Long = 6,
+        policy: ExistingPeriodicWorkPolicy = ExistingPeriodicWorkPolicy.KEEP
+    ) {
         val request = PeriodicWorkRequestBuilder<SyncWorker>(
             intervalHours, TimeUnit.HOURS
         ).setConstraints(
@@ -36,17 +40,20 @@ object WorkScheduler {
 
         WorkManager.getInstance(context).enqueueUniquePeriodicWork(
             "sync_check",
-            ExistingPeriodicWorkPolicy.KEEP,
+            policy,
             request
         )
     }
 
     fun updateSyncInterval(context: Context, intervalHours: Long) {
-        WorkManager.getInstance(context).cancelUniqueWork("sync_check")
-        scheduleSync(context, intervalHours)
+        scheduleSync(context, intervalHours, ExistingPeriodicWorkPolicy.REPLACE)
     }
 
-    fun scheduleAutoBackup(context: Context, intervalHours: Long) {
+    fun scheduleAutoBackup(
+        context: Context,
+        intervalHours: Long,
+        policy: ExistingPeriodicWorkPolicy = ExistingPeriodicWorkPolicy.KEEP
+    ) {
         if (intervalHours <= 0) {
             cancelAutoBackup(context)
             return
@@ -57,7 +64,7 @@ object WorkScheduler {
 
         WorkManager.getInstance(context).enqueueUniquePeriodicWork(
             "auto_backup",
-            ExistingPeriodicWorkPolicy.KEEP,
+            policy,
             request
         )
     }
@@ -67,9 +74,10 @@ object WorkScheduler {
     }
 
     fun updateAutoBackupInterval(context: Context, intervalHours: Long) {
-        cancelAutoBackup(context)
-        if (intervalHours > 0) {
-            scheduleAutoBackup(context, intervalHours)
+        if (intervalHours <= 0) {
+            cancelAutoBackup(context)
+        } else {
+            scheduleAutoBackup(context, intervalHours, ExistingPeriodicWorkPolicy.REPLACE)
         }
     }
 }

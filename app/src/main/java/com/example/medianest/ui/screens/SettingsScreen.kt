@@ -480,7 +480,8 @@ fun SettingsScreen(
                     Text(
                         text = "Notes:\n" +
                                "• Export details: Packages all database records (videos list, subscriptions, watch history, custom folders, playlists) and copies all downloaded video & audio files into a ZIP archive.\n" +
-                               "• Import details: Overwrites database with imported records and re-extracts video & audio files to their corresponding local storage paths.",
+                               "• Import details: Overwrites database with imported records and re-extracts video & audio files to their corresponding local storage paths.\n" +
+                               "• Download Missing Files: Appears when files are missing on disk. Clicking it will re-queue and re-download completed files that are absent. Do not run 'Repair Library' first, as it will clear database references to those files.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -668,14 +669,14 @@ fun SettingsScreen(
                         }
 
                         Spacer(Modifier.height(8.dp))
-                        Row(
+                        Column(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             Text("Status: Active", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
                             if (nextBackupTime != null && nextBackupTime!! > 0) {
                                 val dateStr = SimpleDateFormat("h:mm:ss a", Locale.getDefault()).format(Date(nextBackupTime!!))
-                                Text("Next: $dateStr (in $countdownText)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("Next Backup: $dateStr (in $countdownText)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
                     } else {
