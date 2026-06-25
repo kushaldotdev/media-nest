@@ -117,7 +117,7 @@ fun VideoDetailScreen(
                         Icon(
                             Icons.Default.Favorite,
                             contentDescription = "Favorite",
-                            tint = if (isFavorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                            tint = if (isFavorite) Color.Red else MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }

@@ -19,6 +19,10 @@ import androidx.compose.ui.layout.ContentScale
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
@@ -45,12 +49,18 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.example.medianest.data.local.entity.SubscriptionEntity
 import com.example.medianest.ui.viewmodel.SubscriptionsViewModel
+import com.example.medianest.ui.viewmodel.ViewMode
+import com.example.medianest.ui.components.GlassCard
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SubscriptionsScreen(
     sourceType: String,
     searchQuery: String = "",
+    viewMode: ViewMode = ViewMode.LIST,
     onSubscriptionClick: (String, String) -> Unit,
     viewModel: SubscriptionsViewModel = hiltViewModel()
 ) {
@@ -73,24 +83,75 @@ fun SubscriptionsScreen(
             )
         }
     } else {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            items(filtered, key = { it.id }) { sub ->
-                SubscriptionCard(
-                    subscription = sub,
-                    onAutoDownloadChange = { autoDownload, audioOnly ->
-                        viewModel.updateAutoDownload(sub.id, autoDownload, audioOnly)
-                    },
-                    onUnsubscribe = { 
-                        viewModel.unsubscribe(sub.id) 
-                        coroutineScope.launch {
-                            snackbarHostState.showSnackbar("Unsubscribed from ${sub.name}")
-                        }
-                    },
-                    onClick = { onSubscriptionClick(sub.sourceType, sub.sourceId) }
-                )
+        if (viewMode == ViewMode.GRID) {
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(2),
+                modifier = Modifier.fillMaxSize().padding(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(filtered, key = { it.id }) { sub ->
+                    SubscriptionCard(
+                        subscription = sub,
+                        onAutoDownloadChange = { autoDownload, audioOnly ->
+                            viewModel.updateAutoDownload(sub.id, autoDownload, audioOnly)
+                        },
+                        onUnsubscribe = { 
+                            viewModel.unsubscribe(sub.id) 
+                            coroutineScope.launch {
+                                snackbarHostState.showSnackbar("Unsubscribed from ${sub.name}")
+                            }
+                        },
+                        onClick = { onSubscriptionClick(sub.sourceType, sub.sourceId) }
+                    )
+                }
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Text(
+                        text = "*Automatically downloads new uploads*",
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                        ),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+                }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize().padding(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(filtered, key = { it.id }) { sub ->
+                    SubscriptionCard(
+                        subscription = sub,
+                        onAutoDownloadChange = { autoDownload, audioOnly ->
+                            viewModel.updateAutoDownload(sub.id, autoDownload, audioOnly)
+                        },
+                        onUnsubscribe = { 
+                            viewModel.unsubscribe(sub.id) 
+                            coroutineScope.launch {
+                                snackbarHostState.showSnackbar("Unsubscribed from ${sub.name}")
+                            }
+                        },
+                        onClick = { onSubscriptionClick(sub.sourceType, sub.sourceId) }
+                    )
+                }
+                item {
+                    Text(
+                        text = "*Automatically downloads new uploads*",
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                        ),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+                }
             }
         }
         
@@ -107,7 +168,9 @@ private fun SubscriptionCard(
     onUnsubscribe: () -> Unit,
     onClick: () -> Unit
 ) {
-    Card(
+    var isTitleExpanded by remember { mutableStateOf(false) }
+
+    GlassCard(
         onClick = onClick,
         modifier = Modifier
             .fillMaxWidth()
@@ -130,14 +193,9 @@ private fun SubscriptionCard(
                 Text(
                     text = subscription.name,
                     style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = "Automatically downloads new uploads",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    maxLines = if (isTitleExpanded) Int.MAX_VALUE else 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.clickable { isTitleExpanded = !isTitleExpanded }
                 )
             }
             Spacer(Modifier.width(12.dp))

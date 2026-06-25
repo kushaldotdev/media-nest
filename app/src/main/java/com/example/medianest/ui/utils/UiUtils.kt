@@ -35,7 +35,7 @@ object UiUtils {
         }
     }
 
-    private fun parseUploadDate(rawDate: String?): Date? {
+    fun parseUploadDate(rawDate: String?): Date? {
         if (rawDate.isNullOrBlank()) return null
         if (rawDate.contains("T")) {
             try {
@@ -56,7 +56,7 @@ object UiUtils {
         return null
     }
 
-    private fun getRelativeTimeString(date: Date): String {
+    fun formatRelativeTime(date: Date, abbreviated: Boolean = true): String {
         val diffMs = System.currentTimeMillis() - date.time
         if (diffMs < 0) {
             return "just now"
@@ -66,31 +66,44 @@ object UiUtils {
         val diffHour = diffMin / 60
         val diffDay = diffHour / 24
 
-        return when {
-            diffDay < 1 -> {
-                when {
-                    diffHour < 1 -> {
-                        if (diffMin <= 1) "1 minute ago" else "$diffMin minutes ago"
-                    }
-                    else -> {
-                        if (diffHour == 1L) "1 hour ago" else "$diffHour hours ago"
-                    }
-                }
+        val years = diffDay / 365
+        val months = (diffDay % 365) / 30
+        val days = (diffDay % 365) % 30
+        val hours = diffHour % 24
+
+        if (abbreviated) {
+            val sb = StringBuilder()
+            if (years > 0) sb.append("${years}y ")
+            if (months > 0) sb.append("${months}mo ")
+            if (days > 0) sb.append("${days}d ")
+            if (hours > 0) sb.append("${hours}h ")
+            
+            val result = sb.toString().trim()
+            if (result.isNotEmpty()) return result
+            
+            return if (diffMin > 0) "${diffMin}m" else "just now"
+        } else {
+            val parts = mutableListOf<String>()
+            if (years > 0) {
+                parts.add(if (years == 1L) "1 year" else "$years years")
             }
-            diffDay < 7 -> {
-                if (diffDay == 1L) "1 day ago" else "$diffDay days ago"
+            if (months > 0) {
+                parts.add(if (months == 1L) "1 month" else "$months months")
             }
-            diffDay < 30 -> {
-                val weeks = diffDay / 7
-                if (weeks <= 1L) "1 week ago" else "$weeks weeks ago"
+            if (days > 0) {
+                parts.add(if (days == 1L) "1 day" else "$days days")
             }
-            diffDay < 365 -> {
-                val months = diffDay / 30
-                if (months <= 1L) "1 month ago" else "$months months ago"
+            if (hours > 0) {
+                parts.add(if (hours == 1L) "1 hour" else "$hours hours")
             }
-            else -> {
-                val years = diffDay / 365
-                if (years <= 1L) "1 year ago" else "$years years ago"
+
+            if (parts.isNotEmpty()) {
+                return parts.joinToString(", ") + " ago"
+            }
+            return if (diffMin > 0) {
+                if (diffMin == 1L) "1 minute ago" else "$diffMin minutes ago"
+            } else {
+                "just now"
             }
         }
     }
@@ -101,7 +114,13 @@ object UiUtils {
             return rawDate
         }
         val date = parseUploadDate(rawDate) ?: return rawDate
-        return getRelativeTimeString(date)
+        return formatRelativeTime(date, abbreviated = true)
+    }
+
+    fun formatRelativeDateExact(rawDate: String?): String? {
+        if (rawDate.isNullOrBlank()) return null
+        val date = parseUploadDate(rawDate) ?: return rawDate
+        return formatRelativeTime(date, abbreviated = false)
     }
 
     fun formatAbsoluteReleaseDate(rawDate: String?): String? {

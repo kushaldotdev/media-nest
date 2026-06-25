@@ -43,6 +43,7 @@ import com.example.medianest.ui.viewmodel.LocalBackupInfo
 import com.example.medianest.ui.viewmodel.MigrationState
 import com.example.medianest.ui.viewmodel.ImportInspectionState
 import androidx.compose.ui.text.font.FontWeight
+import com.example.medianest.ui.components.GlassCard
 import com.example.medianest.ui.viewmodel.UpdateState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -168,9 +169,8 @@ fun SettingsScreen(
             // Section: Sync & VPS Configuration
             Text("VPS Sync", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
             
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            GlassCard(
+                modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     val serverUrl by viewModel.serverUrl.collectAsStateWithLifecycle()
@@ -314,9 +314,8 @@ fun SettingsScreen(
 
             // Sync Log
             var logExpanded by remember { mutableStateOf(false) }
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            GlassCard(
+                modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Row(
@@ -384,7 +383,7 @@ fun SettingsScreen(
             // Section: Download Folder Location
             Text("Downloads", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
             
-            Card(modifier = Modifier.fillMaxWidth()) {
+            GlassCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.FolderOpen, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
@@ -452,9 +451,8 @@ fun SettingsScreen(
             // Section: Data & Backup
             Text("Data Management", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
 
-            Card(
+            GlassCard(
                 modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
                 onClick = onNavigateToStatistics
             ) {
                 Row(
@@ -470,7 +468,7 @@ fun SettingsScreen(
                 }
             }
 
-            Card(modifier = Modifier.fillMaxWidth()) {
+            GlassCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text("Backup & Restore", style = MaterialTheme.typography.titleSmall)
                     Spacer(Modifier.height(4.dp))
@@ -741,7 +739,7 @@ fun SettingsScreen(
                 }
             }
 
-            Card(modifier = Modifier.fillMaxWidth()) {
+            GlassCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text("Library Repair", style = MaterialTheme.typography.titleSmall)
                     Spacer(Modifier.height(4.dp))
@@ -850,7 +848,7 @@ fun SettingsScreen(
             }
 
             // Card 1: About App info
-            Card(modifier = Modifier.fillMaxWidth()) {
+            GlassCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.Info, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
@@ -870,7 +868,7 @@ fun SettingsScreen(
             }
 
             // Card 2: App Updates
-            Card(modifier = Modifier.fillMaxWidth()) {
+            GlassCard(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.SystemUpdate, contentDescription = null, tint = MaterialTheme.colorScheme.primary)

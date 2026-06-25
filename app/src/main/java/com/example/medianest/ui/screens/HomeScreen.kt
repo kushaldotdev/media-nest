@@ -59,6 +59,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import com.example.medianest.ui.utils.UiUtils
 import com.example.medianest.ui.viewmodel.HomeUiState
 import com.example.medianest.ui.viewmodel.HomeViewModel
+import com.example.medianest.ui.components.UnifiedVideoRow
+import com.example.medianest.ui.components.UnifiedVideoCard
+import com.example.medianest.ui.components.VideoCardConfig
+import com.example.medianest.ui.components.GlassCard
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -223,7 +227,13 @@ fun HomeScreen(
                     }
                     val filteredVideos = if (showShorts) state.playlist.videos else state.playlist.videos.filter { !it.isShort }
                     items(filteredVideos) { video ->
-                        VideoListItem(video = video, onClick = { onVideoSelected(video.videoId) })
+                        VideoListItem(
+                            video = video,
+                            onClick = { onVideoSelected(video.videoId) },
+                            onFavoriteToggle = { id, current -> viewModel.toggleFavorite(id, current) },
+                            onMoveToFolder = { /* TODO: Move to folder from home screen not supported yet */ },
+                            onDownloadClick = { /* TODO: Download from home screen not supported yet */ }
+                        )
                     }
                 }
                 is HomeUiState.ChannelResult -> {
@@ -271,7 +281,14 @@ fun HomeScreen(
                     }
                     val filteredUploads = if (showShorts) state.channel.uploads else state.channel.uploads.filter { !it.isShort }
                     items(filteredUploads) { video ->
-                        VideoListItem(video = video, onClick = { onVideoSelected(video.videoId) }, showChannelName = false)
+                        VideoListItem(
+                            video = video,
+                            onClick = { onVideoSelected(video.videoId) },
+                            showChannelName = false,
+                            onFavoriteToggle = { id, current -> viewModel.toggleFavorite(id, current) },
+                            onMoveToFolder = { /* TODO: Move to folder from home screen not supported yet */ },
+                            onDownloadClick = { /* TODO: Download from home screen not supported yet */ }
+                        )
                     }
                 }
             }
@@ -319,13 +336,9 @@ fun HistoryItemRow(
     onDelete: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-        )
+    GlassCard(
+        modifier = modifier.fillMaxWidth(),
+        onClick = onClick
     ) {
         Row(
             modifier = Modifier
@@ -369,146 +382,69 @@ fun VideoResultCard(
     onSelectQuality: () -> Unit,
     onFavoriteToggle: ((String, Boolean) -> Unit)? = null
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(200.dp)
-            ) {
-                AsyncImage(
-                    model = video.thumbnailUrl,
-                    contentDescription = video.title,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
-                if (video.durationSeconds > 0) {
-                    Text(
-                        text = UiUtils.formatDuration(video.durationSeconds),
-                        color = Color.White,
-                        style = MaterialTheme.typography.labelSmall,
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(8.dp)
-                            .background(
-                                color = Color.Black.copy(alpha = 0.7f),
-                                shape = RoundedCornerShape(4.dp)
-                            )
-                            .padding(horizontal = 4.dp, vertical = 2.dp)
-                    )
-                }
+    var isFavorited by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        UnifiedVideoCard(
+            title = video.title,
+            channelName = video.channelName,
+            thumbnailUrl = video.thumbnailUrl,
+            durationSeconds = video.durationSeconds,
+            uploadDate = video.uploadDate,
+            isFavorite = isFavorited,
+            config = VideoCardConfig(showFavoriteButton = onFavoriteToggle != null),
+            onFavoriteToggle = {
+                val newFav = !isFavorited
+                isFavorited = newFav
+                onFavoriteToggle?.invoke(video.videoId, newFav)
             }
-            Spacer(Modifier.height(8.dp))
-            Text(
-                text = video.title,
-                style = MaterialTheme.typography.titleMedium,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-            Spacer(Modifier.height(4.dp))
-            val formattedDate = UiUtils.formatReleaseDate(video.uploadDate)
-            val metadataText = buildString {
-                append(video.channelName)
-                if (!formattedDate.isNullOrEmpty()) {
-                    if (isNotEmpty()) append(" • ")
-                    append(formattedDate)
-                }
-            }
-            Text(
-                text = metadataText,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Spacer(Modifier.height(8.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Button(
-                    onClick = onSelectQuality,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text("Select Quality")
-                }
-                if (onFavoriteToggle != null) {
-                    var isFavorited by remember { mutableStateOf(false) }
-                    IconToggleButton(
-                        checked = isFavorited,
-                        onCheckedChange = { checked ->
-                            isFavorited = checked
-                            onFavoriteToggle(video.videoId, checked)
-                        }
-                    ) {
-                        Icon(
-                            imageVector = if (isFavorited) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
-                            contentDescription = "Toggle favorite"
-                        )
-                    }
-                }
-            }
+        )
+        Button(
+            onClick = onSelectQuality,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Select Quality")
         }
     }
 }
 
 @Composable
-fun VideoListItem(video: ExtractedVideoInfo, onClick: () -> Unit, showChannelName: Boolean = true) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(8.dp)
-    ) {
-        Box(modifier = Modifier.size(120.dp, 68.dp)) {
-            AsyncImage(
-                model = video.thumbnailUrl,
-                contentDescription = video.title,
-                modifier = Modifier.fillMaxSize()
-            )
-            if (video.durationSeconds > 0) {
-                Text(
-                    text = UiUtils.formatDuration(video.durationSeconds),
-                    color = Color.White,
-                    style = MaterialTheme.typography.labelSmall,
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(4.dp)
-                        .background(
-                            color = Color.Black.copy(alpha = 0.7f),
-                            shape = RoundedCornerShape(4.dp)
-                        )
-                        .padding(horizontal = 4.dp, vertical = 2.dp)
-                )
-            }
-        }
-        Spacer(Modifier.width(8.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = video.title,
-                style = MaterialTheme.typography.titleSmall,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-            Spacer(Modifier.height(4.dp))
-            val formattedDate = UiUtils.formatReleaseDate(video.uploadDate)
-            val metadataText = buildString {
-                if (showChannelName) {
-                    append(video.channelName)
-                }
-                if (!formattedDate.isNullOrEmpty()) {
-                    if (isNotEmpty()) append(" • ")
-                    append(formattedDate)
-                }
-            }
-            Text(
-                text = metadataText,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
-    }
+fun VideoListItem(
+    video: ExtractedVideoInfo,
+    onClick: () -> Unit,
+    showChannelName: Boolean = true,
+    onFavoriteToggle: ((String, Boolean) -> Unit)? = null,
+    onMoveToFolder: ((String) -> Unit)? = null,
+    onDownloadClick: ((String) -> Unit)? = null
+) {
+    var isFavorited by remember { mutableStateOf(false) }
+
+    UnifiedVideoRow(
+        title = video.title,
+        channelName = if (showChannelName) video.channelName else "",
+        thumbnailUrl = video.thumbnailUrl,
+        durationSeconds = video.durationSeconds,
+        uploadDate = video.uploadDate,
+        isFavorite = isFavorited,
+        isDownloaded = false, // Not tracked on Home screen
+        playbackProgressFraction = 0f, // Not tracked on Home screen
+        config = VideoCardConfig(
+            showFavoriteButton = onFavoriteToggle != null,
+            showMoveToFolderButton = onMoveToFolder != null,
+            showDownloadButton = onDownloadClick != null,
+            showPlaybackProgress = false,
+            showDownloadedBadge = false
+        ),
+        onClick = onClick,
+        onFavoriteToggle = {
+            val newFav = !isFavorited
+            isFavorited = newFav
+            onFavoriteToggle?.invoke(video.videoId, newFav)
+        },
+        onMoveToFolder = { onMoveToFolder?.invoke(video.videoId) },
+        onDownloadClick = { onDownloadClick?.invoke(video.videoId) }
+    )
 }

@@ -43,6 +43,10 @@ import com.example.medianest.ui.viewmodel.LibraryTab
 import com.example.medianest.ui.viewmodel.LibraryViewModel
 import com.example.medianest.ui.viewmodel.ViewMode
 import com.example.medianest.ui.viewmodel.FolderStats
+import com.example.medianest.ui.components.UnifiedVideoCard
+import com.example.medianest.ui.components.UnifiedVideoRow
+import com.example.medianest.ui.components.VideoCardConfig
+import com.example.medianest.ui.components.GlassCard
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -90,7 +94,7 @@ fun LibraryScreen(
             TopAppBar(
                 title = { Text(if (uiState.isSelectionMode) "${uiState.selectedVideoIds.size} Selected" else "Library") },
                 actions = {
-                    if (uiState.currentTab != LibraryTab.SUBSCRIPTIONS && uiState.currentTab != LibraryTab.PLAYLISTS && (uiState.currentTab != LibraryTab.FOLDERS || uiState.selectedFolder != null)) {
+                    if (uiState.currentTab != LibraryTab.FOLDERS || uiState.selectedFolder != null) {
                         IconButton(onClick = { viewModel.toggleViewMode() }) {
                             Icon(
                                 if (uiState.viewMode == ViewMode.GRID) Icons.AutoMirrored.Filled.ViewList else Icons.Default.GridView,
@@ -303,10 +307,20 @@ fun LibraryScreen(
                     }
                 }
                 LibraryTab.PLAYLISTS -> {
-                    SubscriptionsScreen(sourceType = "playlist", searchQuery = uiState.searchQuery, onSubscriptionClick = onSubscriptionClick)
+                    SubscriptionsScreen(
+                        sourceType = "playlist",
+                        searchQuery = uiState.searchQuery,
+                        viewMode = uiState.viewMode,
+                        onSubscriptionClick = onSubscriptionClick
+                    )
                 }
                 LibraryTab.SUBSCRIPTIONS -> {
-                    SubscriptionsScreen(sourceType = "channel", searchQuery = uiState.searchQuery, onSubscriptionClick = onSubscriptionClick)
+                    SubscriptionsScreen(
+                        sourceType = "channel",
+                        searchQuery = uiState.searchQuery,
+                        viewMode = uiState.viewMode,
+                        onSubscriptionClick = onSubscriptionClick
+                    )
                 }
                 }
             }
@@ -447,6 +461,9 @@ private fun VideoListLayout(
     onDeleteDownload: (com.example.medianest.data.local.entity.DownloadEntity) -> Unit,
     onExtractAudio: (com.example.medianest.data.local.entity.DownloadEntity) -> Unit
 ) {
+    val onMoveToFolderClick = LocalMoveToFolder.current
+    val context = LocalContext.current
+
     if (viewMode == ViewMode.GRID) {
         LazyVerticalGrid(
             columns = GridCells.Adaptive(160.dp),
@@ -455,24 +472,51 @@ private fun VideoListLayout(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             items(videos, key = { it.id }) { video ->
-                VideoCard(
-                    video = video,
-                    folders = videoFolderMap[video.id] ?: emptyList(),
-                    isSelectionMode = isSelectionMode,
+                val history = playbackHistory.find { it.videoId == video.id }
+                val positionMillis = history?.positionMillis ?: 0L
+                val progressFraction = if (video.durationSeconds > 0 && positionMillis > 0) {
+                    ((positionMillis.toFloat() / 1000f) / video.durationSeconds.toFloat()).coerceIn(0f, 1f)
+                } else 0f
+
+                UnifiedVideoCard(
+                    title = video.title,
+                    channelName = video.channelName,
+                    thumbnailUrl = video.thumbnailUrl,
+                    durationSeconds = video.durationSeconds,
+                    uploadDate = video.uploadDate,
+                    isFavorite = video.favorite,
+                    isDownloaded = video.localFilePath.isNotEmpty(),
                     isSelected = selectedIds.contains(video.id),
+                    playbackProgressFraction = progressFraction,
+                    folders = videoFolderMap[video.id] ?: emptyList(),
+                    config = VideoCardConfig(
+                        showFavoriteButton = !isSelectionMode,
+                        showMoveToFolderButton = !isSelectionMode,
+                        showDownloadButton = !isSelectionMode,
+                        showSelectionCheckbox = isSelectionMode,
+                        showFolderBadges = true,
+                        showPlaybackProgress = true,
+                        showDownloadedBadge = true
+                    ),
                     onClick = { if (isSelectionMode) onToggleSelection(video.id) else onVideoClick(video.id) },
                     onLongClick = { onVideoLongClick(video.id) },
                     onFavoriteToggle = { onFavoriteToggle(video) },
-                    isDownloadMenuExpanded = expandedDownloadVideoId == video.id,
-                    isFetchingStreams = fetchingStreamsFor == video.id,
-                    fetchedStreams = fetchedStreams,
-                    allDownloads = allDownloads,
-                    playbackHistory = playbackHistory,
-                    onDownloadIconClick = { onDownloadIconClick(video.id) },
-                    onDismissDownloadMenu = onDismissDownloadMenu,
-                    onEnqueueDownload = onEnqueueDownload,
-                    onDeleteDownload = onDeleteDownload,
-                    onExtractAudio = onExtractAudio
+                    onMoveToFolder = { onMoveToFolderClick(video.id) },
+                    onDownloadClick = { onDownloadIconClick(video.id) },
+                    onSelectionToggle = { onToggleSelection(video.id) },
+                    downloadMenuContent = {
+                        QuickDownloadMenu(
+                            isExpanded = expandedDownloadVideoId == video.id,
+                            onDismiss = onDismissDownloadMenu,
+                            isFetching = fetchingStreamsFor == video.id,
+                            fetchedStreams = fetchedStreams,
+                            allDownloads = allDownloads,
+                            videoId = video.id,
+                            onEnqueueDownload = onEnqueueDownload,
+                            onDeleteDownload = onDeleteDownload,
+                            onExtractAudio = onExtractAudio
+                        )
+                    }
                 )
             }
         }
@@ -482,381 +526,61 @@ private fun VideoListLayout(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             items(videos, key = { it.id }) { video ->
-                VideoListRow(
-                    video = video,
-                    folders = videoFolderMap[video.id] ?: emptyList(),
-                    isSelectionMode = isSelectionMode,
+                val history = playbackHistory.find { it.videoId == video.id }
+                val positionMillis = history?.positionMillis ?: 0L
+                val progressFraction = if (video.durationSeconds > 0 && positionMillis > 0) {
+                    ((positionMillis.toFloat() / 1000f) / video.durationSeconds.toFloat()).coerceIn(0f, 1f)
+                } else 0f
+
+                UnifiedVideoRow(
+                    title = video.title,
+                    channelName = video.channelName,
+                    thumbnailUrl = video.thumbnailUrl,
+                    durationSeconds = video.durationSeconds,
+                    uploadDate = video.uploadDate,
+                    isFavorite = video.favorite,
+                    isDownloaded = video.localFilePath.isNotEmpty(),
                     isSelected = selectedIds.contains(video.id),
+                    playbackProgressFraction = progressFraction,
+                    folders = videoFolderMap[video.id] ?: emptyList(),
+                    config = VideoCardConfig(
+                        showFavoriteButton = !isSelectionMode,
+                        showMoveToFolderButton = !isSelectionMode,
+                        showDownloadButton = !isSelectionMode,
+                        showSelectionCheckbox = isSelectionMode,
+                        showFolderBadges = true,
+                        showPlaybackProgress = true,
+                        showDownloadedBadge = true
+                    ),
                     onClick = { if (isSelectionMode) onToggleSelection(video.id) else onVideoClick(video.id) },
                     onLongClick = { onVideoLongClick(video.id) },
                     onFavoriteToggle = { onFavoriteToggle(video) },
-                    isDownloadMenuExpanded = expandedDownloadVideoId == video.id,
-                    isFetchingStreams = fetchingStreamsFor == video.id,
-                    fetchedStreams = fetchedStreams,
-                    allDownloads = allDownloads,
-                    playbackHistory = playbackHistory,
-                    onDownloadIconClick = { onDownloadIconClick(video.id) },
-                    onDismissDownloadMenu = onDismissDownloadMenu,
-                    onEnqueueDownload = onEnqueueDownload,
-                    onDeleteDownload = onDeleteDownload,
-                    onExtractAudio = onExtractAudio
+                    onMoveToFolder = { onMoveToFolderClick(video.id) },
+                    onDownloadClick = { onDownloadIconClick(video.id) },
+                    onSelectionToggle = { onToggleSelection(video.id) },
+                    downloadMenuContent = {
+                        QuickDownloadMenu(
+                            isExpanded = expandedDownloadVideoId == video.id,
+                            onDismiss = onDismissDownloadMenu,
+                            isFetching = fetchingStreamsFor == video.id,
+                            fetchedStreams = fetchedStreams,
+                            allDownloads = allDownloads,
+                            videoId = video.id,
+                            onEnqueueDownload = onEnqueueDownload,
+                            onDeleteDownload = onDeleteDownload,
+                            onExtractAudio = {
+                                onExtractAudio(it)
+                                android.widget.Toast.makeText(context, "Audio extraction started", android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                        )
+                    }
                 )
             }
         }
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun VideoCard(
-    video: VideoEntity,
-    folders: List<FolderEntity> = emptyList(),
-    isSelectionMode: Boolean,
-    isSelected: Boolean,
-    onClick: () -> Unit,
-    onLongClick: () -> Unit,
-    onFavoriteToggle: () -> Unit,
-    isDownloadMenuExpanded: Boolean,
-    isFetchingStreams: Boolean,
-    fetchedStreams: com.example.medianest.data.model.ExtractedVideoInfo?,
-    allDownloads: List<com.example.medianest.data.local.entity.DownloadEntity>,
-    playbackHistory: List<com.example.medianest.data.local.entity.HistoryEntity>,
-    onDownloadIconClick: () -> Unit,
-    onDismissDownloadMenu: () -> Unit,
-    onEnqueueDownload: (com.example.medianest.data.model.ExtractedVideoInfo, com.example.medianest.data.model.StreamSource) -> Unit,
-    onDeleteDownload: (com.example.medianest.data.local.entity.DownloadEntity) -> Unit,
-    onExtractAudio: (com.example.medianest.data.local.entity.DownloadEntity) -> Unit
-) {
-    val onMoveToFolderClick = LocalMoveToFolder.current
-    Card(
-        shape = RoundedCornerShape(12.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .combinedClickable(
-                onClick = onClick,
-                onLongClick = onLongClick
-            )
-    ) {
-        Column {
-            Box {
-                AsyncImage(
-                    model = video.thumbnailUrl,
-                    contentDescription = video.title,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxWidth().height(120.dp)
-                )
-                if (video.localFilePath.isNotEmpty()) {
-                    Icon(
-                        Icons.Default.CheckCircle,
-                        contentDescription = "Downloaded",
-                        tint = Color.Green,
-                        modifier = Modifier
-                            .align(Alignment.BottomStart)
-                            .padding(8.dp)
-                            .size(24.dp)
-                            .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(50))
-                    )
-                }
-                if (video.durationSeconds > 0) {
-                    Text(
-                        text = com.example.medianest.ui.utils.UiUtils.formatDuration(video.durationSeconds),
-                        color = Color.White,
-                        style = MaterialTheme.typography.labelSmall,
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(8.dp)
-                            .background(
-                                color = Color.Black.copy(alpha = 0.7f),
-                                shape = RoundedCornerShape(4.dp)
-                            )
-                            .padding(horizontal = 4.dp, vertical = 2.dp)
-                    )
-                }
 
-                // Red progress bar at the bottom edge of thumbnail
-                val history = playbackHistory.find { it.videoId == video.id }
-                val positionMillis = history?.positionMillis ?: 0L
-                if (video.durationSeconds > 0 && positionMillis > 0) {
-                    val progress = (positionMillis.toFloat() / 1000f) / video.durationSeconds.toFloat()
-                    val coercedProgress = progress.coerceIn(0f, 1f)
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(2.dp)
-                            .align(Alignment.BottomCenter)
-                            .background(Color.Gray.copy(alpha = 0.3f))
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth(coercedProgress)
-                                .height(2.dp)
-                                .background(Color.Red)
-                        )
-                    }
-                }
-            }
-            Column(modifier = Modifier.padding(12.dp)) {
-                FolderBadges(folders)
-                Spacer(Modifier.height(4.dp))
-                Row(verticalAlignment = Alignment.Top) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(video.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        Spacer(Modifier.height(4.dp))
-                        val formattedDate = UiUtils.formatReleaseDate(video.uploadDate)
-                        val metadataText = buildString {
-                            append(video.channelName)
-                            if (!formattedDate.isNullOrEmpty()) {
-                                if (isNotEmpty()) append(" • ")
-                                append(formattedDate)
-                            }
-                        }
-                        Text(
-                            text = metadataText,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                    if (isSelectionMode) {
-                        Checkbox(checked = isSelected, onCheckedChange = { onClick() }, modifier = Modifier.padding(start = 4.dp))
-                    }
-                }
-                if (!isSelectionMode) {
-                    Spacer(Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        IconToggleButton(
-                            checked = video.favorite,
-                            onCheckedChange = { onFavoriteToggle() }
-                        ) {
-                            Icon(
-                                if (video.favorite) Icons.Default.Favorite else Icons.Outlined.FavoriteBorder,
-                                contentDescription = "Favorite",
-                                tint = if (video.favorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        IconButton(onClick = { onMoveToFolderClick(video.id) }) {
-                            Icon(
-                                Icons.Default.DriveFileMove,
-                                contentDescription = "Move to folder",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        Box {
-                            IconButton(
-                                onClick = onDownloadIconClick,
-                                enabled = true
-                            ) {
-                                Icon(
-                                    if (video.localFilePath.isEmpty()) Icons.Default.Download else Icons.Default.DownloadDone,
-                                    contentDescription = "Download",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            QuickDownloadMenu(
-                                isExpanded = isDownloadMenuExpanded,
-                                onDismiss = onDismissDownloadMenu,
-                                isFetching = isFetchingStreams,
-                                fetchedStreams = fetchedStreams,
-                                allDownloads = allDownloads,
-                                videoId = video.id,
-                                onEnqueueDownload = onEnqueueDownload,
-                                onDeleteDownload = onDeleteDownload,
-                                onExtractAudio = onExtractAudio
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun VideoListRow(
-    video: VideoEntity,
-    folders: List<FolderEntity> = emptyList(),
-    isSelectionMode: Boolean,
-    isSelected: Boolean,
-    onClick: () -> Unit,
-    onLongClick: () -> Unit,
-    onFavoriteToggle: () -> Unit,
-    isDownloadMenuExpanded: Boolean,
-    isFetchingStreams: Boolean,
-    fetchedStreams: com.example.medianest.data.model.ExtractedVideoInfo?,
-    allDownloads: List<com.example.medianest.data.local.entity.DownloadEntity>,
-    playbackHistory: List<com.example.medianest.data.local.entity.HistoryEntity>,
-    onDownloadIconClick: () -> Unit,
-    onDismissDownloadMenu: () -> Unit,
-    onEnqueueDownload: (com.example.medianest.data.model.ExtractedVideoInfo, com.example.medianest.data.model.StreamSource) -> Unit,
-    onDeleteDownload: (com.example.medianest.data.local.entity.DownloadEntity) -> Unit,
-    onExtractAudio: (com.example.medianest.data.local.entity.DownloadEntity) -> Unit
-) {
-    val onMoveToFolderClick = LocalMoveToFolder.current
-    Card(
-        shape = RoundedCornerShape(12.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .combinedClickable(
-                onClick = onClick,
-                onLongClick = onLongClick
-            )
-    ) {
-        Row(modifier = Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.Top) {
-            if (isSelectionMode) {
-                Checkbox(checked = isSelected, onCheckedChange = { onClick() })
-            }
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(120.dp, 68.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                ) {
-                    AsyncImage(
-                        model = video.thumbnailUrl,
-                        contentDescription = video.title,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                    if (video.localFilePath.isNotEmpty()) {
-                        Icon(
-                            Icons.Default.CheckCircle,
-                            contentDescription = "Downloaded",
-                            tint = Color.Green,
-                            modifier = Modifier
-                                .align(Alignment.BottomStart)
-                                .padding(4.dp)
-                                .size(16.dp)
-                                .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(50))
-                        )
-                    }
-                    if (video.durationSeconds > 0) {
-                        Text(
-                            text = com.example.medianest.ui.utils.UiUtils.formatDuration(video.durationSeconds),
-                            color = Color.White,
-                            style = MaterialTheme.typography.labelSmall,
-                            modifier = Modifier
-                                .align(Alignment.BottomEnd)
-                                .padding(4.dp)
-                                .background(
-                                    color = Color.Black.copy(alpha = 0.7f),
-                                    shape = RoundedCornerShape(4.dp)
-                                )
-                                .padding(horizontal = 4.dp, vertical = 2.dp)
-                        )
-                    }
-
-                    // Red progress bar at the bottom edge of thumbnail
-                    val history = playbackHistory.find { it.videoId == video.id }
-                    val positionMillis = history?.positionMillis ?: 0L
-                    if (video.durationSeconds > 0 && positionMillis > 0) {
-                        val progress = (positionMillis.toFloat() / 1000f) / video.durationSeconds.toFloat()
-                        val coercedProgress = progress.coerceIn(0f, 1f)
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(2.dp)
-                                .align(Alignment.BottomCenter)
-                                .background(Color.Gray.copy(alpha = 0.3f))
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth(coercedProgress)
-                                    .height(2.dp)
-                                    .background(Color.Red)
-                            )
-                        }
-                    }
-                }
-                FolderBadges(folders)
-            }
-            Spacer(Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(video.title, style = MaterialTheme.typography.titleSmall, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Spacer(Modifier.height(4.dp))
-                val formattedDate = UiUtils.formatReleaseDate(video.uploadDate)
-                val metadataText = buildString {
-                    append(video.channelName)
-                    if (!formattedDate.isNullOrEmpty()) {
-                        if (isNotEmpty()) append(" • ")
-                        append(formattedDate)
-                    }
-                }
-                Text(
-                    text = metadataText,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                
-                if (!isSelectionMode) {
-                    Spacer(Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        IconButton(onClick = onFavoriteToggle, modifier = Modifier.size(36.dp)) {
-                            Icon(
-                                if (video.favorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                                contentDescription = "Favorite",
-                                tint = if (video.favorite) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                        IconButton(onClick = { onMoveToFolderClick(video.id) }, modifier = Modifier.size(36.dp)) {
-                            Icon(
-                                Icons.Default.DriveFileMove,
-                                contentDescription = "Move to folder",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                        Box {
-                            IconButton(onClick = onDownloadIconClick, enabled = true, modifier = Modifier.size(36.dp)) {
-                                Icon(
-                                    if (video.localFilePath.isEmpty()) Icons.Default.Download else Icons.Default.DownloadDone,
-                                    contentDescription = "Download Options",
-                                    tint = if (video.localFilePath.isEmpty()) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                            val context = androidx.compose.ui.platform.LocalContext.current
-                            QuickDownloadMenu(
-                                isExpanded = isDownloadMenuExpanded,
-                                onDismiss = onDismissDownloadMenu,
-                                isFetching = isFetchingStreams,
-                                fetchedStreams = fetchedStreams,
-                                allDownloads = allDownloads,
-                                videoId = video.id,
-                                onEnqueueDownload = onEnqueueDownload,
-                                onDeleteDownload = onDeleteDownload,
-                                onExtractAudio = { 
-                                    onExtractAudio(it)
-                                    android.widget.Toast.makeText(context, "Audio extraction started", android.widget.Toast.LENGTH_SHORT).show()
-                                }
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
 
 @Composable
 private fun FolderContent(
@@ -958,46 +682,106 @@ private fun FolderContent(
                         }
                         if (viewMode == ViewMode.GRID) {
                             items(currentVideos, key = { "video_${it.id}" }) { video ->
-                                VideoCard(
-                                    video = video,
-                                    folders = videoFolderMap[video.id] ?: emptyList(),
-                                    isSelectionMode = isSelectionMode,
+                                val history = playbackHistory.find { it.videoId == video.id }
+                                val positionMillis = history?.positionMillis ?: 0L
+                                val progressFraction = if (video.durationSeconds > 0 && positionMillis > 0) {
+                                    ((positionMillis.toFloat() / 1000f) / video.durationSeconds.toFloat()).coerceIn(0f, 1f)
+                                } else 0f
+                                val onMoveToFolderClick = LocalMoveToFolder.current
+
+                                UnifiedVideoCard(
+                                    title = video.title,
+                                    channelName = video.channelName,
+                                    thumbnailUrl = video.thumbnailUrl,
+                                    durationSeconds = video.durationSeconds,
+                                    uploadDate = video.uploadDate,
+                                    isFavorite = video.favorite,
+                                    isDownloaded = video.localFilePath.isNotEmpty(),
                                     isSelected = selectedIds.contains(video.id),
+                                    playbackProgressFraction = progressFraction,
+                                    folders = videoFolderMap[video.id] ?: emptyList(),
+                                    config = VideoCardConfig(
+                                        showFavoriteButton = !isSelectionMode,
+                                        showMoveToFolderButton = !isSelectionMode,
+                                        showDownloadButton = !isSelectionMode,
+                                        showSelectionCheckbox = isSelectionMode,
+                                        showFolderBadges = true,
+                                        showPlaybackProgress = true,
+                                        showDownloadedBadge = true
+                                    ),
                                     onClick = { if (isSelectionMode) onToggleSelection(video.id) else onVideoClick(video.id) },
                                     onLongClick = { onVideoLongClick(video.id) },
                                     onFavoriteToggle = { onFavoriteToggle(video) },
-                                    isDownloadMenuExpanded = expandedDownloadVideoId == video.id,
-                                    isFetchingStreams = fetchingStreamsFor == video.id,
-                                    fetchedStreams = fetchedStreams,
-                                    allDownloads = allDownloads,
-                                    playbackHistory = playbackHistory,
-                                    onDownloadIconClick = { onDownloadIconClick(video.id) },
-                                    onDismissDownloadMenu = onDismissDownloadMenu,
-                                    onEnqueueDownload = onEnqueueDownload,
-                                    onDeleteDownload = onDeleteDownload,
-                                    onExtractAudio = onExtractAudio
+                                    onMoveToFolder = { onMoveToFolderClick(video.id) },
+                                    onDownloadClick = { onDownloadIconClick(video.id) },
+                                    onSelectionToggle = { onToggleSelection(video.id) },
+                                    downloadMenuContent = {
+                                        QuickDownloadMenu(
+                                            isExpanded = expandedDownloadVideoId == video.id,
+                                            onDismiss = onDismissDownloadMenu,
+                                            isFetching = fetchingStreamsFor == video.id,
+                                            fetchedStreams = fetchedStreams,
+                                            allDownloads = allDownloads,
+                                            videoId = video.id,
+                                            onEnqueueDownload = onEnqueueDownload,
+                                            onDeleteDownload = onDeleteDownload,
+                                            onExtractAudio = onExtractAudio
+                                        )
+                                    }
                                 )
                             }
                         } else {
                             items(currentVideos, key = { "video_${it.id}" }, span = { GridItemSpan(maxLineSpan) }) { video ->
-                                VideoListRow(
-                                    video = video,
-                                    folders = videoFolderMap[video.id] ?: emptyList(),
-                                    isSelectionMode = isSelectionMode,
+                                val history = playbackHistory.find { it.videoId == video.id }
+                                val positionMillis = history?.positionMillis ?: 0L
+                                val progressFraction = if (video.durationSeconds > 0 && positionMillis > 0) {
+                                    ((positionMillis.toFloat() / 1000f) / video.durationSeconds.toFloat()).coerceIn(0f, 1f)
+                                } else 0f
+                                val onMoveToFolderClick = LocalMoveToFolder.current
+                                val context = LocalContext.current
+
+                                UnifiedVideoRow(
+                                    title = video.title,
+                                    channelName = video.channelName,
+                                    thumbnailUrl = video.thumbnailUrl,
+                                    durationSeconds = video.durationSeconds,
+                                    uploadDate = video.uploadDate,
+                                    isFavorite = video.favorite,
+                                    isDownloaded = video.localFilePath.isNotEmpty(),
                                     isSelected = selectedIds.contains(video.id),
+                                    playbackProgressFraction = progressFraction,
+                                    folders = videoFolderMap[video.id] ?: emptyList(),
+                                    config = VideoCardConfig(
+                                        showFavoriteButton = !isSelectionMode,
+                                        showMoveToFolderButton = !isSelectionMode,
+                                        showDownloadButton = !isSelectionMode,
+                                        showSelectionCheckbox = isSelectionMode,
+                                        showFolderBadges = true,
+                                        showPlaybackProgress = true,
+                                        showDownloadedBadge = true
+                                    ),
                                     onClick = { if (isSelectionMode) onToggleSelection(video.id) else onVideoClick(video.id) },
                                     onLongClick = { onVideoLongClick(video.id) },
                                     onFavoriteToggle = { onFavoriteToggle(video) },
-                                    isDownloadMenuExpanded = expandedDownloadVideoId == video.id,
-                                    isFetchingStreams = fetchingStreamsFor == video.id,
-                                    fetchedStreams = fetchedStreams,
-                                    allDownloads = allDownloads,
-                                    playbackHistory = playbackHistory,
-                                    onDownloadIconClick = { onDownloadIconClick(video.id) },
-                                    onDismissDownloadMenu = onDismissDownloadMenu,
-                                    onEnqueueDownload = onEnqueueDownload,
-                                    onDeleteDownload = onDeleteDownload,
-                                    onExtractAudio = onExtractAudio
+                                    onMoveToFolder = { onMoveToFolderClick(video.id) },
+                                    onDownloadClick = { onDownloadIconClick(video.id) },
+                                    onSelectionToggle = { onToggleSelection(video.id) },
+                                    downloadMenuContent = {
+                                        QuickDownloadMenu(
+                                            isExpanded = expandedDownloadVideoId == video.id,
+                                            onDismiss = onDismissDownloadMenu,
+                                            isFetching = fetchingStreamsFor == video.id,
+                                            fetchedStreams = fetchedStreams,
+                                            allDownloads = allDownloads,
+                                            videoId = video.id,
+                                            onEnqueueDownload = onEnqueueDownload,
+                                            onDeleteDownload = onDeleteDownload,
+                                            onExtractAudio = {
+                                                onExtractAudio(it)
+                                                android.widget.Toast.makeText(context, "Audio extraction started", android.widget.Toast.LENGTH_SHORT).show()
+                                            }
+                                        )
+                                    }
                                 )
                             }
                         }
@@ -1024,88 +808,7 @@ private fun FolderContent(
     }
 }
 
-@Composable
-private fun FolderBadges(folders: List<FolderEntity>) {
-    if (folders.isNotEmpty()) {
-        Row(
-            modifier = Modifier.padding(top = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            val firstFolder = folders.first()
-            Surface(
-                shape = RoundedCornerShape(4.dp),
-                color = MaterialTheme.colorScheme.secondaryContainer,
-                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Folder,
-                        contentDescription = null,
-                        modifier = Modifier.size(12.dp)
-                    )
-                    Text(
-                        text = firstFolder.name,
-                        style = MaterialTheme.typography.labelSmall
-                    )
-                }
-            }
 
-            if (folders.size > 1) {
-                var expanded by remember { mutableStateOf(false) }
-                Box {
-                    Surface(
-                        shape = RoundedCornerShape(4.dp),
-                        color = MaterialTheme.colorScheme.secondaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                        modifier = Modifier.clickable { expanded = true }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Text(
-                                text = "+${folders.size - 1}",
-                                style = MaterialTheme.typography.labelSmall
-                            )
-                        }
-                    }
-                    DropdownMenu(
-                        expanded = expanded,
-                        onDismissRequest = { expanded = false }
-                    ) {
-                        folders.drop(1).forEach { folder ->
-                            DropdownMenuItem(
-                                leadingIcon = {
-                                    Icon(
-                                        imageVector = Icons.Default.Folder,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp),
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                },
-                                text = {
-                                    Text(
-                                        text = folder.name,
-                                        style = MaterialTheme.typography.bodyMedium
-                                    )
-                                },
-                                onClick = {
-                                    expanded = false
-                                }
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
 
 @Composable
 private fun FolderRow(
@@ -1116,11 +819,9 @@ private fun FolderRow(
     onDelete: () -> Unit
 ) {
     val context = LocalContext.current
-    Card(
-        shape = RoundedCornerShape(12.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)
+    GlassCard(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth()
     ) {
         Row(modifier = Modifier.padding(16.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Default.Folder, contentDescription = null, modifier = Modifier.size(40.dp), tint = MaterialTheme.colorScheme.primary)

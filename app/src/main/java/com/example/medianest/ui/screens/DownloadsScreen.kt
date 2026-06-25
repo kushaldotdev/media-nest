@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
@@ -365,6 +366,34 @@ private fun DownloadItem(
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
                     )
+                    if (download.status == DownloadStatus.COMPLETED && download.errorMessage != "file_missing") {
+                        Row(
+                            modifier = Modifier
+                                .align(Alignment.TopStart)
+                                .padding(4.dp)
+                                .background(
+                                    color = Color.Black.copy(alpha = 0.7f),
+                                    shape = RoundedCornerShape(4.dp)
+                                )
+                                .padding(horizontal = 4.dp, vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = "Downloaded",
+                                tint = Color(0xFF4CAF50),
+                                modifier = Modifier.size(12.dp)
+                            )
+                            if (download.fileSizeBytes > 0L) {
+                                Text(
+                                    text = "%.1f MB".format(download.fileSizeBytes / (1024f * 1024f)),
+                                    color = Color.White,
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            }
+                        }
+                    }
                     if (durationSeconds > 0) {
                         Text(
                             text = com.example.medianest.ui.utils.UiUtils.formatDuration(durationSeconds),
@@ -416,35 +445,15 @@ private fun DownloadItem(
                 }
             }
 
-            // Status and Speed info
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                if (download.status == DownloadStatus.COMPLETED && download.errorMessage != "file_missing") {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.Check,
-                            contentDescription = "Completed",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(Modifier.width(4.dp))
-                        val sizeText = if (download.fileSizeBytes > 0L) {
-                            "%.1f MB".format(download.fileSizeBytes / (1024f * 1024f))
-                        } else {
-                            "Done"
-                        }
-                        Text(
-                            text = sizeText,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                } else {
+            if (download.status != DownloadStatus.COMPLETED || download.errorMessage == "file_missing") {
+                // Status and Speed info
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     val statusText = when (download.status) {
                         DownloadStatus.QUEUED -> "Queued"
                         DownloadStatus.DOWNLOADING -> {
@@ -530,7 +539,7 @@ private fun DownloadItem(
             // Action Buttons
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
+                horizontalArrangement = if (download.status == DownloadStatus.COMPLETED && download.errorMessage != "file_missing") Arrangement.SpaceBetween else Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 when (download.status) {
@@ -674,59 +683,58 @@ private fun DownloadItem(
                                 Spacer(Modifier.width(4.dp))
                                 Text("Delete", style = MaterialTheme.typography.labelMedium)
                             }
-                            Spacer(Modifier.width(8.dp))
-                        } else if (download.filePath.isNotEmpty()) {
-                            val isCurrentPlaying = playingVideoId == download.videoId && 
-                                (playingUri == null || download.filePath.isEmpty() || 
-                                 playingUri == android.net.Uri.fromFile(java.io.File(download.filePath)).toString())
-                            val showPause = isCurrentPlaying && isPlaying
-                            Button(
-                                onClick = {
-                                    if (isCurrentPlaying) {
-                                        viewModel.togglePlayPause()
-                                    } else {
-                                        onPlayDownload(download)
-                                    }
-                                },
-                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                                modifier = Modifier.height(32.dp)
-                            ) {
-                                Icon(
-                                    imageVector = if (showPause) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(Modifier.width(4.dp))
-                                Text(if (showPause) "Pause" else "Play", style = MaterialTheme.typography.labelMedium)
-                            }
-                            Spacer(Modifier.width(8.dp))
-                        }
-                        if (download.format != "audio" && download.format != "audio_extracted") {
-                            val isExtracting = uiState.extractingVideoId == download.videoId
-                            OutlinedButton(
-                                onClick = { viewModel.extractAudio(download) },
-                                enabled = !isExtracting,
-                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                                modifier = Modifier.height(32.dp)
-                            ) {
-                                if (isExtracting) {
-                                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                                } else {
-                                    Icon(Icons.Default.MusicNote, contentDescription = null, modifier = Modifier.size(16.dp))
+                        } else {
+                            if (download.filePath.isNotEmpty()) {
+                                val isCurrentPlaying = playingVideoId == download.videoId && 
+                                    (playingUri == null || download.filePath.isEmpty() || 
+                                     playingUri == android.net.Uri.fromFile(java.io.File(download.filePath)).toString())
+                                val showPause = isCurrentPlaying && isPlaying
+                                Button(
+                                    onClick = {
+                                        if (isCurrentPlaying) {
+                                            viewModel.togglePlayPause()
+                                        } else {
+                                            onPlayDownload(download)
+                                        }
+                                    },
+                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                    modifier = Modifier.height(32.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = if (showPause) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(Modifier.width(4.dp))
+                                    Text(if (showPause) "Pause" else "Play", style = MaterialTheme.typography.labelMedium)
                                 }
-                                Spacer(Modifier.width(4.dp))
-                                Text("Extract Audio", style = MaterialTheme.typography.labelMedium)
                             }
-                            Spacer(Modifier.width(8.dp))
-                        }
-                        TextButton(
-                            onClick = { onDeleteClick(download) },
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                            modifier = Modifier.height(32.dp)
-                        ) {
-                            Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("Delete", style = MaterialTheme.typography.labelMedium)
+                            if (download.format != "audio" && download.format != "audio_extracted") {
+                                val isExtracting = uiState.extractingVideoId == download.videoId
+                                OutlinedButton(
+                                    onClick = { viewModel.extractAudio(download) },
+                                    enabled = !isExtracting,
+                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                    modifier = Modifier.height(32.dp)
+                                ) {
+                                    if (isExtracting) {
+                                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                                    } else {
+                                        Icon(Icons.Default.MusicNote, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    }
+                                    Spacer(Modifier.width(4.dp))
+                                    Text("Extract Audio", style = MaterialTheme.typography.labelMedium)
+                                }
+                            }
+                            TextButton(
+                                onClick = { onDeleteClick(download) },
+                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                modifier = Modifier.height(32.dp)
+                            ) {
+                                Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text("Delete", style = MaterialTheme.typography.labelMedium)
+                            }
                         }
                     }
                 }
