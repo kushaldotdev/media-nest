@@ -22,6 +22,12 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.medianest.data.local.entity.FolderEntity
 import com.example.medianest.ui.utils.UiUtils
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
+import android.text.format.Formatter
+import com.example.medianest.data.local.entity.DownloadEntity
+import com.example.medianest.data.model.ExtractedVideoInfo
+import com.example.medianest.data.model.StreamSource
 
 /**
  * Configuration options for displaying optional features on the unified video card.
@@ -545,6 +551,107 @@ fun UnifiedVideoRow(
                                 }
                                 downloadMenuContent?.invoke()
                             }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun QuickDownloadMenu(
+    isExpanded: Boolean,
+    onDismiss: () -> Unit,
+    isFetching: Boolean,
+    fetchedStreams: ExtractedVideoInfo?,
+    allDownloads: List<DownloadEntity>,
+    videoId: String,
+    onEnqueueDownload: (ExtractedVideoInfo, StreamSource) -> Unit,
+    onDeleteDownload: (DownloadEntity) -> Unit,
+    onExtractAudio: (DownloadEntity) -> Unit
+) {
+    val context = LocalContext.current
+    DropdownMenu(
+        expanded = isExpanded,
+        onDismissRequest = onDismiss,
+        modifier = Modifier.heightIn(max = (LocalConfiguration.current.screenHeightDp * 0.5f).dp)
+    ) {
+        if (isFetching) {
+            DropdownMenuItem(
+                text = { Text("Loading formats...") },
+                leadingIcon = { CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp) },
+                onClick = { }
+            )
+        } else if (fetchedStreams != null) {
+            val streams = fetchedStreams.streamSources
+            val downloadedEntities = allDownloads.filter { it.videoId == videoId }
+
+            if (downloadedEntities.isNotEmpty()) {
+                DropdownMenuItem(
+                    text = { Text("Downloaded Formats", style = MaterialTheme.typography.titleSmall) },
+                    onClick = { }
+                )
+                downloadedEntities.forEach { entity ->
+                    DropdownMenuItem(
+                        text = { Text("Delete ${if (entity.format == "audio" || entity.format == "audio_extracted") "Audio" else entity.quality}") },
+                        leadingIcon = { Icon(Icons.Default.Delete, "Delete") },
+                        onClick = { onDeleteDownload(entity); onDismiss() }
+                    )
+                    if (entity.format == "video" && !downloadedEntities.any { it.format == "audio_extracted" }) {
+                        DropdownMenuItem(
+                            text = { Text("Extract Audio from ${entity.quality}") },
+                            leadingIcon = { Icon(Icons.Default.AudioFile, "Extract") },
+                            onClick = { onExtractAudio(entity); onDismiss() }
+                        )
+                    }
+                }
+                androidx.compose.material3.Divider()
+            }
+
+            val videoStreams = streams.filter { it.format == "video" || it.format == "video_only" }
+            val bestAudioStream = streams.filter { it.format == "audio" }
+                .maxByOrNull { it.quality.replace("kbps", "").toIntOrNull() ?: 0 }
+            val bestAudioLength = bestAudioStream?.contentLength
+
+            val groupedVideos = videoStreams.groupBy { it.quality }
+            val sortedResolutions = groupedVideos.keys.sortedByDescending { 
+                it.substringBefore("p").toIntOrNull() ?: 0 
+            }
+            
+            if (sortedResolutions.isNotEmpty()) {
+                DropdownMenuItem(
+                    text = { Text("Available Videos", style = MaterialTheme.typography.titleSmall) },
+                    onClick = { }
+                )
+                sortedResolutions.forEach { resolution ->
+                    DropdownMenuItem(
+                        text = { Text(resolution, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary) },
+                        onClick = { }
+                    )
+                    val streamsInResolution = groupedVideos[resolution] ?: emptyList()
+                    streamsInResolution.forEach { stream ->
+                        val dbQuality = if (stream.format == "audio") stream.quality else "${stream.quality} (${stream.codec})"
+                        val isDownloaded = downloadedEntities.any { it.format == stream.format && it.quality == dbQuality }
+                        if (!isDownloaded) {
+                            DropdownMenuItem(
+                                text = {
+                                    val sizeStr = stream.contentLength?.let { videoLen ->
+                                        val videoSize = Formatter.formatShortFileSize(context, videoLen)
+                                        if (stream.format == "video_only" && bestAudioLength != null && bestAudioLength > 0) {
+                                            val audioSize = Formatter.formatShortFileSize(context, bestAudioLength)
+                                            " • $videoSize + $audioSize"
+                                        } else {
+                                            " • $videoSize"
+                                        }
+                                    } ?: ""
+                                    val typeLabel = "Video"
+                                    val codecLabel = if (stream.codec.isNotEmpty()) " (${stream.codec.uppercase()})" else ""
+                                    Text("$typeLabel$codecLabel$sizeStr")
+                                },
+                                leadingIcon = { Icon(Icons.Default.Download, "Download") },
+                                onClick = { onEnqueueDownload(fetchedStreams, stream); onDismiss() }
+                            )
                         }
                     }
                 }

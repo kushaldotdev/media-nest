@@ -34,6 +34,15 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.material.icons.filled.AudioFile
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.foundation.layout.heightIn
+import android.text.format.Formatter
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -63,6 +72,7 @@ import com.example.medianest.ui.components.UnifiedVideoRow
 import com.example.medianest.ui.components.UnifiedVideoCard
 import com.example.medianest.ui.components.VideoCardConfig
 import com.example.medianest.ui.components.GlassCard
+import com.example.medianest.ui.components.QuickDownloadMenu
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -75,12 +85,23 @@ fun HomeScreen(
     val subscriptions by viewModel.subscriptions.collectAsStateWithLifecycle()
     val linkHistory by viewModel.linkHistory.collectAsStateWithLifecycle()
     val showShorts by viewModel.showShorts.collectAsStateWithLifecycle()
+    val favoriteVideoIds by viewModel.favoriteVideoIds.collectAsStateWithLifecycle()
+    val folders by viewModel.folders.collectAsStateWithLifecycle()
+    val videoFolderMap by viewModel.videoFolderMap.collectAsStateWithLifecycle()
+    val allDownloads by viewModel.allDownloads.collectAsStateWithLifecycle()
+    val fetchingStreamsFor by viewModel.fetchingStreamsFor.collectAsStateWithLifecycle()
+    val fetchedStreams by viewModel.fetchedStreams.collectAsStateWithLifecycle()
+    val playbackHistory by viewModel.playbackHistory.collectAsStateWithLifecycle()
     var urlInput by remember { mutableStateOf("") }
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
+
+    var showMoveToFolderDialog by remember { mutableStateOf(false) }
+    var videoToMove by remember { mutableStateOf<ExtractedVideoInfo?>(null) }
+    var expandedDownloadVideoId by remember { mutableStateOf<String?>(null) }
 
     Scaffold(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
@@ -176,10 +197,25 @@ fun HomeScreen(
                 is HomeUiState.Success -> {
                     viewModel.cacheResult(state.video)
                     item {
+                        val history = playbackHistory.find { it.videoId == state.video.videoId }
+                        val positionMillis = history?.positionMillis ?: 0L
+                        val progressFraction = if (state.video.durationSeconds > 0 && positionMillis > 0) {
+                            ((positionMillis.toFloat() / 1000f) / state.video.durationSeconds.toFloat()).coerceIn(0f, 1f)
+                        } else 0f
                         VideoResultCard(
                             video = state.video,
+                            isFavorite = favoriteVideoIds.contains(state.video.videoId),
+                            folders = videoFolderMap[state.video.videoId] ?: emptyList(),
+                            playbackProgressFraction = progressFraction,
                             onSelectQuality = { onVideoSelected(state.video.videoId) },
-                            onFavoriteToggle = { videoId, fav -> viewModel.toggleFavorite(videoId, fav) }
+                            onFavoriteToggle = { video, fav -> 
+                                viewModel.toggleFavorite(video, fav)
+                                coroutineScope.launch {
+                                    snackbarHostState.showSnackbar(
+                                        if (fav) "Added to favorites" else "Removed from favorites"
+                                    )
+                                }
+                            }
                         )
                     }
                 }
@@ -227,12 +263,46 @@ fun HomeScreen(
                     }
                     val filteredVideos = if (showShorts) state.playlist.videos else state.playlist.videos.filter { !it.isShort }
                     items(filteredVideos) { video ->
+                        val history = playbackHistory.find { it.videoId == video.videoId }
+                        val positionMillis = history?.positionMillis ?: 0L
+                        val progressFraction = if (video.durationSeconds > 0 && positionMillis > 0) {
+                            ((positionMillis.toFloat() / 1000f) / video.durationSeconds.toFloat()).coerceIn(0f, 1f)
+                        } else 0f
                         VideoListItem(
                             video = video,
+                            isFavorite = favoriteVideoIds.contains(video.videoId),
+                            folders = videoFolderMap[video.videoId] ?: emptyList(),
+                            playbackProgressFraction = progressFraction,
                             onClick = { onVideoSelected(video.videoId) },
-                            onFavoriteToggle = { id, current -> viewModel.toggleFavorite(id, current) },
-                            onMoveToFolder = { /* TODO: Move to folder from home screen not supported yet */ },
-                            onDownloadClick = { /* TODO: Download from home screen not supported yet */ }
+                            onFavoriteToggle = { videoObj, fav -> 
+                                viewModel.toggleFavorite(videoObj, fav)
+                                coroutineScope.launch {
+                                    snackbarHostState.showSnackbar(
+                                        if (fav) "Added to favorites" else "Removed from favorites"
+                                    )
+                                }
+                            },
+                            onMoveToFolder = { 
+                                videoToMove = video
+                                showMoveToFolderDialog = true
+                            },
+                            onDownloadClick = { id -> 
+                                expandedDownloadVideoId = id
+                                viewModel.fetchStreamsFor(id)
+                            },
+                            downloadMenuContent = {
+                                QuickDownloadMenu(
+                                    isExpanded = expandedDownloadVideoId == video.videoId,
+                                    onDismiss = { expandedDownloadVideoId = null },
+                                    isFetching = fetchingStreamsFor == video.videoId,
+                                    fetchedStreams = fetchedStreams,
+                                    allDownloads = allDownloads,
+                                    videoId = video.videoId,
+                                    onEnqueueDownload = { info, stream -> viewModel.enqueueDownload(info, stream) },
+                                    onDeleteDownload = { entity -> viewModel.deleteDownload(entity) },
+                                    onExtractAudio = { entity -> viewModel.extractAudio(entity) }
+                                )
+                            }
                         )
                     }
                 }
@@ -281,13 +351,47 @@ fun HomeScreen(
                     }
                     val filteredUploads = if (showShorts) state.channel.uploads else state.channel.uploads.filter { !it.isShort }
                     items(filteredUploads) { video ->
+                        val history = playbackHistory.find { it.videoId == video.videoId }
+                        val positionMillis = history?.positionMillis ?: 0L
+                        val progressFraction = if (video.durationSeconds > 0 && positionMillis > 0) {
+                            ((positionMillis.toFloat() / 1000f) / video.durationSeconds.toFloat()).coerceIn(0f, 1f)
+                        } else 0f
                         VideoListItem(
                             video = video,
+                            isFavorite = favoriteVideoIds.contains(video.videoId),
+                            folders = videoFolderMap[video.videoId] ?: emptyList(),
+                            playbackProgressFraction = progressFraction,
                             onClick = { onVideoSelected(video.videoId) },
                             showChannelName = false,
-                            onFavoriteToggle = { id, current -> viewModel.toggleFavorite(id, current) },
-                            onMoveToFolder = { /* TODO: Move to folder from home screen not supported yet */ },
-                            onDownloadClick = { /* TODO: Download from home screen not supported yet */ }
+                            onFavoriteToggle = { videoObj, fav -> 
+                                viewModel.toggleFavorite(videoObj, fav)
+                                coroutineScope.launch {
+                                    snackbarHostState.showSnackbar(
+                                        if (fav) "Added to favorites" else "Removed from favorites"
+                                    )
+                                }
+                            },
+                            onMoveToFolder = { 
+                                videoToMove = video
+                                showMoveToFolderDialog = true
+                            },
+                            onDownloadClick = { id -> 
+                                expandedDownloadVideoId = id
+                                viewModel.fetchStreamsFor(id)
+                            },
+                            downloadMenuContent = {
+                                QuickDownloadMenu(
+                                    isExpanded = expandedDownloadVideoId == video.videoId,
+                                    onDismiss = { expandedDownloadVideoId = null },
+                                    isFetching = fetchingStreamsFor == video.videoId,
+                                    fetchedStreams = fetchedStreams,
+                                    allDownloads = allDownloads,
+                                    videoId = video.videoId,
+                                    onEnqueueDownload = { info, stream -> viewModel.enqueueDownload(info, stream) },
+                                    onDeleteDownload = { entity -> viewModel.deleteDownload(entity) },
+                                    onExtractAudio = { entity -> viewModel.extractAudio(entity) }
+                                )
+                            }
                         )
                     }
                 }
@@ -326,6 +430,47 @@ fun HomeScreen(
                 }
             }
         }
+    }
+
+    if (showMoveToFolderDialog && videoToMove != null) {
+        AlertDialog(
+            onDismissRequest = { 
+                showMoveToFolderDialog = false
+                videoToMove = null
+            },
+            title = { Text("Move to Folder") },
+            text = {
+                if (folders.isEmpty()) {
+                    Text("No folders found. Create one in the Library tab first.")
+                } else {
+                    LazyColumn {
+                        items(folders) { folder ->
+                            TextButton(
+                                onClick = {
+                                    videoToMove?.let { video ->
+                                        viewModel.moveVideoToFolder(video, folder.id)
+                                        coroutineScope.launch {
+                                            snackbarHostState.showSnackbar("Moved to ${folder.name}")
+                                        }
+                                    }
+                                    showMoveToFolderDialog = false
+                                    videoToMove = null
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(folder.name)
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { 
+                    showMoveToFolderDialog = false
+                    videoToMove = null
+                }) { Text("Cancel") }
+            }
+        )
     }
 }
 
@@ -379,72 +524,70 @@ fun HistoryItemRow(
 @Composable
 fun VideoResultCard(
     video: ExtractedVideoInfo,
+    isFavorite: Boolean,
+    folders: List<com.example.medianest.data.local.entity.FolderEntity> = emptyList(),
+    playbackProgressFraction: Float = 0f,
     onSelectQuality: () -> Unit,
-    onFavoriteToggle: ((String, Boolean) -> Unit)? = null
+    onFavoriteToggle: ((ExtractedVideoInfo, Boolean) -> Unit)? = null
 ) {
-    var isFavorited by remember { mutableStateOf(false) }
-
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        UnifiedVideoCard(
-            title = video.title,
-            channelName = video.channelName,
-            thumbnailUrl = video.thumbnailUrl,
-            durationSeconds = video.durationSeconds,
-            uploadDate = video.uploadDate,
-            isFavorite = isFavorited,
-            config = VideoCardConfig(showFavoriteButton = onFavoriteToggle != null),
-            onFavoriteToggle = {
-                val newFav = !isFavorited
-                isFavorited = newFav
-                onFavoriteToggle?.invoke(video.videoId, newFav)
-            }
-        )
-        Button(
-            onClick = onSelectQuality,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Select Quality")
+    UnifiedVideoCard(
+        title = video.title,
+        channelName = video.channelName,
+        thumbnailUrl = video.thumbnailUrl,
+        durationSeconds = video.durationSeconds,
+        uploadDate = video.uploadDate,
+        isFavorite = isFavorite,
+        folders = folders,
+        playbackProgressFraction = playbackProgressFraction,
+        config = VideoCardConfig(
+            showFavoriteButton = onFavoriteToggle != null,
+            showFolderBadges = folders.isNotEmpty(),
+            showPlaybackProgress = playbackProgressFraction > 0f
+        ),
+        onClick = onSelectQuality,
+        onFavoriteToggle = {
+            onFavoriteToggle?.invoke(video, !isFavorite)
         }
-    }
+    )
 }
 
 @Composable
 fun VideoListItem(
     video: ExtractedVideoInfo,
+    isFavorite: Boolean,
+    folders: List<com.example.medianest.data.local.entity.FolderEntity> = emptyList(),
+    playbackProgressFraction: Float = 0f,
     onClick: () -> Unit,
     showChannelName: Boolean = true,
-    onFavoriteToggle: ((String, Boolean) -> Unit)? = null,
-    onMoveToFolder: ((String) -> Unit)? = null,
-    onDownloadClick: ((String) -> Unit)? = null
+    onFavoriteToggle: ((ExtractedVideoInfo, Boolean) -> Unit)? = null,
+    onMoveToFolder: ((ExtractedVideoInfo) -> Unit)? = null,
+    onDownloadClick: ((String) -> Unit)? = null,
+    downloadMenuContent: (@Composable () -> Unit)? = null
 ) {
-    var isFavorited by remember { mutableStateOf(false) }
-
     UnifiedVideoRow(
         title = video.title,
         channelName = if (showChannelName) video.channelName else "",
         thumbnailUrl = video.thumbnailUrl,
         durationSeconds = video.durationSeconds,
         uploadDate = video.uploadDate,
-        isFavorite = isFavorited,
+        isFavorite = isFavorite,
         isDownloaded = false, // Not tracked on Home screen
-        playbackProgressFraction = 0f, // Not tracked on Home screen
+        playbackProgressFraction = playbackProgressFraction,
+        folders = folders,
         config = VideoCardConfig(
             showFavoriteButton = onFavoriteToggle != null,
             showMoveToFolderButton = onMoveToFolder != null,
             showDownloadButton = onDownloadClick != null,
-            showPlaybackProgress = false,
-            showDownloadedBadge = false
+            showPlaybackProgress = playbackProgressFraction > 0f,
+            showDownloadedBadge = false,
+            showFolderBadges = folders.isNotEmpty()
         ),
         onClick = onClick,
         onFavoriteToggle = {
-            val newFav = !isFavorited
-            isFavorited = newFav
-            onFavoriteToggle?.invoke(video.videoId, newFav)
+            onFavoriteToggle?.invoke(video, !isFavorite)
         },
-        onMoveToFolder = { onMoveToFolder?.invoke(video.videoId) },
-        onDownloadClick = { onDownloadClick?.invoke(video.videoId) }
+        onMoveToFolder = { onMoveToFolder?.invoke(video) },
+        onDownloadClick = { onDownloadClick?.invoke(video.videoId) },
+        downloadMenuContent = downloadMenuContent
     )
 }

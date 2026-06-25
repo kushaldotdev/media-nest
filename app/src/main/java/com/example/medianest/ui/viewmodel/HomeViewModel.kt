@@ -9,10 +9,25 @@ import com.example.medianest.data.repository.SubscriptionRepository
 import com.example.medianest.data.repository.VideoRepository
 import com.example.medianest.data.local.dao.LinkHistoryDao
 import com.example.medianest.data.local.entity.LinkHistoryEntity
+import com.example.medianest.data.local.dao.FolderDao
+import com.example.medianest.data.local.dao.VideoFolderDao
+import com.example.medianest.data.local.entity.FolderEntity
+import com.example.medianest.data.local.entity.VideoFolderJoin
+import com.example.medianest.data.mapper.toVideoEntity
+import com.example.medianest.data.local.dao.VideoDao
+import com.example.medianest.data.local.dao.HistoryDao
+import com.example.medianest.data.local.entity.HistoryEntity
+import com.example.medianest.data.local.entity.DownloadEntity
+import com.example.medianest.data.local.entity.DownloadStatus
+import com.example.medianest.data.repository.DownloadRepository
+import com.example.medianest.service.AudioExtractor
+import com.example.medianest.data.model.StreamSource
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -27,9 +42,16 @@ sealed class HomeUiState {
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
+    @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
     private val repository: VideoRepository,
     private val subscriptionRepository: SubscriptionRepository,
-    private val linkHistoryDao: LinkHistoryDao
+    private val linkHistoryDao: LinkHistoryDao,
+    private val folderDao: FolderDao,
+    private val videoFolderDao: VideoFolderDao,
+    private val videoDao: VideoDao,
+    private val downloadRepository: DownloadRepository,
+    private val audioExtractor: AudioExtractor,
+    private val historyDao: HistoryDao
 ) : ViewModel() {
 
     companion object {
@@ -133,9 +155,164 @@ class HomeViewModel @Inject constructor(
 
     fun getCachedResult(videoId: String): ExtractedVideoInfo? = lastResultCache.get(videoId)
 
-    fun toggleFavorite(videoId: String, favorite: Boolean) {
+    fun toggleFavorite(video: ExtractedVideoInfo, favorite: Boolean) {
         viewModelScope.launch {
-            repository.setFavorite(videoId, favorite)
+            val existing = repository.getVideoById(video.videoId)
+            if (existing == null) {
+                repository.insertVideo(video.toVideoEntity().copy(favorite = favorite))
+            } else {
+                repository.setFavorite(video.videoId, favorite)
+            }
+        }
+    }
+
+    val favoriteVideoIds: StateFlow<Set<String>> = repository.getAllVideos()
+        .map { list -> list.filter { it.favorite }.map { it.id }.toSet() }
+        .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000), emptySet())
+
+    val folders: StateFlow<List<FolderEntity>> = folderDao.getAllFolders()
+        .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val videoFolderMap: StateFlow<Map<String, List<FolderEntity>>> = combine(
+        folderDao.getAllFolders(),
+        videoFolderDao.getAllJoinsFlow()
+    ) { folders, joins ->
+        val folderMap = folders.associateBy { it.id }
+        joins.groupBy({ it.videoId }, { folderMap[it.folderId] })
+            .mapValues { (_, list) -> list.filterNotNull() }
+    }.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000), emptyMap())
+
+    fun moveVideoToFolder(video: ExtractedVideoInfo, folderId: Long) {
+        viewModelScope.launch {
+            val existing = repository.getVideoById(video.videoId)
+            if (existing == null) {
+                repository.insertVideo(video.toVideoEntity())
+            }
+            videoFolderDao.addVideoToFolder(VideoFolderJoin(video.videoId, folderId))
+        }
+    }
+
+    private val _fetchingStreamsFor = MutableStateFlow<String?>(null)
+    val fetchingStreamsFor: StateFlow<String?> = _fetchingStreamsFor
+
+    private val _fetchedStreams = MutableStateFlow<ExtractedVideoInfo?>(null)
+    val fetchedStreams: StateFlow<ExtractedVideoInfo?> = _fetchedStreams
+
+    val allDownloads: StateFlow<List<DownloadEntity>> = downloadRepository.getAllDownloads()
+        .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun fetchStreamsFor(videoId: String) {
+        _fetchingStreamsFor.value = videoId
+        _fetchedStreams.value = null
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                val cached = lastResultCache.get(videoId)
+                if (cached != null && cached.streamSources.isNotEmpty()) {
+                    _fetchedStreams.value = cached
+                } else {
+                    val info = repository.searchAndSave("https://www.youtube.com/watch?v=$videoId")
+                    lastResultCache.put(videoId, info)
+                    if (videoId == _fetchingStreamsFor.value) {
+                        _fetchedStreams.value = info
+                    }
+                }
+            } catch (e: Exception) {
+                // handle error
+            } finally {
+                if (videoId == _fetchingStreamsFor.value) {
+                    _fetchingStreamsFor.value = null
+                }
+            }
+        }
+    }
+
+    fun enqueueDownload(videoInfo: ExtractedVideoInfo, stream: StreamSource) {
+        viewModelScope.launch {
+            val dbQuality = if (stream.format == "audio") stream.quality else "${stream.quality} (${stream.codec})"
+            val existing = downloadRepository.getDownload(videoInfo.videoId, stream.format, dbQuality)
+            if (existing != null) {
+                android.widget.Toast.makeText(context, "Download already exists in queue", android.widget.Toast.LENGTH_SHORT).show()
+                return@launch
+            }
+
+            val video = repository.getVideoById(videoInfo.videoId)
+            if (video == null) {
+                repository.insertVideo(videoInfo.toVideoEntity())
+            }
+
+            val entity = DownloadEntity(
+                videoId = videoInfo.videoId,
+                url = stream.url,
+                videoUrl = "https://www.youtube.com/watch?v=${videoInfo.videoId}",
+                format = stream.format,
+                quality = dbQuality,
+                status = DownloadStatus.QUEUED,
+                title = videoInfo.title,
+                thumbnailUrl = videoInfo.thumbnailUrl
+            )
+            downloadRepository.insert(entity)
+            try {
+                context.startForegroundService(android.content.Intent(context, com.example.medianest.service.DownloadService::class.java))
+                android.widget.Toast.makeText(context, "Download started: ${videoInfo.title}", android.widget.Toast.LENGTH_SHORT).show()
+            } catch (e: Exception) {
+                android.widget.Toast.makeText(context, "Failed to start downloader service: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    fun deleteDownload(download: DownloadEntity) {
+        viewModelScope.launch {
+            if (download.status == DownloadStatus.DOWNLOADING || download.status == DownloadStatus.QUEUED) {
+                com.example.medianest.service.DownloadService.cancel(context, download.id)
+            } else {
+                if (download.filePath.isNotEmpty()) {
+                    try {
+                        val file = java.io.File(download.filePath)
+                        if (file.exists()) file.delete()
+                    } catch (e: Exception) {}
+                }
+                downloadRepository.delete(download)
+                
+                val remaining = downloadRepository.getLocalDownloadsForVideo(download.videoId)
+                if (remaining.isEmpty()) {
+                    val video = repository.getVideoById(download.videoId)
+                    if (video != null) {
+                        repository.updateVideo(video.copy(localFilePath = ""))
+                    }
+                }
+            }
+        }
+    }
+
+    fun extractAudio(download: DownloadEntity) {
+        if (download.filePath.isEmpty() || download.status != DownloadStatus.COMPLETED) return
+        android.widget.Toast.makeText(context, "Audio extraction started", android.widget.Toast.LENGTH_SHORT).show()
+        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO).launch {
+            val existing = downloadRepository.getAudioExtraction(download.videoId)
+            if (existing != null) return@launch
+
+            val extractionEntity = DownloadEntity(
+                videoId = download.videoId,
+                url = "",
+                format = "audio_extracted",
+                quality = "${download.quality}_audio",
+                title = download.title,
+                thumbnailUrl = download.thumbnailUrl,
+                status = DownloadStatus.DOWNLOADING,
+                progress = 0f
+            )
+            val insertId = downloadRepository.insert(extractionEntity)
+
+            try {
+                val result = audioExtractor.extractAudio(download.filePath, download.videoId, download.quality)
+                if (result.success) {
+                    downloadRepository.markCompleted(insertId, java.io.File(result.outputPath).length(), result.outputPath)
+                } else {
+                    downloadRepository.markFailed(insertId, result.errorMessage ?: "Extraction failed", 0)
+                }
+            } catch (e: Throwable) {
+                downloadRepository.markFailed(insertId, e.message ?: "Extraction failed", 0)
+            }
         }
     }
 
@@ -143,6 +320,9 @@ class HomeViewModel @Inject constructor(
         .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000), emptyList())
 
     val linkHistory: StateFlow<List<LinkHistoryEntity>> = linkHistoryDao.getAllLinkHistory()
+        .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val playbackHistory: StateFlow<List<HistoryEntity>> = historyDao.getAllHistory()
         .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000), emptyList())
 
     private fun saveLinkToHistory(url: String, state: HomeUiState) {
