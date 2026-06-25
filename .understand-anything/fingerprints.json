@@ -1,7 +1,7 @@
 {
   "version": "1.0.0",
-  "gitCommitHash": "611dda93ad4c4a61b9fb3cbfd36857ad65cb0db8",
-  "generatedAt": "2026-06-25T16:39:13.344Z",
+  "gitCommitHash": "fdbf17dcb42b42f8e64230614832d5fc6a33529a",
+  "generatedAt": "2026-06-25T21:12:15.266Z",
   "files": {
     ".agents/anchors/medianest.md": {
       "filePath": ".agents/anchors/medianest.md",
@@ -8233,7 +8233,7 @@
     },
     "app/src/main/java/com/example/medianest/ui/screens/DownloadsScreen.kt": {
       "filePath": "app/src/main/java/com/example/medianest/ui/screens/DownloadsScreen.kt",
-      "contentHash": "74fdce4c021a5aaf32580323fcd67ea6ba6ab61596f57f051592a34ed76b8e06",
+      "contentHash": "d7fc368b5d21cc9464d9d8127f6b8fa834534ba4024ec18d3d1904a743d501a8",
       "functions": [
         {
           "name": "DownloadsScreen",
@@ -8260,7 +8260,7 @@
             "isPlaying"
           ],
           "exported": false,
-          "lineCount": 430
+          "lineCount": 437
         }
       ],
       "classes": [],
@@ -8383,6 +8383,12 @@
           "source": "androidx.compose.material.icons.filled.Check",
           "specifiers": [
             "Check"
+          ]
+        },
+        {
+          "source": "androidx.compose.material.icons.filled.CheckCircle",
+          "specifiers": [
+            "CheckCircle"
           ]
         },
         {
@@ -8629,12 +8635,12 @@
       "exports": [
         "DownloadsScreen"
       ],
-      "totalLines": 737,
+      "totalLines": 745,
       "hasStructuralAnalysis": true
     },
     "app/src/main/java/com/example/medianest/ui/screens/HomeScreen.kt": {
       "filePath": "app/src/main/java/com/example/medianest/ui/screens/HomeScreen.kt",
-      "contentHash": "540b58d2d6bafdb463945c2092d36d4c3c779dd0c5013129f969cc00d5cccafa",
+      "contentHash": "cd41f96420e2918258a720aec3553319dbcabeb289217211132d8eaab73bc7f2",
       "functions": [
         {
           "name": "HomeScreen",
@@ -8644,7 +8650,7 @@
             "onSubscribe"
           ],
           "exported": true,
-          "lineCount": 251
+          "lineCount": 399
         },
         {
           "name": "HistoryItemRow",
@@ -8655,27 +8661,37 @@
             "modifier"
           ],
           "exported": true,
-          "lineCount": 50
+          "lineCount": 46
         },
         {
           "name": "VideoResultCard",
           "params": [
             "video",
+            "isFavorite",
+            "folders",
+            "playbackProgressFraction",
             "onSelectQuality",
             "onFavoriteToggle"
           ],
           "exported": true,
-          "lineCount": 89
+          "lineCount": 29
         },
         {
           "name": "VideoListItem",
           "params": [
             "video",
+            "isFavorite",
+            "folders",
+            "playbackProgressFraction",
             "onClick",
-            "showChannelName"
+            "showChannelName",
+            "onFavoriteToggle",
+            "onMoveToFolder",
+            "onDownloadClick",
+            "downloadMenuContent"
           ],
           "exported": true,
-          "lineCount": 59
+          "lineCount": 40
         }
       ],
       "classes": [],
@@ -8885,6 +8901,60 @@
           ]
         },
         {
+          "source": "androidx.compose.material3.AlertDialog",
+          "specifiers": [
+            "AlertDialog"
+          ]
+        },
+        {
+          "source": "androidx.compose.material3.TextButton",
+          "specifiers": [
+            "TextButton"
+          ]
+        },
+        {
+          "source": "androidx.compose.material3.DropdownMenu",
+          "specifiers": [
+            "DropdownMenu"
+          ]
+        },
+        {
+          "source": "androidx.compose.material3.DropdownMenuItem",
+          "specifiers": [
+            "DropdownMenuItem"
+          ]
+        },
+        {
+          "source": "androidx.compose.ui.platform.LocalConfiguration",
+          "specifiers": [
+            "LocalConfiguration"
+          ]
+        },
+        {
+          "source": "androidx.compose.material.icons.filled.AudioFile",
+          "specifiers": [
+            "AudioFile"
+          ]
+        },
+        {
+          "source": "androidx.compose.material.icons.filled.Download",
+          "specifiers": [
+            "Download"
+          ]
+        },
+        {
+          "source": "androidx.compose.foundation.layout.heightIn",
+          "specifiers": [
+            "heightIn"
+          ]
+        },
+        {
+          "source": "android.text.format.Formatter",
+          "specifiers": [
+            "Formatter"
+          ]
+        },
+        {
           "source": "androidx.compose.runtime.Composable",
           "specifiers": [
             "Composable"
@@ -9033,6 +9103,36 @@
           "specifiers": [
             "HomeViewModel"
           ]
+        },
+        {
+          "source": "com.example.medianest.ui.components.UnifiedVideoRow",
+          "specifiers": [
+            "UnifiedVideoRow"
+          ]
+        },
+        {
+          "source": "com.example.medianest.ui.components.UnifiedVideoCard",
+          "specifiers": [
+            "UnifiedVideoCard"
+          ]
+        },
+        {
+          "source": "com.example.medianest.ui.components.VideoCardConfig",
+          "specifiers": [
+            "VideoCardConfig"
+          ]
+        },
+        {
+          "source": "com.example.medianest.ui.components.GlassCard",
+          "specifiers": [
+            "GlassCard"
+          ]
+        },
+        {
+          "source": "com.example.medianest.ui.components.QuickDownloadMenu",
+          "specifiers": [
+            "QuickDownloadMenu"
+          ]
         }
       ],
       "exports": [
@@ -9041,12 +9141,12 @@
         "VideoResultCard",
         "VideoListItem"
       ],
-      "totalLines": 515,
+      "totalLines": 594,
       "hasStructuralAnalysis": true
     },
     "app/src/main/java/com/example/medianest/ui/screens/LibraryScreen.kt": {
       "filePath": "app/src/main/java/com/example/medianest/ui/screens/LibraryScreen.kt",
-      "contentHash": "4173ede2a6b003908ce6a1f12c6a538f7f79ce83735b95ab0aa59ee5df0218dd",
+      "contentHash": "3d3c234d2cd5a63fd43fadd45d369a336b7490010123750c932405992e969492",
       "functions": [
         {
           "name": "LibraryScreen",
@@ -9056,7 +9156,7 @@
             "viewModel"
           ],
           "exported": true,
-          "lineCount": 379
+          "lineCount": 393
         },
         {
           "name": "VideoListLayout",
@@ -9082,55 +9182,7 @@
             "onExtractAudio"
           ],
           "exported": false,
-          "lineCount": 80
-        },
-        {
-          "name": "VideoCard",
-          "params": [
-            "video",
-            "folders",
-            "isSelectionMode",
-            "isSelected",
-            "onClick",
-            "onLongClick",
-            "onFavoriteToggle",
-            "isDownloadMenuExpanded",
-            "isFetchingStreams",
-            "fetchedStreams",
-            "allDownloads",
-            "playbackHistory",
-            "onDownloadIconClick",
-            "onDismissDownloadMenu",
-            "onEnqueueDownload",
-            "onDeleteDownload",
-            "onExtractAudio"
-          ],
-          "exported": false,
-          "lineCount": 171
-        },
-        {
-          "name": "VideoListRow",
-          "params": [
-            "video",
-            "folders",
-            "isSelectionMode",
-            "isSelected",
-            "onClick",
-            "onLongClick",
-            "onFavoriteToggle",
-            "isDownloadMenuExpanded",
-            "isFetchingStreams",
-            "fetchedStreams",
-            "allDownloads",
-            "playbackHistory",
-            "onDownloadIconClick",
-            "onDismissDownloadMenu",
-            "onEnqueueDownload",
-            "onDeleteDownload",
-            "onExtractAudio"
-          ],
-          "exported": false,
-          "lineCount": 179
+          "lineCount": 140
         },
         {
           "name": "FolderContent",
@@ -9154,6 +9206,7 @@
             "onVideoLongClick",
             "onToggleSelection",
             "onFavoriteToggle",
+            "onRemoveFromFolder",
             "expandedDownloadVideoId",
             "fetchingStreamsFor",
             "fetchedStreams",
@@ -9166,15 +9219,7 @@
             "onExtractAudio"
           ],
           "exported": false,
-          "lineCount": 165
-        },
-        {
-          "name": "FolderBadges",
-          "params": [
-            "folders"
-          ],
-          "exported": false,
-          "lineCount": 82
+          "lineCount": 230
         },
         {
           "name": "FolderRow",
@@ -9186,7 +9231,7 @@
             "onDelete"
           ],
           "exported": false,
-          "lineCount": 35
+          "lineCount": 33
         },
         {
           "name": "EmptyState",
@@ -9195,22 +9240,6 @@
           ],
           "exported": false,
           "lineCount": 6
-        },
-        {
-          "name": "QuickDownloadMenu",
-          "params": [
-            "isExpanded",
-            "onDismiss",
-            "isFetching",
-            "fetchedStreams",
-            "allDownloads",
-            "videoId",
-            "onEnqueueDownload",
-            "onDeleteDownload",
-            "onExtractAudio"
-          ],
-          "exported": false,
-          "lineCount": 100
         }
       ],
       "classes": [],
@@ -9474,6 +9503,36 @@
           ]
         },
         {
+          "source": "com.example.medianest.ui.components.UnifiedVideoCard",
+          "specifiers": [
+            "UnifiedVideoCard"
+          ]
+        },
+        {
+          "source": "com.example.medianest.ui.components.UnifiedVideoRow",
+          "specifiers": [
+            "UnifiedVideoRow"
+          ]
+        },
+        {
+          "source": "com.example.medianest.ui.components.VideoCardConfig",
+          "specifiers": [
+            "VideoCardConfig"
+          ]
+        },
+        {
+          "source": "com.example.medianest.ui.components.GlassCard",
+          "specifiers": [
+            "GlassCard"
+          ]
+        },
+        {
+          "source": "com.example.medianest.ui.components.QuickDownloadMenu",
+          "specifiers": [
+            "QuickDownloadMenu"
+          ]
+        },
+        {
           "source": "kotlinx.coroutines.launch",
           "specifiers": [
             "launch"
@@ -9483,7 +9542,7 @@
       "exports": [
         "LibraryScreen"
       ],
-      "totalLines": 1255,
+      "totalLines": 867,
       "hasStructuralAnalysis": true
     },
     "app/src/main/java/com/example/medianest/ui/screens/PlayerScreen.kt": {
@@ -9901,7 +9960,7 @@
     },
     "app/src/main/java/com/example/medianest/ui/screens/SettingsScreen.kt": {
       "filePath": "app/src/main/java/com/example/medianest/ui/screens/SettingsScreen.kt",
-      "contentHash": "61fdc86e00eb8f386133863c648c0182ad435fac929171ffeec528f9dc3dc5fb",
+      "contentHash": "4344f542eceba0f4268710ecf1370bdf7923c23d537b492978e6458d9b0caff1",
       "functions": [
         {
           "name": "SettingsScreen",
@@ -9910,7 +9969,7 @@
             "onNavigateToStatistics"
           ],
           "exported": true,
-          "lineCount": 1245
+          "lineCount": 1242
         },
         {
           "name": "getPathFromUri",
@@ -10184,6 +10243,12 @@
           ]
         },
         {
+          "source": "com.example.medianest.ui.components.GlassCard",
+          "specifiers": [
+            "GlassCard"
+          ]
+        },
+        {
           "source": "com.example.medianest.ui.viewmodel.UpdateState",
           "specifiers": [
             "UpdateState"
@@ -10235,7 +10300,7 @@
       "exports": [
         "SettingsScreen"
       ],
-      "totalLines": 1362,
+      "totalLines": 1360,
       "hasStructuralAnalysis": true
     },
     "app/src/main/java/com/example/medianest/ui/screens/StatisticsScreen.kt": {
@@ -10518,18 +10583,19 @@
     },
     "app/src/main/java/com/example/medianest/ui/screens/SubscriptionsScreen.kt": {
       "filePath": "app/src/main/java/com/example/medianest/ui/screens/SubscriptionsScreen.kt",
-      "contentHash": "3164fd69cca785c23bf9dbff52662d32d7fbfd327f41c71ed415d4d939329aac",
+      "contentHash": "b53429ca76597d85e7163dd0e944beb450b67984b27382fbb029104f5bc9dbcd",
       "functions": [
         {
           "name": "SubscriptionsScreen",
           "params": [
             "sourceType",
             "searchQuery",
+            "viewMode",
             "onSubscriptionClick",
             "viewModel"
           ],
           "exported": true,
-          "lineCount": 53
+          "lineCount": 105
         },
         {
           "name": "SubscriptionCard",
@@ -10540,7 +10606,7 @@
             "onClick"
           ],
           "exported": false,
-          "lineCount": 74
+          "lineCount": 71
         }
       ],
       "classes": [],
@@ -10657,6 +10723,30 @@
           "source": "androidx.compose.foundation.lazy.items",
           "specifiers": [
             "items"
+          ]
+        },
+        {
+          "source": "androidx.compose.foundation.lazy.grid.LazyVerticalGrid",
+          "specifiers": [
+            "LazyVerticalGrid"
+          ]
+        },
+        {
+          "source": "androidx.compose.foundation.lazy.grid.GridCells",
+          "specifiers": [
+            "GridCells"
+          ]
+        },
+        {
+          "source": "androidx.compose.foundation.lazy.grid.items",
+          "specifiers": [
+            "items"
+          ]
+        },
+        {
+          "source": "androidx.compose.foundation.lazy.grid.GridItemSpan",
+          "specifiers": [
+            "GridItemSpan"
           ]
         },
         {
@@ -10814,17 +10904,47 @@
           "specifiers": [
             "SubscriptionsViewModel"
           ]
+        },
+        {
+          "source": "com.example.medianest.ui.viewmodel.ViewMode",
+          "specifiers": [
+            "ViewMode"
+          ]
+        },
+        {
+          "source": "com.example.medianest.ui.components.GlassCard",
+          "specifiers": [
+            "GlassCard"
+          ]
+        },
+        {
+          "source": "androidx.compose.runtime.remember",
+          "specifiers": [
+            "remember"
+          ]
+        },
+        {
+          "source": "androidx.compose.runtime.mutableStateOf",
+          "specifiers": [
+            "mutableStateOf"
+          ]
+        },
+        {
+          "source": "androidx.compose.runtime.setValue",
+          "specifiers": [
+            "setValue"
+          ]
         }
       ],
       "exports": [
         "SubscriptionsScreen"
       ],
-      "totalLines": 177,
+      "totalLines": 235,
       "hasStructuralAnalysis": true
     },
     "app/src/main/java/com/example/medianest/ui/screens/VideoDetailScreen.kt": {
       "filePath": "app/src/main/java/com/example/medianest/ui/screens/VideoDetailScreen.kt",
-      "contentHash": "e6d308dc7bc98f49cc68118bb79fdca47531194f4fd332fb0cac3df4e38616bf",
+      "contentHash": "e1ccbc532b8bc29ab5c6e3c0072b344ed36108b7e2cf7d38e4170b04de792c4d",
       "functions": [
         {
           "name": "VideoDetailScreen",
@@ -11465,7 +11585,7 @@
     },
     "app/src/main/java/com/example/medianest/ui/utils/UiUtils.kt": {
       "filePath": "app/src/main/java/com/example/medianest/ui/utils/UiUtils.kt",
-      "contentHash": "69e5c9c1e66f7ec0c1de49d8774a655facb4e4035b5f14f2bef70f95fdb844f0",
+      "contentHash": "0b48071f0ae8687267e98aca88e43933db8a207cf02a0c2d3d2b50e74a7a71c6",
       "functions": [
         {
           "name": "formatDuration",
@@ -11500,17 +11620,18 @@
             "rawDate"
           ],
           "returnType": "Date?",
-          "exported": false,
+          "exported": true,
           "lineCount": 20
         },
         {
-          "name": "getRelativeTimeString",
+          "name": "formatRelativeTime",
           "params": [
-            "date"
+            "date",
+            "abbreviated"
           ],
           "returnType": "String",
-          "exported": false,
-          "lineCount": 38
+          "exported": true,
+          "lineCount": 51
         },
         {
           "name": "formatReleaseDate",
@@ -11520,6 +11641,15 @@
           "returnType": "String?",
           "exported": true,
           "lineCount": 8
+        },
+        {
+          "name": "formatRelativeDateExact",
+          "params": [
+            "rawDate"
+          ],
+          "returnType": "String?",
+          "exported": true,
+          "lineCount": 5
         },
         {
           "name": "formatAbsoluteReleaseDate",
@@ -11539,13 +11669,14 @@
             "formatAbsoluteDate",
             "stripHtml",
             "parseUploadDate",
-            "getRelativeTimeString",
+            "formatRelativeTime",
             "formatReleaseDate",
+            "formatRelativeDateExact",
             "formatAbsoluteReleaseDate"
           ],
           "properties": [],
           "exported": true,
-          "lineCount": 112
+          "lineCount": 131
         }
       ],
       "imports": [
@@ -11572,11 +11703,14 @@
         "formatDuration",
         "formatAbsoluteDate",
         "stripHtml",
+        "parseUploadDate",
+        "formatRelativeTime",
         "formatReleaseDate",
+        "formatRelativeDateExact",
         "formatAbsoluteReleaseDate",
         "UiUtils"
       ],
-      "totalLines": 119,
+      "totalLines": 138,
       "hasStructuralAnalysis": true
     },
     "app/src/main/java/com/example/medianest/ui/viewmodel/DownloadsViewModel.kt": {
@@ -12672,7 +12806,7 @@
     },
     "app/src/main/java/com/example/medianest/ui/viewmodel/HomeViewModel.kt": {
       "filePath": "app/src/main/java/com/example/medianest/ui/viewmodel/HomeViewModel.kt",
-      "contentHash": "51f594f36bed2a4543f42b6f66834ed9f4e26a5dfe1be02bda47020f65f38f8c",
+      "contentHash": "523d95e1051a09d3c0c36bc8104b9ce99bf136d4f9a13d059ebecadd0680990b",
       "functions": [
         {
           "name": "toggleShorts",
@@ -12710,11 +12844,53 @@
         {
           "name": "toggleFavorite",
           "params": [
-            "videoId",
+            "video",
             "favorite"
           ],
           "exported": true,
-          "lineCount": 5
+          "lineCount": 10
+        },
+        {
+          "name": "moveVideoToFolder",
+          "params": [
+            "video",
+            "folderId"
+          ],
+          "exported": true,
+          "lineCount": 9
+        },
+        {
+          "name": "fetchStreamsFor",
+          "params": [
+            "videoId"
+          ],
+          "exported": true,
+          "lineCount": 24
+        },
+        {
+          "name": "enqueueDownload",
+          "params": [
+            "videoInfo",
+            "stream"
+          ],
+          "exported": true,
+          "lineCount": 33
+        },
+        {
+          "name": "deleteDownload",
+          "params": [
+            "download"
+          ],
+          "exported": true,
+          "lineCount": 23
+        },
+        {
+          "name": "extractAudio",
+          "params": [
+            "download"
+          ],
+          "exported": true,
+          "lineCount": 31
         },
         {
           "name": "saveLinkToHistory",
@@ -12778,6 +12954,11 @@
             "cacheResult",
             "getCachedResult",
             "toggleFavorite",
+            "moveVideoToFolder",
+            "fetchStreamsFor",
+            "enqueueDownload",
+            "deleteDownload",
+            "extractAudio",
             "saveLinkToHistory",
             "deleteHistoryItem",
             "subscribe",
@@ -12785,18 +12966,34 @@
             "resetState"
           ],
           "properties": [
+            "context",
             "repository",
             "subscriptionRepository",
             "linkHistoryDao",
+            "folderDao",
+            "videoFolderDao",
+            "videoDao",
+            "downloadRepository",
+            "audioExtractor",
+            "historyDao",
             "_uiState",
             "uiState",
             "_showShorts",
             "showShorts",
+            "favoriteVideoIds",
+            "folders",
+            "videoFolderMap",
+            "_fetchingStreamsFor",
+            "fetchingStreamsFor",
+            "_fetchedStreams",
+            "fetchedStreams",
+            "allDownloads",
             "subscriptions",
-            "linkHistory"
+            "linkHistory",
+            "playbackHistory"
           ],
           "exported": true,
-          "lineCount": 154
+          "lineCount": 319
         }
       ],
       "imports": [
@@ -12855,6 +13052,84 @@
           ]
         },
         {
+          "source": "com.example.medianest.data.local.dao.FolderDao",
+          "specifiers": [
+            "FolderDao"
+          ]
+        },
+        {
+          "source": "com.example.medianest.data.local.dao.VideoFolderDao",
+          "specifiers": [
+            "VideoFolderDao"
+          ]
+        },
+        {
+          "source": "com.example.medianest.data.local.entity.FolderEntity",
+          "specifiers": [
+            "FolderEntity"
+          ]
+        },
+        {
+          "source": "com.example.medianest.data.local.entity.VideoFolderJoin",
+          "specifiers": [
+            "VideoFolderJoin"
+          ]
+        },
+        {
+          "source": "com.example.medianest.data.mapper.toVideoEntity",
+          "specifiers": [
+            "toVideoEntity"
+          ]
+        },
+        {
+          "source": "com.example.medianest.data.local.dao.VideoDao",
+          "specifiers": [
+            "VideoDao"
+          ]
+        },
+        {
+          "source": "com.example.medianest.data.local.dao.HistoryDao",
+          "specifiers": [
+            "HistoryDao"
+          ]
+        },
+        {
+          "source": "com.example.medianest.data.local.entity.HistoryEntity",
+          "specifiers": [
+            "HistoryEntity"
+          ]
+        },
+        {
+          "source": "com.example.medianest.data.local.entity.DownloadEntity",
+          "specifiers": [
+            "DownloadEntity"
+          ]
+        },
+        {
+          "source": "com.example.medianest.data.local.entity.DownloadStatus",
+          "specifiers": [
+            "DownloadStatus"
+          ]
+        },
+        {
+          "source": "com.example.medianest.data.repository.DownloadRepository",
+          "specifiers": [
+            "DownloadRepository"
+          ]
+        },
+        {
+          "source": "com.example.medianest.service.AudioExtractor",
+          "specifiers": [
+            "AudioExtractor"
+          ]
+        },
+        {
+          "source": "com.example.medianest.data.model.StreamSource",
+          "specifiers": [
+            "StreamSource"
+          ]
+        },
+        {
           "source": "dagger.hilt.android.lifecycle.HiltViewModel",
           "specifiers": [
             "HiltViewModel"
@@ -12879,6 +13154,18 @@
           ]
         },
         {
+          "source": "kotlinx.coroutines.flow.map",
+          "specifiers": [
+            "map"
+          ]
+        },
+        {
+          "source": "kotlinx.coroutines.flow.combine",
+          "specifiers": [
+            "combine"
+          ]
+        },
+        {
           "source": "kotlinx.coroutines.launch",
           "specifiers": [
             "launch"
@@ -12900,15 +13187,27 @@
         "cacheResult",
         "getCachedResult",
         "toggleFavorite",
+        "favoriteVideoIds",
+        "folders",
+        "videoFolderMap",
+        "moveVideoToFolder",
+        "fetchingStreamsFor",
+        "fetchedStreams",
+        "allDownloads",
+        "fetchStreamsFor",
+        "enqueueDownload",
+        "deleteDownload",
+        "extractAudio",
         "subscriptions",
         "linkHistory",
+        "playbackHistory",
         "deleteHistoryItem",
         "subscribe",
         "unsubscribe",
         "resetState",
         "HomeViewModel"
       ],
-      "totalLines": 182,
+      "totalLines": 362,
       "hasStructuralAnalysis": true
     },
     "app/src/main/java/com/example/medianest/ui/viewmodel/LibraryViewModel.kt": {
