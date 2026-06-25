@@ -38,6 +38,7 @@ import com.example.medianest.data.sync.SyncLogEntry
 import com.example.medianest.data.sync.SyncState
 import com.example.medianest.ui.viewmodel.ExportImportState
 import com.example.medianest.ui.viewmodel.ExportImportViewModel
+import com.example.medianest.ui.viewmodel.MigrationState
 import com.example.medianest.ui.viewmodel.ImportInspectionState
 import com.example.medianest.ui.viewmodel.UpdateState
 import kotlinx.coroutines.delay
@@ -62,6 +63,26 @@ fun SettingsScreen(
     val focusManager = LocalFocusManager.current
 
     val downloadFolder by viewModel.downloadFolder.collectAsStateWithLifecycle()
+    val migrationState by viewModel.migrationState.collectAsStateWithLifecycle()
+
+    LaunchedEffect(migrationState) {
+        when (val s = migrationState) {
+            is MigrationState.Success -> {
+                if (s.movedCount > 0) {
+                    snackbarHostState.showSnackbar("Download folder migrated: moved ${s.movedCount} files")
+                } else {
+                    snackbarHostState.showSnackbar("Download location updated successfully")
+                }
+                viewModel.resetMigrationState()
+            }
+            is MigrationState.Error -> {
+                snackbarHostState.showSnackbar("Migration failed: ${s.message}")
+                viewModel.resetMigrationState()
+            }
+            else -> {}
+        }
+    }
+
     val defaultDownloadsPath = remember {
         try {
             File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS), "MediaNest").absolutePath
@@ -398,10 +419,7 @@ fun SettingsScreen(
                             }
 
                             if (isSupported) {
-                                viewModel.setDownloadFolder(customInput)
-                                coroutineScope.launch {
-                                    snackbarHostState.showSnackbar("Download location updated successfully")
-                                }
+                                viewModel.startDownloadFolderMigration(customInput)
                             } else {
                                 unsupportedPathMessage = "The folder path '$customInput' is not writable or supported. On Android 10+ (API 29+), writing to public system directories is restricted. Please select a different directory."
                                 showUnsupportedPathDialog = true
@@ -947,6 +965,33 @@ fun SettingsScreen(
                     },
                     dismissButton = {
                         TextButton(onClick = { viewModel.resetImportInspection() }) {
+                            Text("Cancel")
+                        }
+                    }
+                )
+            }
+
+            if (migrationState is MigrationState.InProgress) {
+                val s = migrationState as MigrationState.InProgress
+                AlertDialog(
+                    onDismissRequest = { /* Disallow dismiss by tapping outside */ },
+                    title = { Text("Moving Downloaded Files") },
+                    text = {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            Text("Moving files to new download folder. Please do not close the app.", style = MaterialTheme.typography.bodyMedium)
+                            Spacer(Modifier.height(16.dp))
+                            Text("Current file: ${s.currentFile}", style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Spacer(Modifier.height(8.dp))
+                            LinearProgressIndicator(
+                                progress = { s.progress },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Text("Moved ${s.movedCount} of ${s.totalCount} files", style = MaterialTheme.typography.bodySmall)
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { viewModel.cancelMigration() }) {
                             Text("Cancel")
                         }
                     }

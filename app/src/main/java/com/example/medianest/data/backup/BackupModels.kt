@@ -28,7 +28,10 @@ data class BackupVideo(
     @EncodeDefault(EncodeDefault.Mode.NEVER) val uploadDate: String? = null,
     @EncodeDefault(EncodeDefault.Mode.NEVER) val localFilePath: String = "",
     @EncodeDefault(EncodeDefault.Mode.NEVER) val favorite: Boolean = false,
-    val addedAt: Long
+    val addedAt: Long,
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val lastPlayedAt: Long? = null,
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val downloadedAt: Long? = null,
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val syncVersion: Long = 0
 )
 
 @OptIn(ExperimentalSerializationApi::class)
@@ -48,7 +51,10 @@ data class BackupDownload(
     val status: String,
     @EncodeDefault(EncodeDefault.Mode.NEVER) val progress: Float = 0f,
     @EncodeDefault(EncodeDefault.Mode.NEVER) val errorMessage: String? = null,
-    @EncodeDefault(EncodeDefault.Mode.NEVER) val retryCount: Int = 0
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val retryCount: Int = 0,
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val videoUrl: String? = null,
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val updatedAt: Long = 0,
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val syncVersion: Long = 0
 )
 
 @OptIn(ExperimentalSerializationApi::class)
@@ -57,7 +63,8 @@ data class BackupHistory(
     val videoId: String,
     @EncodeDefault(EncodeDefault.Mode.NEVER) val positionMillis: Long = 0,
     val playedAt: Long,
-    @EncodeDefault(EncodeDefault.Mode.NEVER) val totalWatchTimeMillis: Long = 0
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val totalWatchTimeMillis: Long = 0,
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val syncVersion: Long = 0
 )
 
 @Serializable

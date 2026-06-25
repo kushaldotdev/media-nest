@@ -174,7 +174,8 @@ class BackupRepository @Inject constructor(
         id = id, title = title, channelName = channelName, channelId = channelId,
         durationSeconds = durationSeconds, thumbnailUrl = thumbnailUrl,
         description = description, uploadDate = uploadDate,
-        localFilePath = localFilePath?.let { File(it).name } ?: "", favorite = favorite, addedAt = addedAt
+        localFilePath = localFilePath?.let { File(it).name } ?: "", favorite = favorite, addedAt = addedAt,
+        lastPlayedAt = lastPlayedAt, downloadedAt = downloadedAt, syncVersion = syncVersion
     )
 
     private fun DownloadEntity.toBackup() = BackupDownload(
@@ -182,12 +183,13 @@ class BackupRepository @Inject constructor(
         title = title, thumbnailUrl = thumbnailUrl, filePath = filePath?.let { File(it).name } ?: "",
         fileSizeBytes = fileSizeBytes, downloadedAt = downloadedAt,
         lastPlayedAt = lastPlayedAt, status = status.name, progress = progress,
-        errorMessage = errorMessage, retryCount = retryCount
+        errorMessage = errorMessage, retryCount = retryCount,
+        videoUrl = videoUrl, updatedAt = updatedAt, syncVersion = syncVersion
     )
 
     private fun com.example.medianest.data.local.entity.HistoryEntity.toBackup() = BackupHistory(
         videoId = videoId, positionMillis = positionMillis, playedAt = playedAt,
-        totalWatchTimeMillis = totalWatchTimeMillis
+        totalWatchTimeMillis = totalWatchTimeMillis, syncVersion = syncVersion
     )
 
     private fun com.example.medianest.data.local.entity.WatchSessionEntity.toBackup() = BackupWatchSession(

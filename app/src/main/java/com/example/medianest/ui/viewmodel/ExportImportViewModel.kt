@@ -32,6 +32,11 @@ import androidx.core.content.FileProvider
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import androidx.room.withTransaction
+import com.example.medianest.data.local.AppDatabase
+import com.example.medianest.data.local.entity.DownloadStatus
+import com.example.medianest.data.repository.DownloadRepository
+import com.example.medianest.data.repository.VideoRepository
 
 sealed class ExportImportState {
     data object Idle : ExportImportState()
@@ -43,6 +48,13 @@ sealed class ExportImportState {
 sealed class ImportInspectionState {
     data object Idle : ImportInspectionState()
     data class NeedsChoice(val uri: Uri) : ImportInspectionState()
+}
+
+sealed class MigrationState {
+    data object Idle : MigrationState()
+    data class InProgress(val currentFile: String, val movedCount: Int, val totalCount: Int, val progress: Float) : MigrationState()
+    data class Success(val movedCount: Int) : MigrationState()
+    data class Error(val message: String) : MigrationState()
 }
 
 sealed class UpdateState {
@@ -78,6 +90,9 @@ class ExportImportViewModel @Inject constructor(
     private val syncRepository: SyncRepository,
     private val syncManager: SyncManager,
     private val okHttpClient: OkHttpClient,
+    private val downloadRepository: DownloadRepository,
+    private val videoRepository: VideoRepository,
+    private val database: AppDatabase,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
 
@@ -101,6 +116,110 @@ class ExportImportViewModel @Inject constructor(
     val syncIntervalHours = devicePreferences.syncIntervalHours.stateIn(viewModelScope, SharingStarted.Eagerly, 6)
 
     val downloadFolder = downloadPreferences.downloadFolder.stateIn(viewModelScope, SharingStarted.Eagerly, "")
+
+    private val _migrationState = MutableStateFlow<MigrationState>(MigrationState.Idle)
+    val migrationState: StateFlow<MigrationState> = _migrationState
+
+    var isMigrationCanceled = false
+        private set
+
+    fun cancelMigration() {
+        isMigrationCanceled = true
+    }
+
+    fun resetMigrationState() {
+        _migrationState.value = MigrationState.Idle
+        isMigrationCanceled = false
+    }
+
+    fun startDownloadFolderMigration(newPath: String) {
+        isMigrationCanceled = false
+        _migrationState.value = MigrationState.InProgress("Preparing", 0, 0, 0f)
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val oldPath = downloadFolder.value
+                if (oldPath == newPath) {
+                    _migrationState.value = MigrationState.Success(0)
+                    return@launch
+                }
+
+                // Query all completed downloads
+                val allDownloads = downloadRepository.getAllDownloadsOnce()
+                val downloadsToMove = allDownloads.filter { download ->
+                    download.status == DownloadStatus.COMPLETED &&
+                    download.filePath.isNotEmpty() &&
+                    download.filePath.startsWith(oldPath) &&
+                    java.io.File(download.filePath).exists()
+                }
+
+                val total = downloadsToMove.size
+                if (total == 0) {
+                    downloadPreferences.setDownloadFolder(newPath)
+                    _migrationState.value = MigrationState.Success(0)
+                    return@launch
+                }
+
+                var movedCount = 0
+                for (download in downloadsToMove) {
+                    if (isMigrationCanceled) {
+                        break
+                    }
+
+                    _migrationState.value = MigrationState.InProgress(
+                        currentFile = download.title,
+                        movedCount = movedCount,
+                        totalCount = total,
+                        progress = movedCount.toFloat() / total
+                    )
+
+                    val oldFile = java.io.File(download.filePath)
+                    val subfolder = if (download.format == "audio" || download.format == "audio_extracted" || oldFile.parentFile?.name == "audio") "audio" else "video"
+                    val newDir = java.io.File(newPath, subfolder)
+                    newDir.mkdirs()
+                    
+                    val newFile = java.io.File(newDir, oldFile.name)
+
+                    try {
+                        // Copy file safely
+                        oldFile.copyTo(newFile, overwrite = true)
+                        
+                        // Verify file size matches
+                        if (newFile.exists() && newFile.length() == oldFile.length()) {
+                            // Update DB inside transaction
+                            database.withTransaction {
+                                // 1. Update DownloadEntity
+                                downloadRepository.update(download.copy(filePath = newFile.absolutePath))
+                                
+                                // 2. Update VideoEntity if localFilePath matches
+                                val video = videoRepository.getVideoById(download.videoId)
+                                if (video != null && video.localFilePath == oldFile.absolutePath) {
+                                    videoRepository.updateVideo(video.copy(localFilePath = newFile.absolutePath))
+                                }
+                            }
+                            // Delete old file only after DB update succeeds
+                            oldFile.delete()
+                            movedCount++
+                        } else {
+                            throw Exception("Copy verification failed: file size mismatch")
+                        }
+                    } catch (e: Exception) {
+                        throw Exception("Failed to move '${download.title}': ${e.message}")
+                    }
+                }
+
+                // Always save the new folder preference, even if cancelled halfway, so the moved files remain correct.
+                downloadPreferences.setDownloadFolder(newPath)
+
+                if (isMigrationCanceled) {
+                    _migrationState.value = MigrationState.Success(movedCount)
+                } else {
+                    _migrationState.value = MigrationState.Success(total)
+                }
+            } catch (e: Exception) {
+                _migrationState.value = MigrationState.Error(e.message ?: "Migration failed")
+            }
+        }
+    }
 
     fun setServerUrl(url: String) { viewModelScope.launch { devicePreferences.setServerUrl(url) } }
     fun setApiKey(key: String) { viewModelScope.launch { devicePreferences.setApiKey(key) } }

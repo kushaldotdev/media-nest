@@ -201,7 +201,8 @@ class RestoreRepository @Inject constructor(
             durationSeconds = durationSeconds, thumbnailUrl = thumbnailUrl,
             description = description, uploadDate = uploadDate,
             localFilePath = if (exists) resolvedPath else "",
-            favorite = favorite, addedAt = addedAt
+            favorite = favorite, addedAt = addedAt,
+            lastPlayedAt = lastPlayedAt, downloadedAt = downloadedAt, syncVersion = syncVersion
         )
     }
 
@@ -229,13 +230,15 @@ class RestoreRepository @Inject constructor(
             fileSizeBytes = fileSizeBytes, downloadedAt = downloadedAt,
             lastPlayedAt = lastPlayedAt,
             status = finalStatus,
-            progress = progress, errorMessage = finalErrorMessage, retryCount = retryCount
+            progress = progress, errorMessage = finalErrorMessage, retryCount = retryCount,
+            videoUrl = videoUrl, updatedAt = if (updatedAt > 0) updatedAt else System.currentTimeMillis(),
+            syncVersion = syncVersion
         )
     }
 
     private fun BackupHistory.toEntity() = HistoryEntity(
         videoId = videoId, positionMillis = positionMillis, playedAt = playedAt,
-        totalWatchTimeMillis = totalWatchTimeMillis
+        totalWatchTimeMillis = totalWatchTimeMillis, syncVersion = syncVersion
     )
 
     private fun BackupWatchSession.toEntity() = com.example.medianest.data.local.entity.WatchSessionEntity(
