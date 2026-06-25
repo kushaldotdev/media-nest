@@ -125,6 +125,7 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
             val videoHistory by detailViewModel.videoHistory.collectAsState()
             val watchSessions by detailViewModel.watchSessions.collectAsState()
             val localVideo by detailViewModel.localVideo.collectAsState()
+            val isFetchingOnline by detailViewModel.isFetchingOnline.collectAsState()
 
             val info = videoInfo
             if (info != null) {
@@ -136,8 +137,10 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
                     isSubscribed = isSubscribed,
                     videoHistory = videoHistory,
                     watchSessions = watchSessions,
+                    isFetchingOnline = isFetchingOnline,
                     onSubscribe = { detailViewModel.toggleSubscription() },
                     onToggleFavorite = { detailViewModel.toggleFavorite() },
+                    onRefresh = { detailViewModel.loadVideoInfo(videoId, forceRefresh = true) },
                     onPlay = { stream ->
                         val streamIndex = info.streamSources.indexOf(stream)
                         navController.navigate("player/$videoId?streamIndex=$streamIndex")

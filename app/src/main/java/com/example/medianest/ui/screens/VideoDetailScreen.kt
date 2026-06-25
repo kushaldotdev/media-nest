@@ -72,6 +72,9 @@ import kotlinx.coroutines.launch
 import coil.compose.AsyncImage
 import com.example.medianest.data.model.ExtractedVideoInfo
 import com.example.medianest.data.model.StreamSource
+import androidx.compose.animation.animateContentSize
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.LinearProgressIndicator
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -88,7 +91,9 @@ fun VideoDetailScreen(
     onSubscribe: () -> Unit = {},
     isSubscribed: Boolean = false,
     videoHistory: com.example.medianest.data.local.entity.HistoryEntity? = null,
-    watchSessions: List<com.example.medianest.data.local.entity.WatchSessionEntity> = emptyList()
+    watchSessions: List<com.example.medianest.data.local.entity.WatchSessionEntity> = emptyList(),
+    isFetchingOnline: Boolean = false,
+    onRefresh: () -> Unit = {}
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
@@ -119,13 +124,23 @@ fun VideoDetailScreen(
             )
         }
     ) { padding ->
-        Column(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(16.dp)
-                .verticalScroll(rememberScrollState())
         ) {
+            PullToRefreshBox(
+                isRefreshing = isFetchingOnline,
+                onRefresh = onRefresh,
+                modifier = Modifier.fillMaxSize()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(16.dp)
+                        .animateContentSize()
+                        .verticalScroll(rememberScrollState())
+                ) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -473,12 +488,29 @@ fun VideoDetailScreen(
             }
 
             if (videoStreams.isEmpty() && audioStreams.isEmpty()) {
-                Text(
-                    "No streams available",
-                    color = MaterialTheme.colorScheme.error
-                )
+                if (isFetchingOnline) {
+                    Text(
+                        "Loading streams…",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    Text(
+                        "No streams available",
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
             }
         }
+        }
+        if (isFetchingOnline) {
+            LinearProgressIndicator(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .align(Alignment.TopCenter),
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+    }
     }
 }
 

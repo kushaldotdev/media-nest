@@ -10,7 +10,8 @@ data class ExtractedVideoInfo(
     val description: String?,
     val uploadDate: String?,
     val isShort: Boolean = false,
-    val streamSources: List<StreamSource> = emptyList()
+    val streamSources: List<StreamSource> = emptyList(),
+    val isOfflineFallback: Boolean = false
 )
 
 data class StreamSource(

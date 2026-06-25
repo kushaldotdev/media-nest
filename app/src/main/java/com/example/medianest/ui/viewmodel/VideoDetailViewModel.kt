@@ -46,6 +46,9 @@ class VideoDetailViewModel @Inject constructor(
     private val _videoInfo = MutableStateFlow<ExtractedVideoInfo?>(null)
     val videoInfo: StateFlow<ExtractedVideoInfo?> = _videoInfo
 
+    private val _isFetchingOnline = MutableStateFlow(false)
+    val isFetchingOnline: StateFlow<Boolean> = _isFetchingOnline
+
     private val _isFavorite = MutableStateFlow(false)
     val isFavorite: StateFlow<Boolean> = _isFavorite
 
@@ -58,7 +61,7 @@ class VideoDetailViewModel @Inject constructor(
     private val _watchSessions = MutableStateFlow<List<com.example.medianest.data.local.entity.WatchSessionEntity>>(emptyList())
     val watchSessions: StateFlow<List<com.example.medianest.data.local.entity.WatchSessionEntity>> = _watchSessions
 
-    fun loadVideoInfo(videoId: String) {
+    fun loadVideoInfo(videoId: String, forceRefresh: Boolean = false) {
         if (currentVideoId != videoId) {
             currentVideoId = videoId
             downloadsJob?.cancel()
@@ -82,8 +85,11 @@ class VideoDetailViewModel @Inject constructor(
                 }
             }
         }
+        if (forceRefresh) {
+            HomeViewModel.lastResultCache.remove(videoId)
+        }
         val cached = HomeViewModel.lastResultCache.get(videoId)
-        if (cached != null && cached.streamSources.isNotEmpty()) {
+        if (cached != null && !cached.isOfflineFallback && cached.streamSources.isNotEmpty()) {
             _videoInfo.value = cached
             if (cached.streamSources.any { it.contentLength == null || it.contentLength <= 0L }) {
                 resolveStreamSizes(videoId)
@@ -92,6 +98,52 @@ class VideoDetailViewModel @Inject constructor(
         }
         
         viewModelScope.launch {
+            if (cached != null) {
+                _videoInfo.value = cached
+            } else {
+                val local = videoRepository.getVideoById(videoId)
+                if (local != null) {
+                    val allDownloads = downloadRepository.getDownloadsForVideoFlow(videoId).firstOrNull() ?: emptyList()
+                    val mockSources = allDownloads.map { download ->
+                        val quality = if (download.format == "audio") {
+                            download.quality
+                        } else {
+                            download.quality.substringBefore(" (")
+                        }
+                        val codec = if (download.format == "audio") {
+                            ""
+                        } else {
+                            download.quality.substringAfter(" (", "").substringBefore(")")
+                        }
+                        StreamSource(
+                            url = download.url,
+                            format = download.format,
+                            quality = quality,
+                            mimeType = "",
+                            codec = codec,
+                            contentLength = download.fileSizeBytes
+                        )
+                    }
+                    val fallbackInfo = ExtractedVideoInfo(
+                        videoId = local.id,
+                        title = local.title,
+                        channelName = local.channelName,
+                        channelId = local.channelId,
+                        durationSeconds = local.durationSeconds,
+                        thumbnailUrl = local.thumbnailUrl,
+                        description = local.description,
+                        uploadDate = local.uploadDate,
+                        streamSources = mockSources,
+                        isOfflineFallback = true
+                    )
+                    HomeViewModel.lastResultCache.put(videoId, fallbackInfo)
+                    if (_videoInfo.value == null) {
+                        _videoInfo.value = fallbackInfo
+                    }
+                }
+            }
+
+            _isFetchingOnline.value = true
             try {
                 val videoUrl = "https://www.youtube.com/watch?v=$videoId"
                 val extracted = videoRepository.searchAndSave(videoUrl)
@@ -99,48 +151,16 @@ class VideoDetailViewModel @Inject constructor(
                 _videoInfo.value = extracted
                 resolveStreamSizes(videoId)
             } catch (e: Exception) {
-                // If it fails, fallback to cached info without streams if available
-                if (cached != null) {
-                    _videoInfo.value = cached
-                } else {
-                    val local = videoRepository.getVideoById(videoId)
-                    if (local != null) {
-                        val allDownloads = downloadRepository.getDownloadsForVideoFlow(videoId).firstOrNull() ?: emptyList()
-                        val mockSources = allDownloads.map { download ->
-                            val quality = if (download.format == "audio") {
-                                download.quality
-                            } else {
-                                download.quality.substringBefore(" (")
-                            }
-                            val codec = if (download.format == "audio") {
-                                ""
-                            } else {
-                                download.quality.substringAfter(" (", "").substringBefore(")")
-                            }
-                            StreamSource(
-                                url = download.url,
-                                format = download.format,
-                                quality = quality,
-                                mimeType = "",
-                                codec = codec,
-                                contentLength = download.fileSizeBytes
-                            )
-                        }
-                        val fallbackInfo = ExtractedVideoInfo(
-                            videoId = local.id,
-                            title = local.title,
-                            channelName = local.channelName,
-                            channelId = local.channelId,
-                            durationSeconds = local.durationSeconds,
-                            thumbnailUrl = local.thumbnailUrl,
-                            description = local.description,
-                            uploadDate = local.uploadDate,
-                            streamSources = mockSources
-                        )
-                        HomeViewModel.lastResultCache.put(videoId, fallbackInfo)
-                        _videoInfo.value = fallbackInfo
+                if (forceRefresh) {
+                    android.widget.Toast.makeText(context, "Failed to refresh online streams", android.widget.Toast.LENGTH_SHORT).show()
+                }
+                if (_videoInfo.value == null) {
+                    if (cached != null) {
+                        _videoInfo.value = cached
                     }
                 }
+            } finally {
+                _isFetchingOnline.value = false
             }
         }
     }
