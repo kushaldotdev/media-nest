@@ -60,6 +60,21 @@ class DownloadsViewModel @Inject constructor(
     val playingUri: StateFlow<String?> = _playingUri
 
     val downloads: StateFlow<List<DownloadEntity>> = downloadRepository.getAllDownloads()
+        .map { list ->
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                list.map { download ->
+                    if (download.status == com.example.medianest.data.local.entity.DownloadStatus.COMPLETED) {
+                        if (download.filePath.isEmpty() || !java.io.File(download.filePath).exists()) {
+                            download.copy(errorMessage = "file_missing")
+                        } else {
+                            download
+                        }
+                    } else {
+                        download
+                    }
+                }
+            }
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val videosMap: StateFlow<Map<String, VideoEntity>> = videoRepository.getAllVideos()
@@ -162,6 +177,16 @@ class DownloadsViewModel @Inject constructor(
         DownloadService.cancel(context, downloadId)
     }
 
+    private suspend fun getOutputDir(format: String): File {
+        val dir = if (format == "audio" || format == "audio_extracted") "audio" else "video"
+        val customFolder = downloadPreferences.downloadFolder.first()
+        return if (customFolder.isNotEmpty()) {
+            File(File(customFolder), dir)
+        } else {
+            File(context.filesDir, "MediaNest/$dir")
+        }
+    }
+
     fun deleteDownload(download: DownloadEntity, deleteFile: Boolean) {
         viewModelScope.launch {
             if (download.status == DownloadStatus.DOWNLOADING || download.status == DownloadStatus.QUEUED) {
@@ -179,8 +204,7 @@ class DownloadsViewModel @Inject constructor(
                         }
                     }
                     try {
-                        val dir = if (download.format == "audio" || download.format == "audio_extracted") "audio" else "video"
-                        val outputDir = File(context.filesDir, "MediaNest/$dir")
+                        val outputDir = getOutputDir(download.format)
                         val tmpFile = File(outputDir, "${download.videoId}_${download.quality}.tmp")
                         if (tmpFile.exists()) {
                             tmpFile.delete()
@@ -205,8 +229,7 @@ class DownloadsViewModel @Inject constructor(
     fun retryDownload(download: DownloadEntity) {
         viewModelScope.launch {
             try {
-                val dir = if (download.format == "audio" || download.format == "audio_extracted") "audio" else "video"
-                val outputDir = File(context.filesDir, "MediaNest/$dir")
+                val outputDir = getOutputDir(download.format)
                 val tmpFile = File(outputDir, "${download.videoId}_${download.quality}.tmp")
                 if (tmpFile.exists()) {
                     tmpFile.delete()
@@ -279,8 +302,7 @@ class DownloadsViewModel @Inject constructor(
                         }
                     }
                     try {
-                        val dir = if (download.format == "audio" || download.format == "audio_extracted") "audio" else "video"
-                        val outputDir = File(context.filesDir, "MediaNest/$dir")
+                        val outputDir = getOutputDir(download.format)
                         val tmpFile = File(outputDir, "${download.videoId}_${download.quality}.tmp")
                         if (tmpFile.exists()) {
                             tmpFile.delete()

@@ -18,10 +18,12 @@ import com.example.medianest.data.local.entity.PlaylistEntity
 import com.example.medianest.data.local.entity.SubscriptionEntity
 import com.example.medianest.data.local.entity.VideoEntity
 import com.example.medianest.data.local.entity.VideoFolderJoin
+import com.example.medianest.data.local.entity.LinkHistoryEntity
 import com.example.medianest.data.preferences.DownloadPreferences
 import com.example.medianest.data.preferences.PlaybackPreferences
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import java.io.File
@@ -45,13 +47,23 @@ class RestoreRepository @Inject constructor(
     private val downloadPreferences: DownloadPreferences,
     private val playbackPreferences: PlaybackPreferences
 ) {
-    suspend fun restoreFromZip(inputStream: InputStream, progress: (Float) -> Unit) {
+    suspend fun restoreFromZip(inputStream: InputStream, restoreMedia: Boolean, progress: (Float) -> Unit) {
         withContext(Dispatchers.IO) {
             var databaseJson: String? = null
             var preferencesJson: String? = null
             
-            val videoDir = File(context.filesDir, "MediaNest/video").also { it.mkdirs() }
-            val audioDir = File(context.filesDir, "MediaNest/audio").also { it.mkdirs() }
+            val customFolder = downloadPreferences.downloadFolder.first()
+            val videoDir = if (customFolder.isNotEmpty()) {
+                File(File(customFolder), "video")
+            } else {
+                File(context.filesDir, "MediaNest/video")
+            }.also { it.mkdirs() }
+            
+            val audioDir = if (customFolder.isNotEmpty()) {
+                File(File(customFolder), "audio")
+            } else {
+                File(context.filesDir, "MediaNest/audio")
+            }.also { it.mkdirs() }
 
             ZipInputStream(inputStream).use { zip ->
                 var entry = zip.nextEntry
@@ -64,14 +76,16 @@ class RestoreRepository @Inject constructor(
                             preferencesJson = zip.readBytes().toString(Charsets.UTF_8)
                         }
                         entry.name.startsWith("media/") -> {
-                            val name = entry.name.removePrefix("media/")
-                            val target = if (name.contains("_audio")) audioDir else videoDir
-                            val file = File(target, name)
-                            if (!file.canonicalPath.startsWith(target.canonicalPath + File.separator)) {
-                                throw SecurityException("Zip Slip detected: entry path is outside destination directory")
-                            }
-                            file.outputStream().use { fos ->
-                                zip.copyTo(fos)
+                            if (restoreMedia) {
+                                val name = entry.name.removePrefix("media/")
+                                val target = if (name.contains("_audio")) audioDir else videoDir
+                                val file = File(target, name)
+                                if (!file.canonicalPath.startsWith(target.canonicalPath + File.separator)) {
+                                    throw SecurityException("Zip Slip detected: entry path is outside destination directory")
+                                }
+                                file.outputStream().use { fos ->
+                                    zip.copyTo(fos)
+                                }
                             }
                         }
                     }
@@ -89,12 +103,12 @@ class RestoreRepository @Inject constructor(
                 database.withTransaction {
                     database.clearAllTables()
                     for (video in data.videos) {
-                        videoDao.insert(video.toEntity())
+                        videoDao.insert(video.toEntity(customFolder))
                     }
                     progress(0.4f)
 
                     for (download in data.downloads) {
-                        downloadDao.insert(download.toEntity())
+                        downloadDao.insert(download.toEntity(customFolder))
                     }
                     progress(0.5f)
 
@@ -120,6 +134,17 @@ class RestoreRepository @Inject constructor(
 
                     for (sub in data.subscriptions) {
                         subscriptionDao.insert(sub.toEntity())
+                    }
+                    progress(0.72f)
+
+                    for (session in data.watchSessions) {
+                        historyDao.insertWatchSession(session.toEntity())
+                    }
+                    progress(0.74f)
+
+                    database.linkHistoryDao().clearAll()
+                    for (lh in data.linkHistory) {
+                        database.linkHistoryDao().insert(lh.toEntity())
                     }
                 }
                 progress(0.75f)
@@ -155,34 +180,66 @@ class RestoreRepository @Inject constructor(
         }
     }
 
-    private fun BackupVideo.toEntity() = VideoEntity(
-        id = id, title = title, channelName = channelName, channelId = channelId,
-        durationSeconds = durationSeconds, thumbnailUrl = thumbnailUrl,
-        description = description, uploadDate = uploadDate,
-        localFilePath = if (localFilePath.isNotEmpty()) {
-            val filename = File(localFilePath).name
-            val subfolder = if (filename.contains("_audio")) "audio" else "video"
-            File(context.filesDir, "MediaNest/$subfolder/$filename").absolutePath
-        } else "",
-        favorite = favorite, addedAt = addedAt
-    )
+    private fun resolveMediaPath(fileName: String, customFolder: String, format: String? = null): String {
+        if (fileName.isEmpty()) return ""
+        val subfolder = if (fileName.contains("_audio") || format == "audio" || format == "audio_extracted") "audio" else "video"
+        return if (customFolder.isNotEmpty()) {
+            File(File(customFolder), "$subfolder/$fileName").absolutePath
+        } else {
+            File(context.filesDir, "MediaNest/$subfolder/$fileName").absolutePath
+        }
+    }
 
-    private fun BackupDownload.toEntity() = DownloadEntity(
-        id = id, videoId = videoId, url = url, format = format, quality = quality,
-        title = title, thumbnailUrl = thumbnailUrl,
-        filePath = if (filePath.isNotEmpty()) {
+    private fun BackupVideo.toEntity(customFolder: String): VideoEntity {
+        val resolvedPath = if (localFilePath.isNotEmpty()) {
+            val filename = File(localFilePath).name
+            resolveMediaPath(filename, customFolder)
+        } else ""
+        val exists = resolvedPath.isNotEmpty() && File(resolvedPath).exists()
+        return VideoEntity(
+            id = id, title = title, channelName = channelName, channelId = channelId,
+            durationSeconds = durationSeconds, thumbnailUrl = thumbnailUrl,
+            description = description, uploadDate = uploadDate,
+            localFilePath = if (exists) resolvedPath else "",
+            favorite = favorite, addedAt = addedAt
+        )
+    }
+
+    private fun BackupDownload.toEntity(customFolder: String): DownloadEntity {
+        val resolvedPath = if (filePath.isNotEmpty()) {
             val filename = File(filePath).name
-            val subfolder = if (filename.contains("_audio") || format == "audio" || format == "audio_extracted") "audio" else "video"
-            File(context.filesDir, "MediaNest/$subfolder/$filename").absolutePath
-        } else "",
-        fileSizeBytes = fileSizeBytes, downloadedAt = downloadedAt,
-        lastPlayedAt = lastPlayedAt,
-        status = try { DownloadStatus.valueOf(status) } catch (_: Exception) { DownloadStatus.COMPLETED },
-        progress = progress, errorMessage = errorMessage, retryCount = retryCount
-    )
+            resolveMediaPath(filename, customFolder, format)
+        } else ""
+        val exists = resolvedPath.isNotEmpty() && File(resolvedPath).exists()
+        val originalStatus = try { DownloadStatus.valueOf(status) } catch (_: Exception) { DownloadStatus.COMPLETED }
+        val finalStatus = if (originalStatus == DownloadStatus.COMPLETED && !exists) {
+            DownloadStatus.FAILED
+        } else {
+            originalStatus
+        }
+        val finalErrorMessage = if (originalStatus == DownloadStatus.COMPLETED && !exists) {
+            "Media file not found in backup"
+        } else {
+            errorMessage
+        }
+        return DownloadEntity(
+            id = id, videoId = videoId, url = url, format = format, quality = quality,
+            title = title, thumbnailUrl = thumbnailUrl,
+            filePath = if (exists) resolvedPath else "",
+            fileSizeBytes = fileSizeBytes, downloadedAt = downloadedAt,
+            lastPlayedAt = lastPlayedAt,
+            status = finalStatus,
+            progress = progress, errorMessage = finalErrorMessage, retryCount = retryCount
+        )
+    }
 
     private fun BackupHistory.toEntity() = HistoryEntity(
-        videoId = videoId, positionMillis = positionMillis, playedAt = playedAt
+        videoId = videoId, positionMillis = positionMillis, playedAt = playedAt,
+        totalWatchTimeMillis = totalWatchTimeMillis
+    )
+
+    private fun BackupWatchSession.toEntity() = com.example.medianest.data.local.entity.WatchSessionEntity(
+        videoId = videoId, watchedAt = watchedAt
     )
 
     private fun BackupFolder.toEntity() = FolderEntity(
@@ -204,5 +261,9 @@ class RestoreRepository @Inject constructor(
         thumbnailUrl = thumbnailUrl, uploaderName = uploaderName,
         autoDownload = autoDownload, audioOnly = audioOnly,
         lastCheckedAt = lastCheckedAt, createdAt = createdAt, updatedAt = updatedAt
+    )
+
+    private fun BackupLinkHistory.toEntity() = com.example.medianest.data.local.entity.LinkHistoryEntity(
+        url = url, title = title, extractedAt = extractedAt
     )
 }

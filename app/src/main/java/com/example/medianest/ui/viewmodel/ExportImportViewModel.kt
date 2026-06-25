@@ -1,6 +1,7 @@
 package com.example.medianest.ui.viewmodel
 
 import android.content.Context
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.medianest.data.backup.BackupRepository
@@ -37,6 +38,11 @@ sealed class ExportImportState {
     data class InProgress(val operation: String, val progress: Float = 0f) : ExportImportState()
     data class Success(val message: String) : ExportImportState()
     data class Error(val message: String) : ExportImportState()
+}
+
+sealed class ImportInspectionState {
+    data object Idle : ImportInspectionState()
+    data class NeedsChoice(val uri: Uri) : ImportInspectionState()
 }
 
 sealed class UpdateState {
@@ -77,6 +83,9 @@ class ExportImportViewModel @Inject constructor(
 
     private val _state = MutableStateFlow<ExportImportState>(ExportImportState.Idle)
     val state: StateFlow<ExportImportState> = _state
+
+    private val _importInspection = MutableStateFlow<ImportInspectionState>(ImportInspectionState.Idle)
+    val importInspection: StateFlow<ImportInspectionState> = _importInspection
 
     private val _updateState = MutableStateFlow<UpdateState>(UpdateState.Idle)
     val updateState: StateFlow<UpdateState> = _updateState
@@ -121,11 +130,31 @@ class ExportImportViewModel @Inject constructor(
     fun triggerSync() { viewModelScope.launch { syncManager.sync() } }
     fun resetSyncState() { syncManager.resetState() }
 
-    fun exportToFile(outputStream: OutputStream) {
+    fun resetImportInspection() {
+        _importInspection.value = ImportInspectionState.Idle
+    }
+
+    suspend fun getBackupSizes(): Pair<Long, Long> {
+        return backupRepository.getBackupSizes()
+    }
+
+    fun formatSize(bytes: Long): String {
+        val kb = bytes / 1024.0
+        val mb = kb / 1024.0
+        val gb = mb / 1024.0
+        return when {
+            gb >= 1.0 -> String.format(java.util.Locale.US, "%.2f GB", gb)
+            mb >= 1.0 -> String.format(java.util.Locale.US, "%.2f MB", mb)
+            kb >= 1.0 -> String.format(java.util.Locale.US, "%.2f KB", kb)
+            else -> "$bytes Bytes"
+        }
+    }
+
+    fun exportToFile(outputStream: OutputStream, includeMedia: Boolean) {
         _state.value = ExportImportState.InProgress("Exporting", 0f)
         viewModelScope.launch {
             try {
-                backupRepository.exportToZip(outputStream) { progress ->
+                backupRepository.exportToZip(outputStream, includeMedia) { progress ->
                     _state.value = ExportImportState.InProgress("Exporting", progress)
                 }
                 _state.value = ExportImportState.Success("Export complete")
@@ -135,12 +164,48 @@ class ExportImportViewModel @Inject constructor(
         }
     }
 
-    fun restoreFromFile(inputStream: java.io.InputStream) {
+    fun inspectImportFile(uri: Uri) {
+        _state.value = ExportImportState.InProgress("Checking backup file", 0f)
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                var hasMedia = false
+                appContext.contentResolver.openInputStream(uri)?.use { inputStream ->
+                    java.util.zip.ZipInputStream(inputStream).use { zip ->
+                        var entry = zip.nextEntry
+                        while (entry != null) {
+                            if (entry.name.startsWith("media/")) {
+                                hasMedia = true
+                                break
+                            }
+                            zip.closeEntry()
+                            entry = zip.nextEntry
+                        }
+                    }
+                }
+                
+                if (hasMedia) {
+                    _state.value = ExportImportState.Idle
+                    _importInspection.value = ImportInspectionState.NeedsChoice(uri)
+                } else {
+                    _state.value = ExportImportState.Idle
+                    restoreFromFile(uri, restoreMedia = false)
+                }
+            } catch (e: Exception) {
+                _state.value = ExportImportState.Error("Inspection failed: ${e.message}")
+            }
+        }
+    }
+
+    fun restoreFromFile(uri: Uri, restoreMedia: Boolean) {
         _state.value = ExportImportState.InProgress("Restoring", 0f)
         viewModelScope.launch {
             try {
-                restoreRepository.restoreFromZip(inputStream) { progress ->
-                    _state.value = ExportImportState.InProgress("Restoring", progress)
+                withContext(Dispatchers.IO) {
+                    appContext.contentResolver.openInputStream(uri)?.use { inputStream ->
+                        restoreRepository.restoreFromZip(inputStream, restoreMedia) { progress ->
+                            _state.value = ExportImportState.InProgress("Restoring", progress)
+                        }
+                    } ?: throw Exception("Could not open file")
                 }
                 _state.value = ExportImportState.Success("Restore complete")
             } catch (e: Exception) {

@@ -32,21 +32,27 @@ class LibraryRepair @Inject constructor(
             val errors = mutableListOf<String>()
             
             val customFolder = downloadPreferences.downloadFolder.first()
-            val baseDirs = mutableListOf(context.filesDir)
-            if (customFolder.isNotEmpty()) {
-                baseDirs.add(File(customFolder))
+            val dirs = mutableListOf<File>()
+            
+            // Add internal dirs
+            dirs.add(File(context.filesDir, "MediaNest/video"))
+            dirs.add(File(context.filesDir, "MediaNest/audio"))
+            context.getExternalFilesDir(null)?.let { extDir ->
+                dirs.add(File(extDir, "MediaNest/video"))
+                dirs.add(File(extDir, "MediaNest/audio"))
             }
-            context.getExternalFilesDir(null)?.let { baseDirs.add(it) }
+            
+            // Add custom folder dirs directly
+            if (customFolder.isNotEmpty()) {
+                dirs.add(File(File(customFolder), "video"))
+                dirs.add(File(File(customFolder), "audio"))
+            }
 
             val mediaFiles = mutableMapOf<String, File>()
-            for (baseDir in baseDirs) {
-                val videoDir = File(baseDir, "MediaNest/video")
-                val audioDir = File(baseDir, "MediaNest/audio")
-                for (dir in listOf(videoDir, audioDir)) {
-                    if (dir.exists()) {
-                        dir.listFiles()?.forEach { file ->
-                            mediaFiles[file.name] = file
-                        }
+            for (dir in dirs.distinct()) {
+                if (dir.exists()) {
+                    dir.listFiles()?.forEach { file ->
+                        mediaFiles[file.name] = file
                     }
                 }
             }

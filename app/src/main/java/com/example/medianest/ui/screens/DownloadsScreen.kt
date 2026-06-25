@@ -424,7 +424,7 @@ private fun DownloadItem(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                if (download.status == DownloadStatus.COMPLETED) {
+                if (download.status == DownloadStatus.COMPLETED && download.errorMessage != "file_missing") {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
                             imageVector = Icons.Default.Check,
@@ -483,7 +483,7 @@ private fun DownloadItem(
                         }
                         DownloadStatus.FAILED -> download.errorMessage ?: "Failed"
                         DownloadStatus.CANCELED -> "Canceled"
-                        DownloadStatus.COMPLETED -> ""
+                        DownloadStatus.COMPLETED -> if (download.errorMessage == "file_missing") "Source missing" else ""
                     }
                     Text(
                         text = statusText,
@@ -491,6 +491,7 @@ private fun DownloadItem(
                         color = when (download.status) {
                             DownloadStatus.FAILED -> MaterialTheme.colorScheme.error
                             DownloadStatus.CANCELED -> MaterialTheme.colorScheme.outline
+                            DownloadStatus.COMPLETED -> if (download.errorMessage == "file_missing") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
                             else -> MaterialTheme.colorScheme.onSurfaceVariant
                         }
                     )
@@ -651,7 +652,30 @@ private fun DownloadItem(
                         }
                     }
                     DownloadStatus.COMPLETED -> {
-                        if (download.filePath.isNotEmpty()) {
+                        if (download.errorMessage == "file_missing") {
+                            if (download.format != "audio_extracted") {
+                                Button(
+                                    onClick = { onRestartClick(download) },
+                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                    modifier = Modifier.height(32.dp)
+                                ) {
+                                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(Modifier.width(4.dp))
+                                    Text("Redownload", style = MaterialTheme.typography.labelMedium)
+                                }
+                                Spacer(Modifier.width(8.dp))
+                            }
+                            TextButton(
+                                onClick = { onDeleteClick(download) },
+                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                modifier = Modifier.height(32.dp)
+                            ) {
+                                Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text("Delete", style = MaterialTheme.typography.labelMedium)
+                            }
+                            Spacer(Modifier.width(8.dp))
+                        } else if (download.filePath.isNotEmpty()) {
                             val isCurrentPlaying = playingVideoId == download.videoId && 
                                 (playingUri == null || download.filePath.isEmpty() || 
                                  playingUri == android.net.Uri.fromFile(java.io.File(download.filePath)).toString())

@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import java.io.File
 
 private val Context.downloadStore: DataStore<Preferences> by preferencesDataStore(name = "download_prefs")
 
@@ -24,7 +25,11 @@ class DownloadPreferences(private val context: Context) {
     }
 
     val downloadFolder: Flow<String> = context.downloadStore.data.map { prefs ->
-        prefs[KEY_DOWNLOAD_FOLDER] ?: ""
+        prefs[KEY_DOWNLOAD_FOLDER] ?: try {
+            File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS), "MediaNest").absolutePath
+        } catch (_: Exception) {
+            File(context.getExternalFilesDir(null) ?: context.filesDir, "MediaNest").absolutePath
+        }
     }
 
     suspend fun setMaxConcurrentDownloads(max: Int) {

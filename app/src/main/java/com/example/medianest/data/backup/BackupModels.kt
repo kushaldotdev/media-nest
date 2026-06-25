@@ -56,7 +56,21 @@ data class BackupDownload(
 data class BackupHistory(
     val videoId: String,
     @EncodeDefault(EncodeDefault.Mode.NEVER) val positionMillis: Long = 0,
-    val playedAt: Long
+    val playedAt: Long,
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val totalWatchTimeMillis: Long = 0
+)
+
+@Serializable
+data class BackupWatchSession(
+    val videoId: String,
+    val watchedAt: Long
+)
+
+@Serializable
+data class BackupLinkHistory(
+    val url: String,
+    val title: String,
+    val extractedAt: Long
 )
 
 @OptIn(ExperimentalSerializationApi::class)
@@ -124,5 +138,7 @@ data class BackupData(
     @EncodeDefault(EncodeDefault.Mode.NEVER) val videoFolderJoins: List<BackupVideoFolderJoin> = emptyList(),
     @EncodeDefault(EncodeDefault.Mode.NEVER) val playlists: List<BackupPlaylist> = emptyList(),
     @EncodeDefault(EncodeDefault.Mode.NEVER) val subscriptions: List<BackupSubscription> = emptyList(),
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val watchSessions: List<BackupWatchSession> = emptyList(),
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val linkHistory: List<BackupLinkHistory> = emptyList(),
     @EncodeDefault(EncodeDefault.Mode.NEVER) val preferences: BackupPreferences = BackupPreferences()
 )

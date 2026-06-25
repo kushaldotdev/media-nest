@@ -2,6 +2,8 @@ package com.example.medianest.service
 
 import android.content.Context
 import android.media.MediaCodec
+import com.example.medianest.data.preferences.DownloadPreferences
+import kotlinx.coroutines.flow.first
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.media.MediaMuxer
@@ -15,7 +17,8 @@ import javax.inject.Singleton
 
 @Singleton
 class AudioExtractor @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val downloadPreferences: DownloadPreferences
 ) {
     data class ExtractionResult(
         val outputPath: String,
@@ -28,7 +31,12 @@ class AudioExtractor @Inject constructor(
         videoId: String,
         quality: String
     ): ExtractionResult = withContext(Dispatchers.IO) {
-        val outputDir = File(context.filesDir, "MediaNest/audio")
+        val customFolder = downloadPreferences.downloadFolder.first()
+        val outputDir = if (customFolder.isNotEmpty()) {
+            File(File(customFolder), "audio")
+        } else {
+            File(context.filesDir, "MediaNest/audio")
+        }
         outputDir.mkdirs()
 
         // Try native demuxing first (generates .m4a container, extremely fast, 100% crash-free)

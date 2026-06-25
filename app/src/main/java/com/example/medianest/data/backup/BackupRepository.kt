@@ -8,6 +8,7 @@ import com.example.medianest.data.local.dao.PlaylistDao
 import com.example.medianest.data.local.dao.SubscriptionDao
 import com.example.medianest.data.local.dao.VideoDao
 import com.example.medianest.data.local.dao.VideoFolderDao
+import com.example.medianest.data.local.dao.LinkHistoryDao
 import com.example.medianest.data.local.entity.DownloadEntity
 import com.example.medianest.data.local.entity.DownloadStatus
 import com.example.medianest.data.local.entity.FolderEntity
@@ -15,6 +16,7 @@ import com.example.medianest.data.local.entity.PlaylistEntity
 import com.example.medianest.data.local.entity.SubscriptionEntity
 import com.example.medianest.data.local.entity.VideoEntity
 import com.example.medianest.data.local.entity.VideoFolderJoin
+import com.example.medianest.data.local.entity.LinkHistoryEntity
 import com.example.medianest.data.preferences.DownloadPreferences
 import com.example.medianest.data.preferences.PlaybackPreferences
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -41,10 +43,49 @@ class BackupRepository @Inject constructor(
     private val videoFolderDao: VideoFolderDao,
     private val playlistDao: PlaylistDao,
     private val subscriptionDao: SubscriptionDao,
+    private val linkHistoryDao: LinkHistoryDao,
     private val downloadPreferences: DownloadPreferences,
     private val playbackPreferences: PlaybackPreferences
 ) {
-    suspend fun exportToZip(outputStream: OutputStream, progress: (Float) -> Unit) {
+    private suspend fun getMediaDirs(): List<File> {
+        val customFolder = downloadPreferences.downloadFolder.first()
+        val dirs = mutableListOf<File>()
+        
+        // Add default/internal dirs
+        dirs.add(File(context.filesDir, "MediaNest/video"))
+        dirs.add(File(context.filesDir, "MediaNest/audio"))
+        context.getExternalFilesDir(null)?.let { extDir ->
+            dirs.add(File(extDir, "MediaNest/video"))
+            dirs.add(File(extDir, "MediaNest/audio"))
+        }
+        
+        // Add custom folder dirs directly
+        if (customFolder.isNotEmpty()) {
+            dirs.add(File(File(customFolder), "video"))
+            dirs.add(File(File(customFolder), "audio"))
+        }
+        
+        return dirs.distinct()
+    }
+
+    suspend fun getBackupSizes(): Pair<Long, Long> {
+        val dbFile = context.getDatabasePath("medianest.db")
+        val dbSize = if (dbFile.exists()) dbFile.length() else 100_000L
+        
+        var mediaSize = 0L
+        getMediaDirs().forEach { dir ->
+            if (dir.exists()) {
+                dir.listFiles()?.forEach { file ->
+                    if (file.isFile) {
+                        mediaSize += file.length()
+                    }
+                }
+            }
+        }
+        return Pair(dbSize, dbSize + mediaSize)
+    }
+
+    suspend fun exportToZip(outputStream: OutputStream, includeMedia: Boolean, progress: (Float) -> Unit) {
         withContext(Dispatchers.IO) {
             ZipOutputStream(outputStream).use { zos ->
                 progress(0.05f)
@@ -63,6 +104,10 @@ class BackupRepository @Inject constructor(
                 progress(0.4f)
                 val joins = videoFolderDao.getAllJoins()
                 progress(0.45f)
+                val watchSessions = historyDao.getAllWatchSessions()
+                progress(0.48f)
+                val linkHistory = linkHistoryDao.getAllLinkHistory().first()
+                progress(0.5f)
 
                 val preferences = BackupPreferences(
                     downloads = mapOf("max_concurrent" to downloadPreferences.maxConcurrentDownloads.first().toString()),
@@ -73,7 +118,7 @@ class BackupRepository @Inject constructor(
                     metadata = BackupMetadata(
                         videoCount = videos.size,
                         downloadCount = downloads.size,
-                        mediaFileCount = countMediaFiles()
+                        mediaFileCount = if (includeMedia) countMediaFiles() else 0
                     ),
                     videos = videos.map { it.toBackup() },
                     downloads = downloads.map { it.toBackup() },
@@ -82,6 +127,8 @@ class BackupRepository @Inject constructor(
                     playlists = playlists.map { it.toBackup() },
                     subscriptions = subscriptions.map { it.toBackup() },
                     videoFolderJoins = joins.map { it.toBackup() },
+                    watchSessions = watchSessions.map { it.toBackup() },
+                    linkHistory = linkHistory.map { it.toBackup() },
                     preferences = preferences
                 )
 
@@ -96,31 +143,31 @@ class BackupRepository @Inject constructor(
                 zos.write(json.encodeToString(preferences).toByteArray())
                 zos.closeEntry()
 
-                // Write media files
-                val mediaFiles = listOf(
-                    File(context.filesDir, "MediaNest/video"),
-                    File(context.filesDir, "MediaNest/audio")
-                ).flatMap { dir ->
-                    if (dir.exists()) dir.listFiles()?.toList() ?: emptyList() else emptyList()
-                }
-                var written = 0
-                val total = mediaFiles.size.coerceAtLeast(1)
-                for (file in mediaFiles) {
-                    zos.putNextEntry(ZipEntry("media/${file.name}"))
-                    file.inputStream().use { it.copyTo(zos) }
-                    zos.closeEntry()
-                    written++
-                    progress(0.6f + 0.4f * written / total)
+                if (includeMedia) {
+                    // Write media files
+                    val mediaFiles = getMediaDirs().flatMap { dir ->
+                        if (dir.exists()) dir.listFiles()?.toList() ?: emptyList() else emptyList()
+                    }.distinctBy { it.name }
+                    var written = 0
+                    val total = mediaFiles.size.coerceAtLeast(1)
+                    for (file in mediaFiles) {
+                        zos.putNextEntry(ZipEntry("media/${file.name}"))
+                        file.inputStream().use { it.copyTo(zos) }
+                        zos.closeEntry()
+                        written++
+                        progress(0.6f + 0.4f * written / total)
+                    }
+                } else {
+                    progress(1.0f)
                 }
             }
         }
     }
 
-    private fun countMediaFiles(): Int {
-        return listOf(
-            File(context.filesDir, "MediaNest/video"),
-            File(context.filesDir, "MediaNest/audio")
-        ).sumOf { dir -> if (dir.exists()) dir.listFiles()?.size ?: 0 else 0 }
+    private suspend fun countMediaFiles(): Int {
+        return getMediaDirs().flatMap { dir ->
+            if (dir.exists()) dir.listFiles()?.toList() ?: emptyList() else emptyList()
+        }.distinctBy { it.name }.size
     }
 
     private fun VideoEntity.toBackup() = BackupVideo(
@@ -139,7 +186,12 @@ class BackupRepository @Inject constructor(
     )
 
     private fun com.example.medianest.data.local.entity.HistoryEntity.toBackup() = BackupHistory(
-        videoId = videoId, positionMillis = positionMillis, playedAt = playedAt
+        videoId = videoId, positionMillis = positionMillis, playedAt = playedAt,
+        totalWatchTimeMillis = totalWatchTimeMillis
+    )
+
+    private fun com.example.medianest.data.local.entity.WatchSessionEntity.toBackup() = BackupWatchSession(
+        videoId = videoId, watchedAt = watchedAt
     )
 
     private fun FolderEntity.toBackup() = BackupFolder(
@@ -161,5 +213,9 @@ class BackupRepository @Inject constructor(
         thumbnailUrl = thumbnailUrl, uploaderName = uploaderName,
         autoDownload = autoDownload, audioOnly = audioOnly,
         lastCheckedAt = lastCheckedAt, createdAt = createdAt, updatedAt = updatedAt
+    )
+
+    private fun com.example.medianest.data.local.entity.LinkHistoryEntity.toBackup() = BackupLinkHistory(
+        url = url, title = title, extractedAt = extractedAt
     )
 }

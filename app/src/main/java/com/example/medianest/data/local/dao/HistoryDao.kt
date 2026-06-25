@@ -41,6 +41,9 @@ interface HistoryDao {
     @androidx.room.Insert
     suspend fun insertWatchSession(session: com.example.medianest.data.local.entity.WatchSessionEntity)
 
+    @Query("SELECT * FROM watch_sessions")
+    suspend fun getAllWatchSessions(): List<com.example.medianest.data.local.entity.WatchSessionEntity>
+
     @Query("SELECT * FROM watch_sessions WHERE videoId = :videoId ORDER BY watchedAt DESC")
     fun getWatchSessions(videoId: String): Flow<List<com.example.medianest.data.local.entity.WatchSessionEntity>>
 

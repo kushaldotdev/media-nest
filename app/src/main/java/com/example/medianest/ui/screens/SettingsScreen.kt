@@ -38,9 +38,11 @@ import com.example.medianest.data.sync.SyncLogEntry
 import com.example.medianest.data.sync.SyncState
 import com.example.medianest.ui.viewmodel.ExportImportState
 import com.example.medianest.ui.viewmodel.ExportImportViewModel
+import com.example.medianest.ui.viewmodel.ImportInspectionState
 import com.example.medianest.ui.viewmodel.UpdateState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -60,24 +62,23 @@ fun SettingsScreen(
     val focusManager = LocalFocusManager.current
 
     val downloadFolder by viewModel.downloadFolder.collectAsStateWithLifecycle()
-    val externalPath = context.getExternalFilesDir(null)?.absolutePath ?: ""
-    val internalPath = context.filesDir.absolutePath
     val defaultDownloadsPath = remember {
         try {
-            android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS).absolutePath
+            File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS), "MediaNest").absolutePath
         } catch (_: Exception) {
-            "/storage/emulated/0/Download"
+            File(context.getExternalFilesDir(null) ?: context.filesDir, "MediaNest").absolutePath
         }
     }
 
     var customInput by remember(downloadFolder) {
-        mutableStateOf(
-            if (downloadFolder.isNotEmpty() && downloadFolder != externalPath) downloadFolder else defaultDownloadsPath
-        )
+        mutableStateOf(downloadFolder.ifEmpty { defaultDownloadsPath })
     }
 
     var showUnsupportedPathDialog by remember { mutableStateOf(false) }
     var unsupportedPathMessage by remember { mutableStateOf("") }
+
+    var showExportDialog by remember { mutableStateOf(false) }
+    var exportIncludeMedia by remember { mutableStateOf(false) }
 
     val folderPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree()
@@ -99,7 +100,7 @@ fun SettingsScreen(
         uri?.let {
             try {
                 val outputStream = context.contentResolver.openOutputStream(it) ?: return@let
-                viewModel.exportToFile(outputStream)
+                viewModel.exportToFile(outputStream, exportIncludeMedia)
             } catch (_: Exception) { }
         }
     }
@@ -108,10 +109,7 @@ fun SettingsScreen(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
         uri?.let {
-            try {
-                val inputStream = context.contentResolver.openInputStream(it) ?: return@let
-                viewModel.restoreFromFile(inputStream)
-            } catch (_: Exception) { }
+            viewModel.inspectImportFile(it)
         }
     }
 
@@ -365,118 +363,60 @@ fun SettingsScreen(
                     Text("Select where media files should be saved.", style = MaterialTheme.typography.bodySmall)
                     Spacer(Modifier.height(12.dp))
 
-                    var selectedOption by remember(downloadFolder) {
-                        mutableStateOf(
-                            when (downloadFolder) {
-                                "" -> "internal"
-                                externalPath -> "external"
-                                else -> "custom"
+                    OutlinedTextField(
+                        value = customInput,
+                        onValueChange = { customInput = it },
+                        label = { Text("Download Path") },
+                        singleLine = true,
+                        trailingIcon = {
+                            IconButton(onClick = { folderPickerLauncher.launch(null) }) {
+                                Icon(Icons.Default.FolderOpen, contentDescription = "Choose Folder")
                             }
-                        )
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        FilterChip(
-                            selected = selectedOption == "internal",
-                            onClick = {
-                                selectedOption = "internal"
-                                viewModel.setDownloadFolder("")
-                                coroutineScope.launch {
-                                    snackbarHostState.showSnackbar("Download location set to Internal storage")
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Button(
+                        onClick = {
+                            val targetDir = java.io.File(customInput)
+                            var isSupported = false
+                            try {
+                                if (!targetDir.exists()) {
+                                    targetDir.mkdirs()
                                 }
-                            },
-                            label = { Text("Internal") }
-                        )
-                        if (externalPath.isNotEmpty()) {
-                            FilterChip(
-                                selected = selectedOption == "external",
-                                onClick = {
-                                    selectedOption = "external"
-                                    viewModel.setDownloadFolder(externalPath)
-                                    coroutineScope.launch {
-                                        snackbarHostState.showSnackbar("Download location set to External storage")
-                                    }
-                                },
-                                label = { Text("External") }
-                            )
-                        }
-                        FilterChip(
-                            selected = selectedOption == "custom",
-                            onClick = {
-                                selectedOption = "custom"
-                            },
-                            label = { Text("Custom") }
-                        )
-                    }
-
-                    if (selectedOption == "custom") {
-                        Spacer(Modifier.height(8.dp))
-                        OutlinedTextField(
-                            value = customInput,
-                            onValueChange = { customInput = it },
-                            label = { Text("Custom Absolute Path") },
-                            singleLine = true,
-                            trailingIcon = {
-                                IconButton(onClick = { folderPickerLauncher.launch(null) }) {
-                                    Icon(Icons.Default.FolderOpen, contentDescription = "Choose Folder")
-                                }
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            placeholder = { Text(defaultDownloadsPath) }
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        Button(
-                            onClick = {
-                                val targetDir = java.io.File(customInput)
-                                var isSupported = false
-                                try {
-                                    if (!targetDir.exists()) {
-                                        targetDir.mkdirs()
-                                    }
-                                    isSupported = targetDir.exists() && targetDir.canWrite()
-                                    if (isSupported) {
-                                        val testFile = java.io.File(targetDir, ".tmp_write_test")
-                                        if (testFile.createNewFile()) {
-                                            testFile.delete()
-                                        } else {
-                                            isSupported = false
-                                        }
-                                    }
-                                } catch (e: Exception) {
-                                    isSupported = false
-                                }
-
+                                isSupported = targetDir.exists() && targetDir.canWrite()
                                 if (isSupported) {
-                                    viewModel.setDownloadFolder(customInput)
-                                    coroutineScope.launch {
-                                        snackbarHostState.showSnackbar("Download location updated successfully")
+                                    val testFile = java.io.File(targetDir, ".tmp_write_test")
+                                    if (testFile.createNewFile()) {
+                                        testFile.delete()
+                                    } else {
+                                        isSupported = false
                                     }
-                                } else {
-                                    unsupportedPathMessage = "The folder path '$customInput' is not writable or supported. On Android 10+ (API 29+), writing to public system directories is restricted. Please select a different directory."
-                                    showUnsupportedPathDialog = true
                                 }
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("Apply Location")
-                        }
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            "Warning: Ensure the path is writable by the app.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    } else {
-                        Spacer(Modifier.height(8.dp))
-                        Text(
-                            text = "Path: ${downloadFolder.ifEmpty { internalPath }}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                            } catch (e: Exception) {
+                                isSupported = false
+                            }
+
+                            if (isSupported) {
+                                viewModel.setDownloadFolder(customInput)
+                                coroutineScope.launch {
+                                    snackbarHostState.showSnackbar("Download location updated successfully")
+                                }
+                            } else {
+                                unsupportedPathMessage = "The folder path '$customInput' is not writable or supported. On Android 10+ (API 29+), writing to public system directories is restricted. Please select a different directory."
+                                showUnsupportedPathDialog = true
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Apply Location")
                     }
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "Warning: Ensure the path is writable by the app.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
 
@@ -523,7 +463,7 @@ fun SettingsScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Button(
-                            onClick = { exportLauncher.launch("MediaNest_Backup.zip") },
+                            onClick = { showExportDialog = true },
                             enabled = state !is ExportImportState.InProgress,
                             modifier = Modifier.weight(1f)
                         ) {
@@ -847,6 +787,167 @@ fun SettingsScreen(
                     confirmButton = {
                         TextButton(onClick = { showUnsupportedPathDialog = false }) {
                             Text("OK")
+                        }
+                    }
+                )
+            }
+
+            if (showExportDialog) {
+                var sizes by remember { mutableStateOf<Pair<Long, Long>?>(null) }
+                LaunchedEffect(Unit) {
+                    sizes = viewModel.getBackupSizes()
+                }
+
+                val formattedMetadataSize = remember(sizes) {
+                    sizes?.first?.let { viewModel.formatSize(it) } ?: "Calculating..."
+                }
+                val formattedFullSize = remember(sizes) {
+                    sizes?.second?.let { viewModel.formatSize(it) } ?: "Calculating..."
+                }
+                var selectedOption by remember { mutableStateOf(false) } // false = metadata only, true = full backup
+
+                AlertDialog(
+                    onDismissRequest = { showExportDialog = false },
+                    title = { Text("Export Backup Options") },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Text("Choose what data to export:", style = MaterialTheme.typography.bodyMedium)
+                            
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { selectedOption = false }
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = !selectedOption,
+                                    onClick = { selectedOption = false }
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Column {
+                                    Text("Metadata Only", style = MaterialTheme.typography.bodyLarge)
+                                    Text(
+                                        "Database and preferences (~$formattedMetadataSize)",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                            
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { selectedOption = true }
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = selectedOption,
+                                    onClick = { selectedOption = true }
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Column {
+                                    Text("Full Backup", style = MaterialTheme.typography.bodyLarge)
+                                    Text(
+                                        "Includes all downloaded video and audio files (~$formattedFullSize)",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                exportIncludeMedia = selectedOption
+                                showExportDialog = false
+                                exportLauncher.launch(if (selectedOption) "MediaNest_Backup.zip" else "MediaNest_Metadata_Backup.zip")
+                            },
+                            enabled = sizes != null
+                        ) {
+                            Text("Export")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showExportDialog = false }) {
+                            Text("Cancel")
+                        }
+                    }
+                )
+            }
+
+            val importInspection by viewModel.importInspection.collectAsStateWithLifecycle()
+            if (importInspection is ImportInspectionState.NeedsChoice) {
+                val uri = (importInspection as ImportInspectionState.NeedsChoice).uri
+                var selectedOption by remember { mutableStateOf(true) } // true = full restore, false = metadata only
+
+                AlertDialog(
+                    onDismissRequest = { viewModel.resetImportInspection() },
+                    title = { Text("Import Options") },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Text("This backup file contains media files. Choose how to restore them:", style = MaterialTheme.typography.bodyMedium)
+                            
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { selectedOption = true }
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = selectedOption,
+                                    onClick = { selectedOption = true }
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Column {
+                                    Text("Full Restore", style = MaterialTheme.typography.bodyLarge)
+                                    Text(
+                                        "Restore database, settings, and copy all downloaded media files.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { selectedOption = false }
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = !selectedOption,
+                                    onClick = { selectedOption = false }
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Column {
+                                    Text("Metadata Only", style = MaterialTheme.typography.bodyLarge)
+                                    Text(
+                                        "Restore database and settings, but skip media files.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                viewModel.restoreFromFile(uri, restoreMedia = selectedOption)
+                                viewModel.resetImportInspection()
+                            }
+                        ) {
+                            Text("Restore")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { viewModel.resetImportInspection() }) {
+                            Text("Cancel")
                         }
                     }
                 )
