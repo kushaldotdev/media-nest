@@ -51,18 +51,12 @@ class BackupRepository @Inject constructor(
         val customFolder = downloadPreferences.downloadFolder.first()
         val dirs = mutableListOf<File>()
         
-        // Add default/internal dirs
-        dirs.add(File(context.filesDir, "MediaNest/video"))
-        dirs.add(File(context.filesDir, "MediaNest/audio"))
-        context.getExternalFilesDir(null)?.let { extDir ->
-            dirs.add(File(extDir, "MediaNest/video"))
-            dirs.add(File(extDir, "MediaNest/audio"))
-        }
-        
-        // Add custom folder dirs directly
         if (customFolder.isNotEmpty()) {
             dirs.add(File(File(customFolder), "video"))
             dirs.add(File(File(customFolder), "audio"))
+        } else {
+            dirs.add(File(context.filesDir, "MediaNest/video"))
+            dirs.add(File(context.filesDir, "MediaNest/audio"))
         }
         
         return dirs.distinct()
