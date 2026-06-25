@@ -354,27 +354,25 @@ fun PlayerScreen(
                 Column(
                     modifier = Modifier.fillMaxSize()
                 ) {
-                    if (state.isAudioOnly) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .weight(1f),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            AsyncImage(
-                                model = state.thumbnailUrl,
-                                contentDescription = state.title,
-                                modifier = Modifier
-                                    .fillMaxWidth(0.6f)
-                                    .aspectRatio(1f)
-                            )
-                        }
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .weight(1f)
-                        ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                    ) {
+                        if (state.isAudioOnly) {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                AsyncImage(
+                                    model = state.thumbnailUrl,
+                                    contentDescription = state.title,
+                                    modifier = Modifier
+                                        .fillMaxWidth(0.6f)
+                                        .aspectRatio(1f)
+                                )
+                            }
+                        } else {
                             AndroidView(
                                 factory = { ctx ->
                                     PlayerView(ctx).apply {
@@ -402,6 +400,94 @@ fun PlayerScreen(
                                 )
                             }
                         }
+
+                        // Floating Alerts Column
+                        Column(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .fillMaxWidth()
+                                .padding(12.dp)
+                        ) {
+                            if (state.historyPositionMs > 5000L && state.historyPositionMs < state.durationMs - 10000L && showResumeButton) {
+                                Surface(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(bottom = 8.dp),
+                                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.95f),
+                                    shape = MaterialTheme.shapes.small,
+                                    shadowElevation = 4.dp
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "Last watched: ${formatDuration(state.historyPositionMs)}",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                                        )
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            TextButton(onClick = {
+                                                viewModel.seekTo(state.historyPositionMs)
+                                                showResumeButton = false
+                                                viewModel.clearHistoryPosition()
+                                            }) {
+                                                Text("Resume", color = MaterialTheme.colorScheme.primary)
+                                            }
+                                            Spacer(Modifier.width(4.dp))
+                                            TextButton(onClick = {
+                                                viewModel.forceSaveCurrentPosition()
+                                                showResumeButton = false
+                                            }) {
+                                                Text("Update", color = MaterialTheme.colorScheme.primary)
+                                            }
+                                            Spacer(Modifier.width(4.dp))
+                                            IconButton(onClick = {
+                                                showResumeButton = false
+                                                viewModel.clearHistoryPosition()
+                                            }) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Close,
+                                                    contentDescription = "Dismiss",
+                                                    tint = MaterialTheme.colorScheme.onSecondaryContainer
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (state.showWatchedAlertCount != null) {
+                                Surface(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(bottom = 8.dp),
+                                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.95f),
+                                    shape = MaterialTheme.shapes.small,
+                                    shadowElevation = 4.dp
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "Watched ${state.showWatchedAlertCount} times",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                                        )
+                                        IconButton(onClick = { viewModel.dismissWatchedAlert() }) {
+                                            Icon(
+                                                imageVector = Icons.Default.Close,
+                                                contentDescription = "Dismiss",
+                                                tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
 
                     Column(
@@ -409,83 +495,6 @@ fun PlayerScreen(
                             .fillMaxWidth()
                             .padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 4.dp)
                     ) {
-                        if (state.historyPositionMs > 5000L && state.historyPositionMs < state.durationMs - 10000L && showResumeButton) {
-                            Surface(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(bottom = 8.dp),
-                                color = MaterialTheme.colorScheme.secondaryContainer,
-                                shape = MaterialTheme.shapes.small
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = "Last watched: ${formatDuration(state.historyPositionMs)}",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSecondaryContainer
-                                    )
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        TextButton(onClick = {
-                                            viewModel.seekTo(state.historyPositionMs)
-                                            showResumeButton = false
-                                            viewModel.clearHistoryPosition()
-                                        }) {
-                                            Text("Resume", color = MaterialTheme.colorScheme.primary)
-                                        }
-                                        Spacer(Modifier.width(4.dp))
-                                        TextButton(onClick = {
-                                            viewModel.forceSaveCurrentPosition()
-                                            showResumeButton = false
-                                        }) {
-                                            Text("Update", color = MaterialTheme.colorScheme.primary)
-                                        }
-                                        Spacer(Modifier.width(4.dp))
-                                        IconButton(onClick = {
-                                            showResumeButton = false
-                                            viewModel.clearHistoryPosition()
-                                        }) {
-                                            Icon(
-                                                imageVector = Icons.Default.Close,
-                                                contentDescription = "Dismiss",
-                                                tint = MaterialTheme.colorScheme.onSecondaryContainer
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        if (state.showWatchedAlertCount != null) {
-                            Surface(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(bottom = 8.dp),
-                                color = MaterialTheme.colorScheme.primaryContainer,
-                                shape = MaterialTheme.shapes.small
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = "Watched ${state.showWatchedAlertCount} times",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                                    )
-                                    IconButton(onClick = { viewModel.dismissWatchedAlert() }) {
-                                        Icon(
-                                            imageVector = Icons.Default.Close,
-                                            contentDescription = "Dismiss",
-                                            tint = MaterialTheme.colorScheme.onPrimaryContainer
-                                        )
-                                    }
-                                }
-                            }
-                        }
 
                         Box(
                             modifier = Modifier.fillMaxWidth(),
