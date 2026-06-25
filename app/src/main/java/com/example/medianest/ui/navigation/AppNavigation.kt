@@ -44,7 +44,7 @@ private fun Context.findActivity(): ComponentActivity? {
 
 object NavigationRoutes {
     const val PLAYER_ONLINE = "player/{videoId}?streamIndex={streamIndex}"
-    const val PLAYER_OFFLINE = "downloads/player/{videoId}"
+    const val PLAYER_OFFLINE = "downloads/player/{videoId}?downloadId={downloadId}"
     const val VIDEO_DETAIL = "videoDetail/{videoId}"
     const val STATISTICS = "statistics"
 }
@@ -156,7 +156,7 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
         composable(BottomNavItem.Downloads.route) {
             DownloadsScreen(
                 onPlayDownload = { download ->
-                    navController.navigate("downloads/player/${download.videoId}")
+                    navController.navigate("downloads/player/${download.videoId}?downloadId=${download.id}")
                 },
                 onVideoClick = { videoId ->
                     navController.navigate("videoDetail/$videoId")
@@ -165,15 +165,21 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
         }
         composable(
             route = NavigationRoutes.PLAYER_OFFLINE,
-            arguments = listOf(navArgument("videoId") { type = NavType.StringType })
+            arguments = listOf(
+                navArgument("videoId") { type = NavType.StringType },
+                navArgument("downloadId") { type = NavType.LongType; defaultValue = -1L }
+            )
         ) { backStackEntry ->
             val videoId = backStackEntry.arguments?.getString("videoId") ?: return@composable
+            val downloadIdArg = backStackEntry.arguments?.getLong("downloadId") ?: -1L
+            val downloadId = if (downloadIdArg == -1L) null else downloadIdArg
             val context = LocalContext.current
             val activity = context.findActivity() ?: error("Activity not found")
             val playerViewModel: PlayerViewModel = hiltViewModel(activity)
             PlayerScreen(
                 videoId = videoId,
                 streamIndex = 0,
+                downloadId = downloadId,
                 viewModel = playerViewModel,
                 onBack = { navController.popBackStack() }
             )

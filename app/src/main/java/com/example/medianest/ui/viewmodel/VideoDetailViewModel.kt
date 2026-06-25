@@ -19,6 +19,7 @@ import com.example.medianest.data.repository.SubscriptionRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import java.net.HttpURLConnection
 import java.net.URL
@@ -101,6 +102,44 @@ class VideoDetailViewModel @Inject constructor(
                 // If it fails, fallback to cached info without streams if available
                 if (cached != null) {
                     _videoInfo.value = cached
+                } else {
+                    val local = videoRepository.getVideoById(videoId)
+                    if (local != null) {
+                        val allDownloads = downloadRepository.getDownloadsForVideoFlow(videoId).firstOrNull() ?: emptyList()
+                        val mockSources = allDownloads.map { download ->
+                            val quality = if (download.format == "audio") {
+                                download.quality
+                            } else {
+                                download.quality.substringBefore(" (")
+                            }
+                            val codec = if (download.format == "audio") {
+                                ""
+                            } else {
+                                download.quality.substringAfter(" (", "").substringBefore(")")
+                            }
+                            StreamSource(
+                                url = download.url,
+                                format = download.format,
+                                quality = quality,
+                                mimeType = "",
+                                codec = codec,
+                                contentLength = download.fileSizeBytes
+                            )
+                        }
+                        val fallbackInfo = ExtractedVideoInfo(
+                            videoId = local.id,
+                            title = local.title,
+                            channelName = local.channelName,
+                            channelId = local.channelId,
+                            durationSeconds = local.durationSeconds,
+                            thumbnailUrl = local.thumbnailUrl,
+                            description = local.description,
+                            uploadDate = local.uploadDate,
+                            streamSources = mockSources
+                        )
+                        HomeViewModel.lastResultCache.put(videoId, fallbackInfo)
+                        _videoInfo.value = fallbackInfo
+                    }
                 }
             }
         }

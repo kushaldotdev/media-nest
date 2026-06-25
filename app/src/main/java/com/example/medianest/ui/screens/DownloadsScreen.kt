@@ -69,6 +69,7 @@ fun DownloadsScreen(
     val downloads by viewModel.downloads.collectAsStateWithLifecycle()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val playingVideoId by viewModel.playingVideoId.collectAsStateWithLifecycle()
+    val playingUri by viewModel.playingUri.collectAsStateWithLifecycle()
     val isPlaying by viewModel.isPlaying.collectAsStateWithLifecycle()
     var showDeleteDialogFor by remember { mutableStateOf<DownloadEntity?>(null) }
     var showRestartDialogFor by remember { mutableStateOf<DownloadEntity?>(null) }
@@ -155,6 +156,7 @@ fun DownloadsScreen(
                         onDeleteClick = { showDeleteDialogFor = it },
                         onRestartClick = { showRestartDialogFor = it },
                         playingVideoId = playingVideoId,
+                        playingUri = playingUri,
                         isPlaying = isPlaying
                     )
                 }
@@ -307,6 +309,7 @@ private fun DownloadItem(
     onDeleteClick: (DownloadEntity) -> Unit,
     onRestartClick: (DownloadEntity) -> Unit,
     playingVideoId: String?,
+    playingUri: String?,
     isPlaying: Boolean
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -626,7 +629,9 @@ private fun DownloadItem(
                     }
                     DownloadStatus.COMPLETED -> {
                         if (download.filePath.isNotEmpty()) {
-                            val isCurrentPlaying = playingVideoId == download.videoId
+                            val isCurrentPlaying = playingVideoId == download.videoId && 
+                                (playingUri == null || download.filePath.isEmpty() || 
+                                 playingUri == android.net.Uri.fromFile(java.io.File(download.filePath)).toString())
                             val showPause = isCurrentPlaying && isPlaying
                             Button(
                                 onClick = {

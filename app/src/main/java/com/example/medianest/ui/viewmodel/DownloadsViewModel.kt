@@ -54,6 +54,9 @@ class DownloadsViewModel @Inject constructor(
     private val _isPlaying = MutableStateFlow(false)
     val isPlaying: StateFlow<Boolean> = _isPlaying
 
+    private val _playingUri = MutableStateFlow<String?>(null)
+    val playingUri: StateFlow<String?> = _playingUri
+
     val downloads: StateFlow<List<DownloadEntity>> = downloadRepository.getAllDownloads()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -123,6 +126,7 @@ class DownloadsViewModel @Inject constructor(
     private fun updatePlaybackState(player: Player) {
         _isPlaying.value = player.isPlaying
         _playingVideoId.value = player.currentMediaItem?.mediaId
+        _playingUri.value = player.currentMediaItem?.localConfiguration?.uri?.toString()
     }
 
     fun togglePlayPause() {

@@ -69,6 +69,7 @@ import com.example.medianest.ui.viewmodel.PlayerViewModel
 fun PlayerScreen(
     videoId: String,
     streamIndex: Int,
+    downloadId: Long? = null,
     viewModel: PlayerViewModel = hiltViewModel(),
     onBack: () -> Unit
 ) {
@@ -115,8 +116,8 @@ fun PlayerScreen(
         }
     }
 
-    LaunchedEffect(videoId, streamIndex) {
-        viewModel.initialize(videoId, streamIndex)
+    LaunchedEffect(videoId, streamIndex, downloadId) {
+        viewModel.initialize(videoId, streamIndex, downloadId)
     }
 
     if (isFullScreen) {
@@ -167,7 +168,7 @@ fun PlayerScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f, fill = false)) {
                             IconButton(onClick = { isFullScreen = false }) {
                                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.White)
                             }
@@ -176,8 +177,29 @@ fun PlayerScreen(
                                 text = state.title,
                                 color = Color.White,
                                 style = MaterialTheme.typography.titleMedium,
-                                maxLines = 1
+                                maxLines = 1,
+                                modifier = Modifier.weight(1f, fill = false)
                             )
+                            val quality = state.videoQuality
+                            val qualityText = if (!quality.isNullOrEmpty()) {
+                                if (state.isLocal) "$quality • Local" else "$quality • Stream"
+                            } else {
+                                if (state.isLocal) "Local" else "Stream"
+                            }
+                            if (qualityText.isNotEmpty()) {
+                                Spacer(Modifier.width(8.dp))
+                                Surface(
+                                    color = Color.White.copy(alpha = 0.2f),
+                                    shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp)
+                                ) {
+                                    Text(
+                                        text = qualityText,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = Color.White,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
                         }
                         IconButton(onClick = { isFullScreen = false }) {
                             Icon(Icons.Default.FullscreenExit, contentDescription = "Exit Fullscreen", tint = Color.White)
@@ -274,7 +296,48 @@ fun PlayerScreen(
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text(state.title, maxLines = 1) },
+                    title = {
+                        Column {
+                            Text(state.title, maxLines = 1, style = MaterialTheme.typography.titleMedium)
+                            val quality = state.videoQuality
+                            val qualityText = if (!quality.isNullOrEmpty()) {
+                                if (state.isLocal) "$quality • Local" else "$quality • Stream"
+                            } else {
+                                if (state.isLocal) "Local" else "Stream"
+                            }
+                            if (state.channelName.isNotEmpty() || qualityText.isNotEmpty()) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    if (state.channelName.isNotEmpty()) {
+                                        Text(
+                                            text = state.channelName,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    if (state.channelName.isNotEmpty() && qualityText.isNotEmpty()) {
+                                        Text(
+                                            text = " • ",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    if (qualityText.isNotEmpty()) {
+                                        Surface(
+                                            color = MaterialTheme.colorScheme.secondaryContainer,
+                                            shape = MaterialTheme.shapes.extraSmall
+                                        ) {
+                                            Text(
+                                                text = qualityText,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
                     navigationIcon = {
                         IconButton(onClick = onBack) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -344,7 +407,7 @@ fun PlayerScreen(
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(16.dp)
+                            .padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 4.dp)
                     ) {
                         if (state.historyPositionMs > 5000L && state.historyPositionMs < state.durationMs - 10000L && showResumeButton) {
                             Surface(
@@ -473,7 +536,7 @@ fun PlayerScreen(
                             }
                         }
 
-                        Spacer(Modifier.height(8.dp))
+                        Spacer(Modifier.height(4.dp))
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -488,7 +551,7 @@ fun PlayerScreen(
                             }
                             IconButton(
                                 onClick = { viewModel.togglePlayPause() },
-                                modifier = Modifier.size(64.dp)
+                                modifier = Modifier.size(56.dp)
                             ) {
                                 Icon(
                                     if (state.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
@@ -504,20 +567,27 @@ fun PlayerScreen(
                             }
                         }
 
-                        Spacer(Modifier.height(8.dp))
-                        Text("Speed", style = MaterialTheme.typography.labelMedium)
+                        Spacer(Modifier.height(4.dp))
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f).forEach { speed ->
-                                FilterChip(
-                                    selected = state.currentSpeed == speed,
-                                    onClick = { viewModel.setSpeed(speed) },
-                                    label = { Text("${speed}x") }
-                                )
+                            Text("Speed", style = MaterialTheme.typography.labelMedium)
+                            Row(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f).forEach { speed ->
+                                    FilterChip(
+                                        selected = state.currentSpeed == speed,
+                                        onClick = { viewModel.setSpeed(speed) },
+                                        label = { Text("${speed}x") }
+                                    )
+                                }
                             }
                         }
                     }

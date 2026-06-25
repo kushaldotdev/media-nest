@@ -14,11 +14,13 @@ import androidx.media3.session.SessionToken
 import com.example.medianest.data.local.dao.HistoryDao
 import com.example.medianest.data.local.dao.VideoDao
 import com.example.medianest.data.local.entity.HistoryEntity
+import com.example.medianest.data.local.entity.DownloadEntity
 import com.example.medianest.data.model.ExtractedVideoInfo
 import com.example.medianest.data.model.StreamSource
 import com.example.medianest.data.preferences.PlaybackPreferences
 import com.example.medianest.data.repository.DownloadRepository
 import com.example.medianest.service.PlaybackService
+import kotlin.comparisons.compareBy
 import com.example.medianest.ui.viewmodel.HomeViewModel.Companion.lastResultCache
 import com.google.common.util.concurrent.ListenableFuture
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -47,7 +49,8 @@ data class PlayerUiState(
     val videoId: String? = null,
     val isLocal: Boolean = false,
     val streamIndex: Int = 0,
-    val showWatchedAlertCount: Int? = null
+    val showWatchedAlertCount: Int? = null,
+    val videoQuality: String? = null
 )
 
 @HiltViewModel
@@ -69,6 +72,7 @@ class PlayerViewModel @Inject constructor(
     private var positionTrackingJob: Job? = null
     private var currentVideoId: String? = null
     private var currentStreamIndex: Int = 0
+    private var currentDownloadId: Long? = null
     private var videoInfo: ExtractedVideoInfo? = null
 
     private var sessionTotalWatchTime: Long = 0L
@@ -118,10 +122,11 @@ class PlayerViewModel @Inject constructor(
         )
     }
 
-    fun initialize(videoId: String, streamIndex: Int) {
-        if (currentVideoId == videoId && currentStreamIndex == streamIndex) return
+    fun initialize(videoId: String, streamIndex: Int, downloadId: Long? = null) {
+        if (currentVideoId == videoId && currentStreamIndex == streamIndex && currentDownloadId == downloadId) return
         currentVideoId = videoId
         currentStreamIndex = streamIndex
+        currentDownloadId = downloadId
         val info = lastResultCache.get(videoId)
         videoInfo = info
 
@@ -133,8 +138,35 @@ class PlayerViewModel @Inject constructor(
                     controller.setPlaybackSpeed(speed)
                     _uiState.value = _uiState.value.copy(currentSpeed = speed)
 
+                    val localVideo = videoDao.getVideoById(videoId)
                     val localDownloads = downloadRepository.getLocalDownloadsForVideo(videoId)
-                    val localFile = localDownloads.firstOrNull { it.filePath.isNotEmpty() && java.io.File(it.filePath).exists() }
+                    val localFile = if (downloadId != null) {
+                        localDownloads.firstOrNull { it.id == downloadId && it.filePath.isNotEmpty() && java.io.File(it.filePath).exists() }
+                    } else if (info != null && streamIndex < info.streamSources.size) {
+                        val streamSource = info.streamSources[streamIndex]
+                        val streamQuality = if (streamSource.format == "audio") {
+                            streamSource.quality
+                        } else if (!streamSource.codec.isNullOrEmpty()) {
+                            "${streamSource.quality} (${streamSource.codec})"
+                        } else {
+                            streamSource.quality
+                        }
+                        localDownloads.firstOrNull { 
+                            it.format == streamSource.format && 
+                            it.quality == streamQuality && 
+                            it.filePath.isNotEmpty() && 
+                            java.io.File(it.filePath).exists() 
+                        }
+                    } else {
+                        localDownloads
+                            .sortedWith(
+                                compareBy<DownloadEntity> { it.format == "audio" || it.format == "audio_extracted" }
+                                    .thenByDescending { getQualityValue(it) }
+                                    .thenBy { it.id }
+                            )
+                            .firstOrNull { it.filePath.isNotEmpty() && java.io.File(it.filePath).exists() }
+                    }
+
                     val streamSource = if (localFile == null && info != null && streamIndex < info.streamSources.size) {
                         info.streamSources[streamIndex]
                     } else {
@@ -172,9 +204,9 @@ class PlayerViewModel @Inject constructor(
                         null
                     }
 
-                    val title = info?.title ?: localFile?.title ?: "Unknown"
-                    val channel = info?.channelName ?: ""
-                    val thumbnail = info?.thumbnailUrl ?: localFile?.thumbnailUrl
+                    val title = info?.title ?: localFile?.title ?: localVideo?.title ?: "Unknown"
+                    val channel = info?.channelName ?: localVideo?.channelName ?: ""
+                    val thumbnail = info?.thumbnailUrl ?: localFile?.thumbnailUrl ?: localVideo?.thumbnailUrl
 
                     val lastPlayback = historyDao.getLatestPlayback(videoId)
                     val startPosition = 0L
@@ -185,17 +217,28 @@ class PlayerViewModel @Inject constructor(
                     countedThisSession = false
                     videoDao.updateLastPlayedAt(videoId, System.currentTimeMillis())
 
+                    val durationSeconds = info?.durationSeconds ?: localVideo?.durationSeconds ?: 0L
+                    val quality = if (localFile != null) {
+                        if (localFile.format == "audio" || localFile.format == "audio_extracted") {
+                            localFile.quality
+                        } else {
+                            localFile.quality.substringBefore(" (")
+                        }
+                    } else {
+                        streamSource?.quality
+                    }
                     _uiState.value = _uiState.value.copy(
                         title = title,
                         channelName = channel,
                         thumbnailUrl = thumbnail,
                         isAudioOnly = localFile?.format == "audio" || localFile?.format == "audio_extracted",
-                        durationMs = if (localFile != null) 0L else (info?.durationSeconds ?: 0L) * 1000,
+                        durationMs = if (localFile != null) 0L else durationSeconds * 1000,
                         positionMs = startPosition,
                         historyPositionMs = savedPosition,
                         videoId = videoId,
                         isLocal = localFile != null,
-                        streamIndex = streamIndex
+                        streamIndex = streamIndex,
+                        videoQuality = quality
                     )
 
                     val mediaItemBuilder = MediaItem.Builder()
@@ -311,7 +354,6 @@ class PlayerViewModel @Inject constructor(
         val pos = controller.currentPosition
         if (pos > maxSavedPositionMs) {
             maxSavedPositionMs = pos
-            _uiState.value = _uiState.value.copy(historyPositionMs = pos)
             viewModelScope.launch {
                 historyDao.upsert(
                     HistoryEntity(
@@ -332,7 +374,6 @@ class PlayerViewModel @Inject constructor(
         val duration = controller.duration
         if (duration > maxSavedPositionMs) {
             maxSavedPositionMs = duration
-            _uiState.value = _uiState.value.copy(historyPositionMs = duration)
             viewModelScope.launch {
                 historyDao.upsert(
                     HistoryEntity(
@@ -350,7 +391,7 @@ class PlayerViewModel @Inject constructor(
     fun retry() {
         val videoId = currentVideoId ?: return
         _uiState.value = _uiState.value.copy(error = null)
-        initialize(videoId, currentStreamIndex)
+        initialize(videoId, currentStreamIndex, currentDownloadId)
     }
 
     fun resetError() {
@@ -405,5 +446,10 @@ class PlayerViewModel @Inject constructor(
             MediaController.releaseFuture(it)
         }
         _player.value = null
+    }
+
+    private fun getQualityValue(download: DownloadEntity): Int {
+        val digits = download.quality.takeWhile { it.isDigit() }
+        return digits.toIntOrNull() ?: 0
     }
 }
