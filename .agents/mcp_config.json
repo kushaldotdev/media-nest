@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "understand-anything": {
+      "command": "node",
+      "args": [
+        "C:/Users/Kushal/.understand-anything/mcp_server.js",
+        "d:/dev/media-nest"
+      ]
+    }
+  }
+}
