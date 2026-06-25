@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -100,6 +101,7 @@ fun SettingsScreen(
 
     var showExportDialog by remember { mutableStateOf(false) }
     var exportIncludeMedia by remember { mutableStateOf(false) }
+    var showRepairDetailsDialog by remember { mutableStateOf(false) }
 
     val folderPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree()
@@ -614,15 +616,23 @@ fun SettingsScreen(
                                     ),
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    Row(
-                                        modifier = Modifier.padding(12.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF4CAF50))
-                                        Spacer(Modifier.width(8.dp))
-                                        Text(s.message, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-                                        IconButton(onClick = { viewModel.resetState() }) {
-                                            Icon(Icons.Default.Close, contentDescription = "Close", modifier = Modifier.size(18.dp))
+                                    Column(modifier = Modifier.padding(12.dp)) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF4CAF50))
+                                            Spacer(Modifier.width(8.dp))
+                                            Text(s.message, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                                            IconButton(onClick = { viewModel.resetState() }) {
+                                                Icon(Icons.Default.Close, contentDescription = "Close", modifier = Modifier.size(18.dp))
+                                            }
+                                        }
+                                        Spacer(Modifier.height(4.dp))
+                                        TextButton(
+                                            onClick = { showRepairDetailsDialog = true },
+                                            modifier = Modifier.align(Alignment.End)
+                                        ) {
+                                            Text("Show Details")
                                         }
                                     }
                                 }
@@ -993,6 +1003,37 @@ fun SettingsScreen(
                     confirmButton = {
                         TextButton(onClick = { viewModel.cancelMigration() }) {
                             Text("Cancel")
+                        }
+                    }
+                )
+            }
+
+            if (showRepairDetailsDialog) {
+                val repairState = state as? ExportImportState.Success
+                val details = repairState?.details ?: emptyList()
+                AlertDialog(
+                    onDismissRequest = { showRepairDetailsDialog = false },
+                    title = { Text("Library Repair Details") },
+                    text = {
+                        if (details.isEmpty()) {
+                            Text("No changes were made. Library is in sync.")
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier.fillMaxWidth().heightIn(max = 300.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                items(details) { detail ->
+                                    Text(
+                                        text = "• $detail",
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { showRepairDetailsDialog = false }) {
+                            Text("Close")
                         }
                     }
                 )

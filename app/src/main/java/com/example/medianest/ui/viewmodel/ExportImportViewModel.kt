@@ -41,7 +41,7 @@ import com.example.medianest.data.repository.VideoRepository
 sealed class ExportImportState {
     data object Idle : ExportImportState()
     data class InProgress(val operation: String, val progress: Float = 0f) : ExportImportState()
-    data class Success(val message: String) : ExportImportState()
+    data class Success(val message: String, val details: List<String> = emptyList()) : ExportImportState()
     data class Error(val message: String) : ExportImportState()
 }
 
@@ -341,7 +341,8 @@ class ExportImportViewModel @Inject constructor(
                     _state.value = ExportImportState.InProgress("Repairing", progress)
                 }
                 _state.value = ExportImportState.Success(
-                    "Repair: ${result.filesFound} files, ${result.pathsFixed} paths fixed, ${result.orphansRemoved} orphans removed"
+                    "Repair: ${result.filesFound} files, ${result.pathsFixed} paths fixed, ${result.orphansRemoved} orphans removed",
+                    details = result.details
                 )
             } catch (e: Exception) {
                 _state.value = ExportImportState.Error("Repair failed: ${e.message}")

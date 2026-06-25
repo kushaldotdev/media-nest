@@ -17,7 +17,8 @@ data class RepairResult(
     val pathsFixed: Int = 0,
     val pathsCleared: Int = 0,
     val orphansRemoved: Int = 0,
-    val errors: List<String> = emptyList()
+    val errors: List<String> = emptyList(),
+    val details: List<String> = emptyList()
 )
 
 @Singleton
@@ -30,6 +31,7 @@ class LibraryRepair @Inject constructor(
     suspend fun repair(progress: (Float) -> Unit): RepairResult {
         return withContext(Dispatchers.IO) {
             val errors = mutableListOf<String>()
+            val details = mutableListOf<String>()
             
             val customFolder = downloadPreferences.downloadFolder.first()
             val dirs = mutableListOf<File>()
@@ -59,6 +61,7 @@ class LibraryRepair @Inject constructor(
             progress(0.3f)
 
             val filesFound = mediaFiles.size
+            details.add("Scanned $filesFound media files on disk.")
             var pathsFixed = 0
             var pathsCleared = 0
 
@@ -71,12 +74,16 @@ class LibraryRepair @Inject constructor(
                     }?.value
                     if (matchingFile != null) {
                         if (video.localFilePath != matchingFile.absolutePath) {
+                            val oldPath = video.localFilePath
                             videoDao.update(video.copy(localFilePath = matchingFile.absolutePath))
                             pathsFixed++
+                            details.add("Fixed path for video '${video.title}': found file at '${matchingFile.absolutePath}' (was '$oldPath')")
                         }
                     } else if (video.localFilePath.isNotEmpty()) {
+                        val oldPath = video.localFilePath
                         videoDao.update(video.copy(localFilePath = ""))
                         pathsCleared++
+                        details.add("Cleared missing path for video '${video.title}': file not found on disk at '$oldPath'")
                     }
                 }
             } catch (e: Exception) {
@@ -89,7 +96,9 @@ class LibraryRepair @Inject constructor(
                 val downloads = downloadDao.getAllDownloads().first()
                 for (download in downloads) {
                     if (download.filePath.isNotEmpty() && !File(download.filePath).exists()) {
+                        val oldPath = download.filePath
                         downloadDao.update(download.copy(filePath = ""))
+                        details.add("Cleared missing path for download '${download.title}': file not found on disk at '$oldPath'")
                     }
                 }
             } catch (e: Exception) {
@@ -117,8 +126,10 @@ class LibraryRepair @Inject constructor(
             var orphansRemoved = 0
             for ((_, file) in mediaFiles) {
                 if (file.absolutePath !in registeredPaths) {
+                    val fileName = file.name
                     file.delete()
                     orphansRemoved++
+                    details.add("Removed orphan media file: '$fileName'")
                 }
             }
             progress(1.0f)
@@ -128,7 +139,8 @@ class LibraryRepair @Inject constructor(
                 pathsFixed = pathsFixed,
                 pathsCleared = pathsCleared,
                 orphansRemoved = orphansRemoved,
-                errors = errors
+                errors = errors,
+                details = details
             )
         }
     }
