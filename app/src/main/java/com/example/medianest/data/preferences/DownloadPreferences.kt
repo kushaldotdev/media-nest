@@ -29,9 +29,11 @@ class DownloadPreferences(private val context: Context) {
 
     val downloadFolder: Flow<String> = context.downloadStore.data.map { prefs ->
         prefs[KEY_DOWNLOAD_FOLDER] ?: try {
-            File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS), "MediaNest").absolutePath
+            val folderName = if (com.example.medianest.BuildConfig.DEBUG) "MediaNestDebug" else "MediaNest"
+            File(android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS), folderName).absolutePath
         } catch (_: Exception) {
-            File(context.getExternalFilesDir(null) ?: context.filesDir, "MediaNest").absolutePath
+            val folderName = if (com.example.medianest.BuildConfig.DEBUG) "MediaNestDebug" else "MediaNest"
+            File(context.getExternalFilesDir(null) ?: context.filesDir, folderName).absolutePath
         }
     }
 

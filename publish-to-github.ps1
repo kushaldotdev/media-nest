@@ -1,4 +1,4 @@
-# publish.ps1
+# publish-to-github.ps1
 param(
     [string]$VersionArg = ""
 )
@@ -46,7 +46,7 @@ $content = $content -replace "versionName\s*=\s*`"$oldName`"", "versionName = `"
 
 Set-Content $file -Value $content -NoNewline
 
-# Check for other uncommitted changes
+# Check for uncommitted changes
 $gitStatus = git status --porcelain
 if ($gitStatus) {
     Write-Warning "You have uncommitted changes in your repository. These will be included in the release build!"
@@ -68,19 +68,25 @@ if (git tag -l $versionTag) {
 }
 
 # 3. Build APK
-Write-Host "Building APK..."
-cmd.exe /c ".\build.bat"
+Write-Host "Building Release APK..."
+cmd.exe /c ".\build-release.bat clean"
 if ($LASTEXITCODE -ne 0) {
     Write-Error "Build failed"
 }
 
 # 4. Release via GitHub CLI
 Write-Host "Publishing release $versionTag to GitHub..."
-$apkSource = ".\app\build\outputs\apk\debug\app-debug.apk"
+$apkSigned = ".\app\build\outputs\apk\release\app-release.apk"
+$apkUnsigned = ".\app\build\outputs\apk\release\app-release-unsigned.apk"
 $apkDest = ".\medianest-$versionTag.apk"
 
-if (-not (Test-Path $apkSource)) {
-    Write-Error "Built APK not found at $apkSource"
+if (Test-Path $apkSigned) {
+    $apkSource = $apkSigned
+} elseif (Test-Path $apkUnsigned) {
+    Write-Warning "Using unsigned APK (no signing config in build.gradle.kts)"
+    $apkSource = $apkUnsigned
+} else {
+    Write-Error "No APK found in .\app\build\outputs\apk\release\"
 }
 
 Copy-Item $apkSource -Destination $apkDest

@@ -879,13 +879,23 @@ fun SettingsScreen(
                     Text("Current Installed Version: v$currentAppVersion", style = MaterialTheme.typography.bodySmall)
                     Spacer(Modifier.height(12.dp))
 
+                    val isDebug = com.example.medianest.BuildConfig.DEBUG
                     when (val s = updateState) {
                         is UpdateState.Idle -> {
-                            Button(
-                                onClick = { viewModel.checkForUpdates() },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text("Check for Updates")
+                            if (isDebug) {
+                                Text(
+                                    text = "Updates are disabled in debug builds. Please update via Gradle/Android Studio.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(vertical = 4.dp)
+                                )
+                            } else {
+                                Button(
+                                    onClick = { viewModel.checkForUpdates() },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("Check for Updates")
+                                }
                             }
                         }
                         is UpdateState.Checking -> {
