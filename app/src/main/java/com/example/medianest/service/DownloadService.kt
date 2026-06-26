@@ -932,6 +932,12 @@ class DownloadService : Service() {
       }
 
       private fun restartDownload(id: Long) {
+           cancelFlags.remove(id) // Ensure it's not marked as cancelled
+           val existingJob = activeJobs[id]
+           if (existingJob != null) {
+               activeCalls[id]?.cancel()
+               existingJob.cancel()
+           }
            serviceScope.launch {
                val download = repository.getDownloadById(id) ?: return@launch
                try {
@@ -951,7 +957,8 @@ class DownloadService : Service() {
                    status = DownloadStatus.QUEUED,
                    progress = 0f,
                    errorMessage = null,
-                   retryCount = 0
+                   retryCount = 0,
+                   fileSizeBytes = 0L // Reset to allow fetching a fresh total size if needed
                )
                repository.update(reset)
                resumeDownload(id)
