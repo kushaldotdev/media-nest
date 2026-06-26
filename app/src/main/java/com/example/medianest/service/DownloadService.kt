@@ -409,12 +409,12 @@ class DownloadService : Service() {
                     val isRange = response.code == 206
 
                     // Parse Content-Range to learn total file size: "bytes 0-999999/123456789"
-                    if (totalSize <= 0 && isRange) {
+                    if (isRange) {
                         val contentRange = response.header("Content-Range")
                         val parsedTotal = contentRange?.substringAfter("/", "")?.toLongOrNull()
-                        if (parsedTotal != null && parsedTotal > 0) {
+                        if (parsedTotal != null && parsedTotal > 0 && totalSize != parsedTotal) {
                             totalSize = parsedTotal
-                            if (!isAudioStream && download.fileSizeBytes != totalSize) {
+                            if (!isAudioStream) {
                                 repository.updateFileSize(download.id, totalSize)
                             }
                         }
@@ -424,9 +424,11 @@ class DownloadService : Service() {
                     if (!isRange && offset == 0L) {
                         if (tmpFile.exists()) tmpFile.delete()
                         val responseLength = response.body?.contentLength() ?: -1L
-                        if (responseLength > 0 && !isAudioStream && download.fileSizeBytes != responseLength) {
+                        if (responseLength > 0 && responseLength != totalSize) {
                             totalSize = responseLength
-                            repository.updateFileSize(download.id, totalSize)
+                            if (!isAudioStream) {
+                                repository.updateFileSize(download.id, totalSize)
+                            }
                         }
                     } else if (!isRange) {
                         // Server lost range support mid-download — restart
