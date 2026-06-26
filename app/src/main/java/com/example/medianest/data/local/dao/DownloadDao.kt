@@ -66,6 +66,9 @@ interface DownloadDao {
     @Query("UPDATE downloads SET retryCount = :retryCount WHERE id = :id")
     suspend fun updateRetryCount(id: Long, retryCount: Int)
 
+    @Query("UPDATE downloads SET url = :url WHERE id = :id")
+    suspend fun updateUrl(id: Long, url: String)
+
     @Query("SELECT * FROM downloads WHERE videoId = :videoId AND status = 'COMPLETED'")
     suspend fun getCompletedDownloadsForVideo(videoId: String): List<DownloadEntity>
 

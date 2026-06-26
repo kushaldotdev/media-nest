@@ -308,150 +308,237 @@ class DownloadService : Service() {
         var currentUrl = url
         var retries = 0
         val maxRetries = 3
+        // Two-tier chunk sizes: small first chunk to minimize time at throttled speed,
+        // then large chunks for throughput. YouTube throttles Range: bytes=0- requests;
+        // non-zero offsets bypass throttling.
+        val FIRST_CHUNK_SIZE = 2L * 1024 * 1024   // 2 MB
+        val NORMAL_CHUNK_SIZE = 10L * 1024 * 1024  // 10 MB
+
         while (retries <= maxRetries) {
             if (isPaused(download.id) || isCancelled(download.id) || isPutToQueue(download.id)) {
                 return false
             }
             try {
-                val existingBytes = if (tmpFile.exists()) tmpFile.length() else 0L
-                val requestBuilder = Request.Builder().url(currentUrl)
-                // Always send the Range header to bypass YouTube's throttling on non-range requests
-                requestBuilder.header("Range", "bytes=$existingBytes-")
-                requestBuilder.header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
-                requestBuilder.header("Accept-Encoding", "identity")
-                val request = requestBuilder.build()
+                var offset = if (tmpFile.exists()) tmpFile.length() else 0L
+                var totalSize = if (download.fileSizeBytes > 0) download.fileSizeBytes else -1L
 
-                val call = okHttpClient.newCall(request)
-                activeCalls[download.id] = call
-                val response = withContext(Dispatchers.IO) {
-                    call.execute()
-                }
+                // Progress tracking state (persists across chunks)
+                var lastProgressUpdate = 0L
+                var lastProgressTime = System.currentTimeMillis()
+                var lastProgressSent = startProgress + (if (totalSize > 0) (offset.toFloat() / totalSize) else 0f) * (endProgress - startProgress)
+                var speedLastTime = System.currentTimeMillis()
+                var speedLastBytes = offset
+                var currentSpeedString: String? = null
 
-                if (!response.isSuccessful) {
-                    if (response.code == 416) {
-                        tmpFile.delete()
-                        retries++
-                        continue
-                    }
-                    if ((response.code == 403 || response.code == 410) && retries < maxRetries) {
-                        retries++
-                        repository.updateRetryCount(download.id, retries)
-                        val freshUrl = onUrlExpired()
-                        if (freshUrl != null) {
-                            currentUrl = freshUrl
-                            continue
-                        }
-                    }
-                    if (isAudioStream) {
-                        throw IOException("HTTP ${response.code}")
-                    } else {
-                        repository.markFailed(download.id, "HTTP ${response.code}", retries)
+                // Chunked download loop — each iteration requests a bounded byte range
+                while (true) {
+                    if (isPaused(download.id)) {
+                        val pct = if (totalSize > 0) offset.toFloat() / totalSize else 0f
+                        val savedProgress = startProgress + pct * (endProgress - startProgress)
+                        repository.updateStatus(download.id, DownloadStatus.PAUSED, savedProgress)
+                        activeJobs.remove(download.id)
                         return false
                     }
-                }
+                    if (isCancelled(download.id)) {
+                        tmpFile.delete()
+                        repository.updateStatus(download.id, DownloadStatus.CANCELED, download.progress)
+                        return false
+                    }
+                    if (isPutToQueue(download.id)) {
+                        val pct = if (totalSize > 0) offset.toFloat() / totalSize else 0f
+                        val savedProgress = startProgress + pct * (endProgress - startProgress)
+                        repository.updateStatus(download.id, DownloadStatus.QUEUED, savedProgress)
+                        activeJobs.remove(download.id)
+                        return false
+                    }
 
-                val isRange = response.code == 206
-                val actualExistingBytes = if (isRange) existingBytes else 0L
-                if (!isRange && tmpFile.exists()) {
-                    tmpFile.delete()
-                }
+                    // Done: all bytes received
+                    if (totalSize > 0 && offset >= totalSize) break
 
-                val responseLength = response.body?.contentLength() ?: -1L
-                val resolvedTotalLength = if (responseLength > 0) actualExistingBytes + responseLength else -1L
+                    // Use small first chunk (2 MB) to quickly escape throttled byte-0 range,
+                    // then switch to large chunks (10 MB) for throughput
+                    val chunkSize = if (offset == 0L) FIRST_CHUNK_SIZE else NORMAL_CHUNK_SIZE
+                    val rangeEnd = if (totalSize > 0) {
+                        minOf(offset + chunkSize - 1, totalSize - 1)
+                    } else {
+                        offset + chunkSize - 1
+                    }
 
-                if (resolvedTotalLength > 0 && !isAudioStream && download.fileSizeBytes != resolvedTotalLength) {
-                    repository.updateFileSize(download.id, resolvedTotalLength)
-                }
+                    val request = Request.Builder()
+                        .url(currentUrl)
+                        .header("Range", "bytes=$offset-$rangeEnd")
+                        .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                        .header("Accept-Encoding", "identity")
+                        .build()
 
-                response.body?.byteStream()?.use { input ->
-                    FileOutputStream(tmpFile, isRange).use { output ->
-                        val buffer = ByteArray(128 * 1024) // 128 KB buffer to maximize throughput
-                        var bytesRead = actualExistingBytes
-                        var lastProgressUpdate = 0L
-                        var lastProgressTime = System.currentTimeMillis()
-                        var lastProgressSent = startProgress + (if (resolvedTotalLength > 0) (bytesRead.toFloat() / resolvedTotalLength) else 0f) * (endProgress - startProgress)
+                    val call = okHttpClient.newCall(request)
+                    activeCalls[download.id] = call
+                    val response = withContext(Dispatchers.IO) {
+                        call.execute()
+                    }
 
-                        var speedLastTime = System.currentTimeMillis()
-                        var speedLastBytes = bytesRead
-                        var currentSpeedString: String? = null
-
-                        while (true) {
-                            if (isPaused(download.id)) {
-                                val currentPct = if (resolvedTotalLength > 0) bytesRead.toFloat() / resolvedTotalLength else 0f
-                                val savedProgress = startProgress + currentPct * (endProgress - startProgress)
-                                repository.updateStatus(download.id, DownloadStatus.PAUSED, savedProgress)
-                                activeJobs.remove(download.id)
-                                return false
+                    if (!response.isSuccessful) {
+                        response.body?.close()
+                        if (response.code == 416) {
+                            // Range not satisfiable — file may be complete or corrupted
+                            if (totalSize > 0 && offset >= totalSize) {
+                                break // Already have all bytes
                             }
-                            if (isCancelled(download.id)) {
-                                tmpFile.delete()
-                                repository.updateStatus(download.id, DownloadStatus.CANCELED, download.progress)
-                                return false
+                            tmpFile.delete()
+                            offset = 0L
+                            retries++
+                            break // Break inner chunk loop to retry from outer loop
+                        }
+                        if ((response.code == 403 || response.code == 410) && retries < maxRetries) {
+                            retries++
+                            repository.updateRetryCount(download.id, retries)
+                            val freshUrl = onUrlExpired()
+                            if (freshUrl != null) {
+                                currentUrl = freshUrl
+                                break // Break inner chunk loop to retry with new URL
                             }
-                            if (isPutToQueue(download.id)) {
-                                val currentPct = if (resolvedTotalLength > 0) bytesRead.toFloat() / resolvedTotalLength else 0f
-                                val savedProgress = startProgress + currentPct * (endProgress - startProgress)
-                                repository.updateStatus(download.id, DownloadStatus.QUEUED, savedProgress)
-                                activeJobs.remove(download.id)
-                                return false
-                            }
+                        }
+                        if (isAudioStream) {
+                            throw IOException("HTTP ${response.code}")
+                        } else {
+                            repository.markFailed(download.id, "HTTP ${response.code}", retries)
+                            return false
+                        }
+                    }
 
-                            val read = input.read(buffer)
-                            if (read == -1) break
-                            output.write(buffer, 0, read)
-                            bytesRead += read
+                    val isRange = response.code == 206
 
-                            val currentPct = if (resolvedTotalLength > 0) bytesRead.toFloat() / resolvedTotalLength else 0f
-                            val currentProgress = startProgress + currentPct * (endProgress - startProgress)
-
-                            val currentTime = System.currentTimeMillis()
-                            val timeElapsed = currentTime - lastProgressTime >= 250
-
-                            // Calculate download speed every 1 second
-                            if (currentTime - speedLastTime >= 1000) {
-                                val bytesDiff = bytesRead - speedLastBytes
-                                val timeDiff = currentTime - speedLastTime
-                                if (timeDiff > 0) {
-                                    val bytesPerSec = (bytesDiff * 1000f) / timeDiff
-                                    currentSpeedString = if (bytesPerSec >= 1024 * 1024) {
-                                        "%.1f MB/s".format(bytesPerSec / (1024f * 1024f))
-                                    } else {
-                                        "%.0f KB/s".format(bytesPerSec / 1024f)
-                                    }
-                                }
-                                speedLastTime = currentTime
-                                speedLastBytes = bytesRead
-                            }
-
-                            val shouldUpdate = if (resolvedTotalLength > 0) {
-                                (currentProgress - lastProgressSent >= 0.01f && timeElapsed) || (bytesRead == resolvedTotalLength)
-                            } else {
-                                (bytesRead - lastProgressUpdate > 1024 * 1024) && timeElapsed
-                            }
-
-                            if (shouldUpdate) {
-                                if (!isPaused(download.id) && !isCancelled(download.id) && !isPutToQueue(download.id)) {
-                                    val payload = if (progressMessage != null) {
-                                        if (currentSpeedString != null) "$progressMessage|$currentSpeedString" else progressMessage
-                                    } else {
-                                        currentSpeedString
-                                    }
-                                    repository.updateProgressAndMessage(download.id, currentProgress, payload)
-                                }
-                                activeProgress[download.id] = ActiveProgress(
-                                    title = if (progressMessage != null) "Downloading audio..." else (download.title.ifEmpty { download.quality }),
-                                    bytesDownloaded = (currentProgress * (if (resolvedTotalLength > 0) resolvedTotalLength else bytesRead)).toLong(),
-                                    totalBytes = if (resolvedTotalLength > 0) resolvedTotalLength else bytesRead
-                                )
-                                updateNotification()
-                                lastProgressSent = currentProgress
-                                lastProgressUpdate = bytesRead
-                                lastProgressTime = currentTime
+                    // Parse Content-Range to learn total file size: "bytes 0-999999/123456789"
+                    if (totalSize <= 0 && isRange) {
+                        val contentRange = response.header("Content-Range")
+                        val parsedTotal = contentRange?.substringAfter("/", "")?.toLongOrNull()
+                        if (parsedTotal != null && parsedTotal > 0) {
+                            totalSize = parsedTotal
+                            if (!isAudioStream && download.fileSizeBytes != totalSize) {
+                                repository.updateFileSize(download.id, totalSize)
                             }
                         }
                     }
+
+                    // Fallback: server doesn't support range — stream entire response
+                    if (!isRange && offset == 0L) {
+                        if (tmpFile.exists()) tmpFile.delete()
+                        val responseLength = response.body?.contentLength() ?: -1L
+                        if (responseLength > 0 && !isAudioStream && download.fileSizeBytes != responseLength) {
+                            totalSize = responseLength
+                            repository.updateFileSize(download.id, totalSize)
+                        }
+                    } else if (!isRange) {
+                        // Server lost range support mid-download — restart
+                        response.body?.close()
+                        tmpFile.delete()
+                        offset = 0L
+                        retries++
+                        break
+                    }
+
+                    // Stream this chunk's bytes to file (always append)
+                    response.body?.byteStream()?.use { input ->
+                        FileOutputStream(tmpFile, true).use { output ->
+                            val buffer = ByteArray(128 * 1024) // 128 KB buffer to maximize throughput
+
+                            while (true) {
+                                if (isPaused(download.id)) {
+                                    offset = tmpFile.length()
+                                    val pct = if (totalSize > 0) offset.toFloat() / totalSize else 0f
+                                    val savedProgress = startProgress + pct * (endProgress - startProgress)
+                                    repository.updateStatus(download.id, DownloadStatus.PAUSED, savedProgress)
+                                    activeJobs.remove(download.id)
+                                    return false
+                                }
+                                if (isCancelled(download.id)) {
+                                    tmpFile.delete()
+                                    repository.updateStatus(download.id, DownloadStatus.CANCELED, download.progress)
+                                    return false
+                                }
+                                if (isPutToQueue(download.id)) {
+                                    offset = tmpFile.length()
+                                    val pct = if (totalSize > 0) offset.toFloat() / totalSize else 0f
+                                    val savedProgress = startProgress + pct * (endProgress - startProgress)
+                                    repository.updateStatus(download.id, DownloadStatus.QUEUED, savedProgress)
+                                    activeJobs.remove(download.id)
+                                    return false
+                                }
+
+                                val read = input.read(buffer)
+                                if (read == -1) break
+                                output.write(buffer, 0, read)
+                                offset += read
+
+                                val currentPct = if (totalSize > 0) offset.toFloat() / totalSize else 0f
+                                val currentProgress = startProgress + currentPct * (endProgress - startProgress)
+
+                                val currentTime = System.currentTimeMillis()
+                                val timeElapsed = currentTime - lastProgressTime >= 250
+
+                                // Calculate download speed every 1 second
+                                if (currentTime - speedLastTime >= 1000) {
+                                    val bytesDiff = offset - speedLastBytes
+                                    val timeDiff = currentTime - speedLastTime
+                                    if (timeDiff > 0) {
+                                        val bytesPerSec = (bytesDiff * 1000f) / timeDiff
+                                        currentSpeedString = if (bytesPerSec >= 1024 * 1024) {
+                                            "%.1f MB/s".format(bytesPerSec / (1024f * 1024f))
+                                        } else {
+                                            "%.0f KB/s".format(bytesPerSec / 1024f)
+                                        }
+                                    }
+                                    speedLastTime = currentTime
+                                    speedLastBytes = offset
+                                }
+
+                                val shouldUpdate = if (totalSize > 0) {
+                                    (currentProgress - lastProgressSent >= 0.01f && timeElapsed) || (offset == totalSize)
+                                } else {
+                                    (offset - lastProgressUpdate > 1024 * 1024) && timeElapsed
+                                }
+
+                                if (shouldUpdate) {
+                                    if (!isPaused(download.id) && !isCancelled(download.id) && !isPutToQueue(download.id)) {
+                                        val payload = if (progressMessage != null) {
+                                            if (currentSpeedString != null) "$progressMessage|$currentSpeedString" else progressMessage
+                                        } else {
+                                            currentSpeedString
+                                        }
+                                        repository.updateProgressAndMessage(download.id, currentProgress, payload)
+                                    }
+                                    activeProgress[download.id] = ActiveProgress(
+                                        title = if (progressMessage != null) "Downloading audio..." else (download.title.ifEmpty { download.quality }),
+                                        bytesDownloaded = (currentProgress * (if (totalSize > 0) totalSize else offset)).toLong(),
+                                        totalBytes = if (totalSize > 0) totalSize else offset
+                                    )
+                                    updateNotification()
+                                    lastProgressSent = currentProgress
+                                    lastProgressUpdate = offset
+                                    lastProgressTime = currentTime
+                                }
+                            }
+                        }
+                    }
+
+                    // Update offset from file in case stream closed early
+                    offset = tmpFile.length()
+
+                    // If server didn't support range (full response), we're done
+                    if (!isRange) break
                 }
-                return true
+
+                // Check if we completed successfully
+                val finalSize = tmpFile.length()
+                if (totalSize > 0 && finalSize >= totalSize) {
+                    return true
+                }
+                // For unknown total size, if we exited the chunk loop normally, we're done
+                if (totalSize <= 0 && finalSize > 0 && retries <= maxRetries) {
+                    return true
+                }
+                // Otherwise, retry (URL expired, 416, etc.) — continue outer while loop
+                continue
             } catch (e: CancellationException) {
                 return false
             } catch (e: Exception) {
@@ -501,20 +588,51 @@ class DownloadService : Service() {
             videoDownloadCompleted = true
         }
 
+        // Proactively refresh the stream URL if the stored one looks expired.
+        // YouTube googlevideo URLs have an 'expire' parameter — if it's in the past,
+        // skip the guaranteed-403 first attempt and extract a fresh URL immediately.
+        var downloadUrl = download.url
+        if (downloadUrl.contains("googlevideo.com") && downloadUrl.contains("expire=")) {
+            try {
+                val expireStr = android.net.Uri.parse(downloadUrl).getQueryParameter("expire")
+                val expireEpoch = expireStr?.toLongOrNull() ?: 0L
+                if (expireEpoch > 0 && expireEpoch < System.currentTimeMillis() / 1000) {
+                    val watchUrl = download.videoUrl ?: ("https://www.youtube.com/watch?v=" + download.videoId)
+                    val freshInfo = extractor.extractVideo(watchUrl)
+                    // Exact match first, then fallback to same format with any quality
+                    val matchingStream = freshInfo.streamSources.find {
+                        it.format == download.format && it.quality == download.quality
+                    } ?: freshInfo.streamSources.find {
+                        it.format == download.format
+                    }
+                    if (matchingStream != null) {
+                        downloadUrl = matchingStream.url
+                        // Update DB so future retries use the fresh URL
+                        repository.updateUrl(download.id, downloadUrl)
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.w("DownloadService", "Proactive URL refresh failed, will retry on 403", e)
+            }
+        }
+
         // Step 1: Download video (or primary stream)
         val videoSuccess = if (videoDownloadCompleted) true else {
             downloadUrlToFile(
                 download = download,
-                url = download.url,
+                url = downloadUrl,
                 tmpFile = tmpFile,
                 startProgress = 0.0f,
                 endProgress = if (download.format == "video_only") 0.90f else 1.0f,
                 progressMessage = null,
                 isAudioStream = false
             ) {
-                val freshInfo = extractor.extractVideo(download.videoUrl ?: download.url)
+                val freshInfo = extractor.extractVideo(download.videoUrl ?: ("https://www.youtube.com/watch?v=" + download.videoId))
+                // Exact match first, then fallback to same format with any quality
                 val matchingStream = freshInfo.streamSources.find {
                     it.format == download.format && it.quality == download.quality
+                } ?: freshInfo.streamSources.find {
+                    it.format == download.format
                 }
                 matchingStream?.url
             }

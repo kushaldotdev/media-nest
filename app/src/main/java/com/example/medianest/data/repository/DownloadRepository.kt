@@ -52,6 +52,9 @@ class DownloadRepository @Inject constructor(
     suspend fun updateRetryCount(id: Long, retryCount: Int) =
         downloadDao.updateRetryCount(id, retryCount)
 
+    suspend fun updateUrl(id: Long, url: String) =
+        downloadDao.updateUrl(id, url)
+
     suspend fun getLocalDownloadsForVideo(videoId: String): List<DownloadEntity> =
         downloadDao.getCompletedDownloadsForVideo(videoId)
 
