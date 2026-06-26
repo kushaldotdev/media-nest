@@ -333,7 +333,7 @@ class HomeViewModel @Inject constructor(
             else -> return
         }
         viewModelScope.launch {
-            linkHistoryDao.insert(LinkHistoryEntity(url = url, title = title))
+            linkHistoryDao.insertWithLimit(LinkHistoryEntity(url = url, title = title))
         }
     }
 
