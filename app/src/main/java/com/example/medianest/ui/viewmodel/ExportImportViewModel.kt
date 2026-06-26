@@ -654,7 +654,9 @@ class ExportImportViewModel @Inject constructor(
                 val allDownloads = downloadRepository.getAllDownloadsOnce()
                 var queuedCount = 0
                 for (download in allDownloads) {
-                    if (download.status == DownloadStatus.COMPLETED && download.format != "audio_extracted") {
+                    val isCompleted = download.status == DownloadStatus.COMPLETED
+                    val isFailedBackup = download.status == DownloadStatus.FAILED && download.errorMessage == "Media file not found in backup"
+                    if ((isCompleted || isFailedBackup) && download.format != "audio_extracted") {
                         val file = if (download.filePath.isNotEmpty()) File(download.filePath) else null
                         if (file == null || !file.exists()) {
                             val reset = download.copy(

@@ -24,7 +24,7 @@ enum class DownloadStatus {
             onDelete = ForeignKey.CASCADE
         )
     ],
-    indices = [Index("videoId"), Index("videoId", "format", "quality", unique = true)]
+    indices = [Index("videoId"), Index("videoId", "format", "quality", unique = true), Index("status")]
 )
 data class DownloadEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,

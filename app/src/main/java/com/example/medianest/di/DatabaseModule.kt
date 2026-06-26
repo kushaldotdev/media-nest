@@ -137,6 +137,12 @@ object DatabaseModule {
         }
     }
 
+    private val MIGRATION_11_12 = object : Migration(11, 12) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_downloads_status ON downloads(status)")
+        }
+    }
+
     private val MIGRATION_4_5 = object : Migration(4, 5) {
         override fun migrate(db: SupportSQLiteDatabase) {
             db.execSQL("ALTER TABLE videos ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0")
@@ -179,6 +185,7 @@ object DatabaseModule {
             .addMigrations(MIGRATION_8_9)
             .addMigrations(MIGRATION_9_10)
             .addMigrations(MIGRATION_10_11)
+            .addMigrations(MIGRATION_11_12)
             .fallbackToDestructiveMigration(dropAllTables = true)
             .build()
     }

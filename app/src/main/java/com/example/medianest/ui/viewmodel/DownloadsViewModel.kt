@@ -191,36 +191,45 @@ class DownloadsViewModel @Inject constructor(
         viewModelScope.launch {
             if (download.status == DownloadStatus.DOWNLOADING || download.status == DownloadStatus.QUEUED) {
                 DownloadService.cancel(context, download.id)
-            } else {
-                if (deleteFile) {
-                    if (download.filePath.isNotEmpty()) {
-                        try {
-                            val file = File(download.filePath)
-                            if (file.exists()) {
-                                file.delete()
-                            }
-                        } catch (e: Exception) {
-                            android.util.Log.e("DownloadsViewModel", "Failed to delete completed file", e)
-                        }
-                    }
+            }
+            
+            if (deleteFile) {
+                if (download.filePath.isNotEmpty()) {
                     try {
-                        val outputDir = getOutputDir(download.format)
-                        val tmpFile = File(outputDir, "${download.videoId}_${download.quality}.tmp")
-                        if (tmpFile.exists()) {
-                            tmpFile.delete()
+                        val file = File(download.filePath)
+                        if (file.exists()) {
+                            file.delete()
                         }
                     } catch (e: Exception) {
-                        android.util.Log.e("DownloadsViewModel", "Failed to delete tmp file", e)
+                        android.util.Log.e("DownloadsViewModel", "Failed to delete completed file", e)
                     }
                 }
-                downloadRepository.delete(download)
-                
-                val remaining = downloadRepository.getLocalDownloadsForVideo(download.videoId)
-                if (remaining.isEmpty()) {
-                    val video = videoRepository.getVideoById(download.videoId)
-                    if (video != null) {
-                        videoRepository.updateVideo(video.copy(localFilePath = ""))
+                try {
+                    val outputDir = getOutputDir(download.format)
+                    val tmpFile = File(outputDir, "${download.videoId}_${download.quality}.tmp")
+                    if (tmpFile.exists()) {
+                        tmpFile.delete()
                     }
+                    val audioFile = File(outputDir, "${download.videoId}_${download.quality}_audio.tmp")
+                    if (audioFile.exists()) {
+                        audioFile.delete()
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("DownloadsViewModel", "Failed to delete tmp file", e)
+                }
+            }
+            
+            if (download.status == DownloadStatus.DOWNLOADING || download.status == DownloadStatus.QUEUED) {
+                kotlinx.coroutines.delay(500)
+            }
+            
+            downloadRepository.delete(download)
+            
+            val remaining = downloadRepository.getLocalDownloadsForVideo(download.videoId)
+            if (remaining.isEmpty()) {
+                val video = videoRepository.getVideoById(download.videoId)
+                if (video != null) {
+                    videoRepository.updateVideo(video.copy(localFilePath = ""))
                 }
             }
         }

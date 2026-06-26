@@ -148,6 +148,9 @@ class LibraryRepair @Inject constructor(
             // Remove orphan media files (no matching video)
             var orphansRemoved = 0
             for ((_, file) in mediaFiles) {
+                if (file.name.endsWith(".tmp", ignoreCase = true)) {
+                    continue
+                }
                 if (file.absolutePath !in registeredPaths) {
                     val fileName = file.name
                     file.delete()

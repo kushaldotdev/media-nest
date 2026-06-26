@@ -1,6 +1,6 @@
 ---
 project: MediaNest
-built: 2026-06-23 01:35
+built: 2026-06-26 18:55
 source-files:
   - path: .agents/plan/2026-06-22-phase1-project-scaffold.md
     mtime: 2026-06-22 00:00
@@ -23,7 +23,7 @@ source-files:
   - path: MediaNest_Project_Plan.md
     mtime: 2026-06-22 00:00
   - path: app/src/main/java/com/example/medianest/data/backup/LibraryRepair.kt
-    mtime: 2026-06-23 01:20
+    mtime: 2026-06-26 18:44
   - path: app/src/main/java/com/example/medianest/data/backup/RestoreRepository.kt
     mtime: 2026-06-23 01:22
   - path: app/src/main/java/com/example/medianest/data/sync/SyncManager.kt
@@ -31,9 +31,9 @@ source-files:
   - path: app/src/main/java/com/example/medianest/data/sync/SyncRepository.kt
     mtime: 2026-06-23 01:20
   - path: app/src/main/java/com/example/medianest/di/DatabaseModule.kt
-    mtime: 2026-06-23 01:18
+    mtime: 2026-06-26 18:44
   - path: app/src/main/java/com/example/medianest/service/DownloadService.kt
-    mtime: 2026-06-23 01:20
+    mtime: 2026-06-26 18:44
   - path: app/src/main/java/com/example/medianest/service/PlaybackService.kt
     mtime: 2026-06-23 01:19
   - path: app/src/main/java/com/example/medianest/ui/screens/LibraryScreen.kt

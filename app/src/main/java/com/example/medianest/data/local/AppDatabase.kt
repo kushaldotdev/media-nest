@@ -34,7 +34,7 @@ import com.example.medianest.data.local.entity.LinkHistoryEntity
         WatchSessionEntity::class,
         LinkHistoryEntity::class
     ],
-    version = 11,
+    version = 12,
     exportSchema = true
 )
 @TypeConverters(Converters::class)

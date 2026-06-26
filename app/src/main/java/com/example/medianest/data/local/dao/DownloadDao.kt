@@ -36,7 +36,7 @@ interface DownloadDao {
     @Query("SELECT COUNT(*) FROM downloads WHERE status = 'DOWNLOADING' AND format != 'audio_extracted'")
     suspend fun getActiveDownloadCount(): Int
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insert(download: DownloadEntity): Long
 
     @Update
@@ -45,10 +45,10 @@ interface DownloadDao {
     @Delete
     suspend fun delete(download: DownloadEntity)
 
-    @Query("UPDATE downloads SET status = :status, progress = :progress WHERE id = :id")
+    @Query("UPDATE downloads SET status = :status, progress = :progress WHERE id = :id AND status IN ('DOWNLOADING', 'QUEUED', 'PAUSED')")
     suspend fun updateStatus(id: Long, status: DownloadStatus, progress: Float)
 
-    @Query("UPDATE downloads SET status = :status WHERE id = :id")
+    @Query("UPDATE downloads SET status = :status WHERE id = :id AND status IN ('DOWNLOADING', 'QUEUED', 'PAUSED')")
     suspend fun updateStatusOnly(id: Long, status: DownloadStatus)
 
     @Query("UPDATE downloads SET status = :status, errorMessage = :errorMessage, retryCount = :retryCount WHERE id = :id")
