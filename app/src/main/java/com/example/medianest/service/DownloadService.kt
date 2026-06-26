@@ -340,7 +340,7 @@ class DownloadService : Service() {
             }
             try {
                 var offset = if (tmpFile.exists()) tmpFile.length() else 0L
-                var totalSize = if (download.fileSizeBytes > 0) download.fileSizeBytes else -1L
+                var totalSize = if (!isAudioStream && download.fileSizeBytes > 0) download.fileSizeBytes else -1L
 
                 // Progress tracking state (persists across chunks)
                 var lastProgressUpdate = 0L
@@ -723,7 +723,7 @@ class DownloadService : Service() {
 
             while (audioRetries <= maxAudioRetries) {
                 // 13. Stale Audio: Delete audioFile at the start of each audio retry loop in downloadFile.
-                if (audioFile.exists()) {
+                if (audioRetries > 0 && audioFile.exists()) {
                     audioFile.delete()
                 }
 
