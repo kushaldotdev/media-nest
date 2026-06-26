@@ -35,6 +35,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.Text
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -86,15 +87,20 @@ fun SubscriptionsScreen(
         if (viewMode == ViewMode.GRID) {
             LazyVerticalGrid(
                 columns = GridCells.Fixed(2),
-                modifier = Modifier.fillMaxSize().padding(8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 items(filtered, key = { it.id }) { sub ->
                     SubscriptionCard(
                         subscription = sub,
                         onAutoDownloadChange = { autoDownload, audioOnly ->
                             viewModel.updateAutoDownload(sub.id, autoDownload, audioOnly)
+                            coroutineScope.launch {
+                                snackbarHostState.showSnackbar(
+                                    if (autoDownload) "Auto-download enabled for ${sub.name}" else "Auto-download disabled for ${sub.name}"
+                                )
+                            }
                         },
                         onUnsubscribe = { 
                             viewModel.unsubscribe(sub.id) 
@@ -121,14 +127,19 @@ fun SubscriptionsScreen(
             }
         } else {
             LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 items(filtered, key = { it.id }) { sub ->
                     SubscriptionCard(
                         subscription = sub,
                         onAutoDownloadChange = { autoDownload, audioOnly ->
                             viewModel.updateAutoDownload(sub.id, autoDownload, audioOnly)
+                            coroutineScope.launch {
+                                snackbarHostState.showSnackbar(
+                                    if (autoDownload) "Auto-download enabled for ${sub.name}" else "Auto-download disabled for ${sub.name}"
+                                )
+                            }
                         },
                         onUnsubscribe = { 
                             viewModel.unsubscribe(sub.id) 
@@ -172,53 +183,50 @@ private fun SubscriptionCard(
 
     GlassCard(
         onClick = onClick,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 4.dp)
+        modifier = Modifier.fillMaxWidth()
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            AsyncImage(
-                model = subscription.thumbnailUrl,
-                contentDescription = subscription.name,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .size(56.dp)
-                    .clip(CircleShape)
-            )
-            Spacer(Modifier.width(16.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = subscription.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = if (isTitleExpanded) Int.MAX_VALUE else 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.clickable { isTitleExpanded = !isTitleExpanded }
-                )
-            }
-            Spacer(Modifier.width(12.dp))
-            Column(
-                horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                androidx.compose.material3.OutlinedButton(
-                    onClick = onUnsubscribe,
-                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                    modifier = Modifier.height(32.dp)
-                ) {
+                AsyncImage(
+                    model = subscription.thumbnailUrl,
+                    contentDescription = subscription.name,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(52.dp)
+                        .clip(if (subscription.sourceType == "playlist") RoundedCornerShape(8.dp) else CircleShape)
+                )
+                Spacer(Modifier.width(16.dp))
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        if (subscription.sourceType == "playlist") "Delete" else "Unsubscribe", 
-                        style = MaterialTheme.typography.labelMedium
+                        text = subscription.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = if (isTitleExpanded) Int.MAX_VALUE else 2,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.clickable { isTitleExpanded = !isTitleExpanded }
                     )
                 }
+            }
+            Spacer(Modifier.height(8.dp))
+            HorizontalDivider(
+                modifier = Modifier.fillMaxWidth(),
+                thickness = 0.5.dp,
+                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+            )
+            Spacer(Modifier.height(4.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        "Auto",
+                        "Auto-download",
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -226,6 +234,13 @@ private fun SubscriptionCard(
                         checked = subscription.autoDownload,
                         onCheckedChange = { onAutoDownloadChange(it, subscription.audioOnly) },
                         modifier = Modifier.scale(0.8f)
+                    )
+                }
+                IconButton(onClick = onUnsubscribe) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = if (subscription.sourceType == "playlist") "Delete playlist" else "Unsubscribe",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }

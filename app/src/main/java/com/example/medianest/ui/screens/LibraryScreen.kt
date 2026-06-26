@@ -649,7 +649,7 @@ private fun FolderContent(
                     Text("No folders yet", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             } else {
-                LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     items(folders, key = { it.id }) { folder ->
                         FolderRow(folder = folder, stats = folderStatsMap[folder.id], onClick = { onFolderClick(folder) }, onRename = { onRenameFolder(folder) }, onDelete = { onDeleteFolder(folder) })
                     }
@@ -833,7 +833,7 @@ private fun FolderRow(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth()
     ) {
-        Row(modifier = Modifier.padding(16.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Row(modifier = Modifier.padding(8.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Default.Folder, contentDescription = null, modifier = Modifier.size(40.dp), tint = MaterialTheme.colorScheme.primary)
             Spacer(Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
