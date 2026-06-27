@@ -1,0 +1,471 @@
+<mxfile host="65bd71144e">
+  <diagram id="page1" name="System Context">
+    <mxGraphModel dx="1422" dy="798" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="p1-user" value="User" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="375" y="40" width="30" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="p1-app" value="&lt;b&gt;MediaNest Android App&lt;/b&gt;&lt;br&gt;Main Application" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="310" y="220" width="160" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="p1-yt" value="&lt;b&gt;YouTube&lt;/b&gt;&lt;br&gt;Content &amp; Metadata" style="ellipse;shape=cloud;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="40" y="220" width="140" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="p1-vps" value="&lt;b&gt;VPS Sync Server&lt;/b&gt;&lt;br&gt;Python FastAPI" style="shape=component;align=left;spacingLeft=6;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="600" y="220" width="160" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="p1-github" value="&lt;b&gt;GitHub&lt;/b&gt;&lt;br&gt;App Updates" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="320" y="440" width="140" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="p1-e1" value="Pastes URL / Controls" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="p1-user" target="p1-app">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="p1-e2" value="Fetches Metadata / Streams" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="p1-app" target="p1-yt">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="p1-e3" value="Syncs Library" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="p1-app" target="p1-vps">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="p1-e4" value="Checks for updates" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="p1-app" target="p1-github">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="page2" name="App Container">
+    <mxGraphModel dx="1422" dy="798" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="p2-ui-layer" value="UI Layer (Jetpack Compose)" style="swimlane;startSize=30;fillColor=#dae8fc;strokeColor=#6c8ebf;html=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="40" width="760" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="p2-ui-home" value="HomeScreen" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="p2-ui-layer">
+          <mxGeometry x="20" y="40" width="130" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="p2-ui-player" value="PlayerScreen" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="p2-ui-layer">
+          <mxGeometry x="170" y="40" width="130" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="p2-ui-downloads" value="DownloadsScreen" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="p2-ui-layer">
+          <mxGeometry x="320" y="40" width="130" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="p2-ui-library" value="LibraryScreen" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="p2-ui-layer">
+          <mxGeometry x="470" y="40" width="130" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="p2-ui-settings" value="SettingsScreen" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="p2-ui-layer">
+          <mxGeometry x="620" y="40" width="120" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="p2-vm-layer" value="ViewModels" style="swimlane;startSize=30;fillColor=#dae8fc;strokeColor=#6c8ebf;html=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="160" width="760" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="p2-vm-home" value="HomeViewModel" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="p2-vm-layer">
+          <mxGeometry x="20" y="40" width="130" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="p2-vm-player" value="PlayerViewModel" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="p2-vm-layer">
+          <mxGeometry x="170" y="40" width="130" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="p2-vm-downloads" value="DownloadsViewModel" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="p2-vm-layer">
+          <mxGeometry x="320" y="40" width="130" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="p2-vm-library" value="LibraryViewModel" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="p2-vm-layer">
+          <mxGeometry x="470" y="40" width="130" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="p2-svc-layer" value="Services" style="swimlane;startSize=30;fillColor=#d5e8d4;strokeColor=#82b366;html=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="280" width="760" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="p2-svc-playback" value="PlaybackService&lt;br&gt;(ExoPlayer)" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="p2-svc-layer">
+          <mxGeometry x="20" y="40" width="220" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="p2-svc-download" value="DownloadService&lt;br&gt;(Foreground)" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="p2-svc-layer">
+          <mxGeometry x="270" y="40" width="220" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="p2-svc-ffmpeg" value="AudioExtractor&lt;br&gt;(FFmpeg)" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="p2-svc-layer">
+          <mxGeometry x="520" y="40" width="220" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="p2-repo-layer" value="Repositories" style="swimlane;startSize=30;fillColor=#ffe6cc;strokeColor=#d79b00;html=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="400" width="760" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="p2-repo-video" value="VideoRepository" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="p2-repo-layer">
+          <mxGeometry x="20" y="40" width="160" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="p2-repo-download" value="DownloadRepository" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="p2-repo-layer">
+          <mxGeometry x="210" y="40" width="160" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="p2-repo-sync" value="SyncRepository" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="p2-repo-layer">
+          <mxGeometry x="390" y="40" width="160" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="p2-repo-backup" value="BackupRepository" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="p2-repo-layer">
+          <mxGeometry x="580" y="40" width="160" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="p2-storage-layer" value="Storage" style="swimlane;startSize=30;fillColor=#e1d5e7;strokeColor=#9673a6;html=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="520" width="760" height="120" as="geometry"/>
+        </mxCell>
+        <mxCell id="p2-storage-room" value="&lt;b&gt;Room DB (SQLite)&lt;/b&gt;&lt;br&gt;videos, downloads, history, sessions,&lt;br&gt;subscriptions, playlists, folders,&lt;br&gt;video_folder_join, link_history" style="shape=cylinder3;whiteSpace=wrap;html=1;" vertex="1" parent="p2-storage-layer">
+          <mxGeometry x="20" y="40" width="220" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="p2-storage-fs" value="&lt;b&gt;File System&lt;/b&gt;&lt;br&gt;Media Files (.mp4, .m4a)" style="shape=folder;whiteSpace=wrap;html=1;" vertex="1" parent="p2-storage-layer">
+          <mxGeometry x="270" y="40" width="220" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="p2-storage-ds" value="&lt;b&gt;DataStore&lt;/b&gt;&lt;br&gt;Preferences" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="p2-storage-layer">
+          <mxGeometry x="520" y="40" width="220" height="70" as="geometry"/>
+        </mxCell>
+        <mxCell id="p2-ext-layer" value="External Integrations" style="swimlane;startSize=30;fillColor=#f5f5f5;strokeColor=#666666;html=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="660" width="760" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="p2-ext-yt" value="YouTube&lt;br&gt;(NewPipeExtractor)" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="p2-ext-layer">
+          <mxGeometry x="20" y="40" width="160" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="p2-ext-ffmpeg" value="FFmpeg&lt;br&gt;(ffmpeg-kit)" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="p2-ext-layer">
+          <mxGeometry x="210" y="40" width="160" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="p2-ext-github" value="GitHub API" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="p2-ext-layer">
+          <mxGeometry x="390" y="40" width="160" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="p2-ext-sync" value="Sync Server&lt;br&gt;(FastAPI)" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="p2-ext-layer">
+          <mxGeometry x="580" y="40" width="160" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="p2-e-ui-vm" value="StateFlow" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="p2-ui-layer" target="p2-vm-layer">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="p2-e-vm-repo" value="suspend" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="p2-vm-layer" target="p2-repo-layer">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="p2-e-repo-storage" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="p2-repo-layer" target="p2-storage-layer">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="page3" name="User Journey">
+    <mxGraphModel dx="1422" dy="798" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="p3-start" value="Start" style="ellipse;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="365" y="20" width="80" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="p3-paste" value="Paste YouTube URL" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="345" y="100" width="120" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="p3-extract" value="Extract Metadata" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="345" y="180" width="120" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="p3-choice" value="Choice?" style="rhombus;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="355" y="260" width="100" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="p3-play" value="Play Streaming" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="200" y="370" width="120" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="p3-download" value="Download" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="490" y="370" width="120" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="p3-player-flow" value="Miniplayer / Bg Audio&lt;br&gt;Watch Sessions" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="185" y="460" width="150" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="p3-download-flow" value="Chunked DL / Pause&lt;br&gt;FFmpeg Merge" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="475" y="460" width="150" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="p3-library" value="Manage Library&lt;br&gt;History / Favs / Folders" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="330" y="560" width="150" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="p3-settings" value="Settings&lt;br&gt;Sync / Backup / Repair" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="330" y="660" width="150" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="p3-end" value="End" style="ellipse;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="1">
+          <mxGeometry x="365" y="760" width="80" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="p3-e1" edge="1" parent="1" source="p3-start" target="p3-paste" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="p3-e2" edge="1" parent="1" source="p3-paste" target="p3-extract" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="p3-e3" edge="1" parent="1" source="p3-extract" target="p3-choice" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="p3-e4" value="Play" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="p3-choice" target="p3-play">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="p3-e5" value="Download" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="p3-choice" target="p3-download">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="p3-e6" edge="1" parent="1" source="p3-play" target="p3-player-flow" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="p3-e7" edge="1" parent="1" source="p3-download" target="p3-download-flow" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="p3-e8" edge="1" parent="1" source="p3-player-flow" target="p3-library" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="p3-e9" edge="1" parent="1" source="p3-download-flow" target="p3-library" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="p3-e10" edge="1" parent="1" source="p3-library" target="p3-settings" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="p3-e11" edge="1" parent="1" source="p3-settings" target="p3-end" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="p3-bg-sync" value="Subscription auto-check" style="rounded=0;whiteSpace=wrap;html=1;dashed=1;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="40" y="560" width="160" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="p3-bg-backup" value="Auto-backup" style="rounded=0;whiteSpace=wrap;html=1;dashed=1;fillColor=none;" vertex="1" parent="1">
+          <mxGeometry x="40" y="620" width="160" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="p3-e-sync" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;dashed=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="p3-bg-sync" target="p3-library">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="p3-e-backup" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;dashed=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="p3-bg-backup" target="p3-settings">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="page4" name="Process Deep-Dive">
+    <mxGraphModel dx="1422" dy="798" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="p4-lane-user" value="User / UI" style="swimlane;horizontal=0;startSize=40;fillColor=#dae8fc;html=1;" vertex="1" parent="1">
+          <mxGeometry x="0" y="0" width="1100" height="200" as="geometry"/>
+        </mxCell>
+        <mxCell id="p4-lane-app" value="App Logic" style="swimlane;horizontal=0;startSize=40;fillColor=#d5e8d4;html=1;" vertex="1" parent="1">
+          <mxGeometry x="0" y="200" width="1100" height="250" as="geometry"/>
+        </mxCell>
+        <mxCell id="p4-lane-ext" value="External" style="swimlane;horizontal=0;startSize=40;fillColor=#f5f5f5;html=1;" vertex="1" parent="1">
+          <mxGeometry x="0" y="450" width="1100" height="200" as="geometry"/>
+        </mxCell>
+        <mxCell id="p4-dl-1" value="Tap Download" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="p4-lane-user">
+          <mxGeometry x="60" y="40" width="100" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="p4-dl-2" value="DownloadService&lt;br&gt;Queues" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="p4-lane-app">
+          <mxGeometry x="60" y="40" width="120" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="p4-dl-3" value="HTTP Chunked&lt;br&gt;Download" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="p4-lane-ext">
+          <mxGeometry x="60" y="40" width="120" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="p4-dl-progress" value="Progress Updates" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="p4-lane-user">
+          <mxGeometry x="220" y="40" width="120" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="p4-dl-4" value="Merge A/V&lt;br&gt;(FFmpeg)" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="p4-lane-app">
+          <mxGeometry x="400" y="40" width="100" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="p4-dl-save" value="Save to Filesystem" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="p4-lane-app">
+          <mxGeometry x="540" y="40" width="120" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="p4-dl-5" value="Update Room DB" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="p4-lane-app">
+          <mxGeometry x="700" y="40" width="120" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="p4-pl-1" value="Tap Play" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="p4-lane-user">
+          <mxGeometry x="60" y="110" width="100" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="p4-pl-2" value="Resolve Source&lt;br&gt;(Local vs Remote)" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="p4-lane-app">
+          <mxGeometry x="60" y="110" width="120" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="p4-pl-merge" value="MergingMediaSource&lt;br&gt;(Separated streams)" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="p4-lane-app">
+          <mxGeometry x="220" y="110" width="140" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="p4-pl-3" value="ExoPlayer Playback" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="p4-lane-app">
+          <mxGeometry x="400" y="110" width="120" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="p4-pl-track" value="Track Position &amp; History" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="p4-lane-app">
+          <mxGeometry x="540" y="110" width="140" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="p4-sy-1" value="SyncManager collects&lt;br&gt;changed rows" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="p4-lane-app">
+          <mxGeometry x="60" y="180" width="140" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="p4-sy-2" value="POST changes&lt;br&gt;to FastAPI" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="p4-lane-ext">
+          <mxGeometry x="220" y="40" width="120" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="p4-sy-merge" value="Server-side Merge&lt;br&gt;(Conflict Resolution)" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="p4-lane-ext">
+          <mxGeometry x="400" y="40" width="140" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="p4-sy-3" value="Apply Remote&lt;br&gt;Changes to Room" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="p4-lane-app">
+          <mxGeometry x="600" y="180" width="140" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="p4-e1" edge="1" parent="1" source="p4-dl-1" target="p4-dl-2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="p4-e2" edge="1" parent="1" source="p4-dl-2" target="p4-dl-3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="p4-e-prog" edge="1" parent="1" source="p4-dl-3" target="p4-dl-progress" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="p4-e3" edge="1" parent="1" source="p4-dl-3" target="p4-dl-4" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="p4-e-save" edge="1" parent="1" source="p4-dl-4" target="p4-dl-save" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="p4-e4" edge="1" parent="1" source="p4-dl-save" target="p4-dl-5" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="p4-e5" edge="1" parent="1" source="p4-pl-1" target="p4-pl-2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="p4-e-merge" edge="1" parent="1" source="p4-pl-2" target="p4-pl-merge" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="p4-e6" edge="1" parent="1" source="p4-pl-merge" target="p4-pl-3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="p4-e-track" edge="1" parent="1" source="p4-pl-3" target="p4-pl-track" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="p4-e7" edge="1" parent="1" source="p4-sy-1" target="p4-sy-2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="p4-e-sy-merge" edge="1" parent="1" source="p4-sy-2" target="p4-sy-merge" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="p4-e8" edge="1" parent="1" source="p4-sy-merge" target="p4-sy-3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="page5" name="Data Model">
+    <mxGraphModel dx="1422" dy="798" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="p5-v" value="&lt;b&gt;videos&lt;/b&gt;&lt;hr&gt;(PK) id&lt;br&gt;title&lt;br&gt;channelName&lt;br&gt;channelId&lt;br&gt;durationSeconds&lt;br&gt;thumbnailUrl&lt;br&gt;localFilePath&lt;br&gt;favorite&lt;br&gt;version&lt;br&gt;updatedAt" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=10;spacingTop=10;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="40" y="40" width="180" height="210" as="geometry"/>
+        </mxCell>
+        <mxCell id="p5-d" value="&lt;b&gt;downloads&lt;/b&gt;&lt;hr&gt;(PK) id&lt;br&gt;(FK) videoId&lt;br&gt;url&lt;br&gt;format&lt;br&gt;quality&lt;br&gt;filePath&lt;br&gt;status&lt;br&gt;progress&lt;br&gt;totalBytes&lt;br&gt;downloadedBytes&lt;br&gt;version" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=10;spacingTop=10;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="280" y="40" width="180" height="230" as="geometry"/>
+        </mxCell>
+        <mxCell id="p5-h" value="&lt;b&gt;playback_history&lt;/b&gt;&lt;hr&gt;(PK, FK) videoId&lt;br&gt;positionMillis&lt;br&gt;playedAt&lt;br&gt;totalWatchTimeMillis" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=10;spacingTop=10;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="520" y="40" width="180" height="110" as="geometry"/>
+        </mxCell>
+        <mxCell id="p5-s" value="&lt;b&gt;watch_sessions&lt;/b&gt;&lt;hr&gt;(PK) id&lt;br&gt;(FK) videoId&lt;br&gt;watchedAt" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=10;spacingTop=10;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="520" y="180" width="180" height="90" as="geometry"/>
+        </mxCell>
+        <mxCell id="p5-sub" value="&lt;b&gt;subscriptions&lt;/b&gt;&lt;hr&gt;(PK) id&lt;br&gt;sourceType&lt;br&gt;sourceId&lt;br&gt;name&lt;br&gt;autoDownload&lt;br&gt;version" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=10;spacingTop=10;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="40" y="300" width="180" height="130" as="geometry"/>
+        </mxCell>
+        <mxCell id="p5-pl" value="&lt;b&gt;playlists&lt;/b&gt;&lt;hr&gt;(PK) id&lt;br&gt;name&lt;br&gt;youtubePlaylistId&lt;br&gt;uploaderName&lt;br&gt;version" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=10;spacingTop=10;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="280" y="300" width="180" height="120" as="geometry"/>
+        </mxCell>
+        <mxCell id="p5-f" value="&lt;b&gt;folders&lt;/b&gt;&lt;hr&gt;(PK) id&lt;br&gt;name&lt;br&gt;(FK) parentId&lt;br&gt;version" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=10;spacingTop=10;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="520" y="300" width="180" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="p5-vfj" value="&lt;b&gt;video_folder_join&lt;/b&gt;&lt;hr&gt;(Composite PK)&lt;br&gt;(FK) videoId&lt;br&gt;(FK) folderId&lt;br&gt;version" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=10;spacingTop=10;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="740" y="300" width="180" height="100" as="geometry"/>
+        </mxCell>
+        <mxCell id="p5-lh" value="&lt;b&gt;link_history&lt;/b&gt;&lt;hr&gt;(PK) url&lt;br&gt;title&lt;br&gt;extractedAt" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=10;spacingTop=10;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="520" y="440" width="180" height="90" as="geometry"/>
+        </mxCell>
+        <mxCell id="p5-e1" value="" style="edgeStyle=entityRelationEdgeStyle;rounded=1;html=1;exitX=0;exitY=0.3;exitDx=0;exitDy=0;entryX=1;entryY=0.3;entryDx=0;entryDy=0;" edge="1" parent="1" source="p5-d" target="p5-v">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="p5-e2" value="" style="edgeStyle=entityRelationEdgeStyle;rounded=1;html=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="p5-h" target="p5-v">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="p5-e3" value="" style="edgeStyle=entityRelationEdgeStyle;rounded=1;html=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.7;entryDx=0;entryDy=0;" edge="1" parent="1" source="p5-s" target="p5-v">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="p5-e4" value="" style="edgeStyle=entityRelationEdgeStyle;rounded=1;html=1;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;" edge="1" parent="1" source="p5-vfj" target="p5-v">
+          <mxGeometry relative="1" as="geometry">
+             <Array as="points"><mxPoint x="830" y="270"/><mxPoint x="130" y="270"/></Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="p5-e5" value="" style="edgeStyle=entityRelationEdgeStyle;rounded=1;html=1;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="p5-vfj" target="p5-f">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="p5-e6" value="Parent" style="edgeStyle=entityRelationEdgeStyle;rounded=1;html=1;exitX=1;exitY=0.8;exitDx=0;exitDy=0;entryX=1;entryY=0.4;entryDx=0;entryDy=0;" edge="1" parent="1" source="p5-f" target="p5-f">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="720" y="380"/>
+              <mxPoint x="720" y="340"/>
+            </Array>
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="page6" name="Deployment Topology">
+    <mxGraphModel dx="1422" dy="798" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="p6-phone" value="Android Phone" style="swimlane;startSize=30;fillColor=#dae8fc;strokeColor=#6c8ebf;html=1;" vertex="1" parent="1">
+          <mxGeometry x="40" y="40" width="300" height="400" as="geometry"/>
+        </mxCell>
+        <mxCell id="p6-os" value="Android OS" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="p6-phone">
+          <mxGeometry x="20" y="40" width="260" height="340" as="geometry"/>
+        </mxCell>
+        <mxCell id="p6-app" value="MediaNest App" style="swimlane;startSize=24;fillColor=#dae8fc;html=1;" vertex="1" parent="p6-os">
+          <mxGeometry x="20" y="40" width="220" height="150" as="geometry"/>
+        </mxCell>
+        <mxCell id="p6-app-internals" value="UI / Services / DB" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="p6-app">
+          <mxGeometry x="30" y="50" width="160" height="60" as="geometry"/>
+        </mxCell>
+        <mxCell id="p6-fs" value="Filesystem&lt;br&gt;(Media Files)" style="shape=folder;whiteSpace=wrap;html=1;" vertex="1" parent="p6-os">
+          <mxGeometry x="20" y="210" width="100" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="p6-wm" value="WorkManager&lt;br&gt;(Background Jobs)" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="p6-os">
+          <mxGeometry x="140" y="210" width="100" height="80" as="geometry"/>
+        </mxCell>
+        <mxCell id="p6-server" value="VPS Server" style="ellipse;shape=cloud;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="500" y="100" width="300" height="280" as="geometry"/>
+        </mxCell>
+        <mxCell id="p6-docker" value="Docker Container" style="swimlane;startSize=24;fillColor=#e1d5e7;strokeColor=#9673a6;html=1;" vertex="1" parent="p6-server">
+          <mxGeometry x="60" y="80" width="180" height="150" as="geometry"/>
+        </mxCell>
+        <mxCell id="p6-fastapi" value="FastAPI App" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="p6-docker">
+          <mxGeometry x="30" y="40" width="120" height="40" as="geometry"/>
+        </mxCell>
+        <mxCell id="p6-db" value="SQLite (sync.db)" style="shape=cylinder3;whiteSpace=wrap;html=1;" vertex="1" parent="p6-docker">
+          <mxGeometry x="30" y="90" width="120" height="50" as="geometry"/>
+        </mxCell>
+        <mxCell id="p6-sync-edge" value="HTTPS / REST (push/pull)&lt;br&gt;Metadata sync only" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0.07;entryY=0.4;entryDx=0;entryDy=0;entryPerimeter=0;" edge="1" parent="1" source="p6-app" target="p6-server">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="page7" name="Security &amp; Navigation">
+    <mxGraphModel dx="1422" dy="798" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        <mxCell id="p7-sec-title" value="&lt;b&gt;Security &amp; Auth Flow&lt;/b&gt;" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=16;" vertex="1" parent="1">
+          <mxGeometry x="40" y="20" width="200" height="30" as="geometry"/>
+        </mxCell>
+        <mxCell id="p7-user" value="User" style="shape=umlActor;html=1;" vertex="1" parent="1"><mxGeometry x="40" y="80" width="30" height="60" as="geometry"/></mxCell>
+        <mxCell id="p7-qr" value="Scan QR Code&lt;br&gt;(Device UUID)" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="120" y="80" width="120" height="60" as="geometry"/></mxCell>
+        <mxCell id="p7-auth-req" value="Auth Request&lt;br&gt;(HTTPS)" style="rounded=1;whiteSpace=wrap;html=1;" vertex="1" parent="1"><mxGeometry x="280" y="80" width="120" height="60" as="geometry"/></mxCell>
+        <mxCell id="p7-fastapi" value="FastAPI Auth&lt;br&gt;JWT Generator" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;" vertex="1" parent="1"><mxGeometry x="440" y="80" width="120" height="60" as="geometry"/></mxCell>
+        <mxCell id="p7-jwt" value="JWT Token &amp; Key&lt;br&gt;Stored in DataStore" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;" vertex="1" parent="1"><mxGeometry x="600" y="80" width="140" height="60" as="geometry"/></mxCell>
+        <mxCell id="p7-e1" edge="1" parent="1" source="p7-user" target="p7-qr" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="p7-e2" edge="1" parent="1" source="p7-qr" target="p7-auth-req" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="p7-e3" edge="1" parent="1" source="p7-auth-req" target="p7-fastapi" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="p7-e4" edge="1" parent="1" source="p7-fastapi" target="p7-jwt" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <mxCell id="p7-nav-title" value="&lt;b&gt;Navigation Graph&lt;/b&gt;" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=16;" vertex="1" parent="1">
+          <mxGeometry x="40" y="200" width="200" height="30" as="geometry"/>
+        </mxCell>
+        <mxCell id="p7-home" value="Home" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;" vertex="1" parent="1"><mxGeometry x="40" y="260" width="100" height="50" as="geometry"/></mxCell>
+        <mxCell id="p7-player" value="Player&lt;br&gt;(Overlay/Service)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;" vertex="1" parent="1"><mxGeometry x="220" y="260" width="120" height="50" as="geometry"/></mxCell>
+        <mxCell id="p7-library" value="Library" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;" vertex="1" parent="1"><mxGeometry x="400" y="260" width="100" height="50" as="geometry"/></mxCell>
+        <mxCell id="p7-settings" value="Settings" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;" vertex="1" parent="1"><mxGeometry x="540" y="260" width="100" height="50" as="geometry"/></mxCell>
+        <mxCell id="p7-n1" edge="1" parent="1" source="p7-home" target="p7-player" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;"><mxGeometry relative="1" as="geometry"/></mxCell>
+        <mxCell id="p7-n2" edge="1" parent="1" source="p7-player" target="p7-home" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;curved=1;"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="280" y="240"/><mxPoint x="90" y="240"/></Array></mxGeometry></mxCell>
+        <mxCell id="p7-n3" edge="1" parent="1" source="p7-home" target="p7-library" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="90" y="340"/><mxPoint x="450" y="340"/></Array></mxGeometry></mxCell>
+        <mxCell id="p7-n4" edge="1" parent="1" source="p7-library" target="p7-settings" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;"><mxGeometry relative="1" as="geometry"/></mxCell>
+
+        <mxCell id="p7-err-title" value="&lt;b&gt;Error &amp; State Handling&lt;/b&gt;" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;fontSize=16;" vertex="1" parent="1">
+          <mxGeometry x="40" y="380" width="200" height="30" as="geometry"/>
+        </mxCell>
+        <mxCell id="p7-offline" value="Offline Mode&lt;br&gt;(Cache Access)" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;" vertex="1" parent="1"><mxGeometry x="40" y="440" width="140" height="80" as="geometry"/></mxCell>
+        <mxCell id="p7-conflict" value="Sync Conflict&lt;br&gt;(Ver: Local vs Svr)" style="rhombus;whiteSpace=wrap;html=1;fillColor=#f8cecc;" vertex="1" parent="1"><mxGeometry x="220" y="440" width="140" height="80" as="geometry"/></mxCell>
+        <mxCell id="p7-repair" value="Repair Logic&lt;br&gt;(Cleanup Temp Files)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e1d5e7;" vertex="1" parent="1"><mxGeometry x="400" y="450" width="140" height="60" as="geometry"/></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
