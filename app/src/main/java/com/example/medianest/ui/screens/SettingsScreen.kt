@@ -654,10 +654,7 @@ fun SettingsScreen(
                                     if (diff <= 0) {
                                         countdownText = "Imminent / Running"
                                     } else {
-                                        val hours = diff / (1000 * 60 * 60)
-                                        val minutes = (diff % (1000 * 60 * 60)) / (1000 * 60)
-                                        val seconds = (diff % (1000 * 60)) / 1000
-                                        countdownText = String.format(Locale.getDefault(), "%d hr %d min %d sec", hours, minutes, seconds)
+                                        countdownText = com.example.medianest.ui.utils.UiUtils.formatDuration(diff / 1000)
                                     }
                                 } else {
                                     countdownText = "Disabled"

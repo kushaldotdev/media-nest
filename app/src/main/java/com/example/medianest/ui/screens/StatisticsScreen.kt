@@ -148,15 +148,5 @@ fun StatCard(title: String, value: String, icon: ImageVector) {
 }
 
 fun formatWatchTime(millis: Long): String {
-    if (millis == 0L) return "0 mins"
-    val hours = TimeUnit.MILLISECONDS.toHours(millis)
-    val mins = TimeUnit.MILLISECONDS.toMinutes(millis) % 60
-    val secs = TimeUnit.MILLISECONDS.toSeconds(millis) % 60
-    
-    val parts = mutableListOf<String>()
-    if (hours > 0) parts.add("$hours hours")
-    if (mins > 0) parts.add("$mins mins")
-    if (hours == 0L && mins == 0L) parts.add("$secs secs")
-    
-    return parts.joinToString(" ")
+    return com.example.medianest.ui.utils.UiUtils.formatDuration(millis / 1000)
 }

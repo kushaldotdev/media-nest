@@ -6,14 +6,29 @@ import java.util.Locale
 
 object UiUtils {
     fun formatDuration(seconds: Long): String {
-        val h = seconds / 3600
-        val m = (seconds % 3600) / 60
-        val s = seconds % 60
-        return if (h > 0) {
-            String.format(Locale.US, "%d:%02d:%02d", h, m, s)
-        } else {
-            String.format(Locale.US, "%d:%02d", m, s)
-        }
+        if (seconds <= 0L) return "0s"
+        val totalMins = seconds / 60
+        val totalHours = totalMins / 60
+        val totalDays = totalHours / 24
+
+        val years = totalDays / 365
+        val months = (totalDays % 365) / 30
+        val weeks = ((totalDays % 365) % 30) / 7
+        val days = ((totalDays % 365) % 30) % 7
+        val hours = totalHours % 24
+        val mins = totalMins % 60
+        val secs = seconds % 60
+
+        val parts = mutableListOf<String>()
+        if (years > 0) parts.add("${years}y")
+        if (months > 0) parts.add("${months}mo")
+        if (weeks > 0) parts.add("${weeks}w")
+        if (days > 0) parts.add("${days}d")
+        if (hours > 0) parts.add("${hours}h")
+        if (mins > 0) parts.add("${mins}m")
+        if (secs > 0 || parts.isEmpty()) parts.add("${secs}s")
+
+        return parts.joinToString(" ")
     }
 
     fun formatAbsoluteDate(timestamp: Long): String {
@@ -68,20 +83,26 @@ object UiUtils {
 
         val years = diffDay / 365
         val months = (diffDay % 365) / 30
-        val days = (diffDay % 365) % 30
+        val weeks = ((diffDay % 365) % 30) / 7
+        val days = ((diffDay % 365) % 30) % 7
         val hours = diffHour % 24
+        val minutes = diffMin % 60
+        val seconds = diffSec % 60
 
         if (abbreviated) {
             val sb = StringBuilder()
             if (years > 0) sb.append("${years}y ")
             if (months > 0) sb.append("${months}mo ")
+            if (weeks > 0) sb.append("${weeks}w ")
             if (days > 0) sb.append("${days}d ")
             if (hours > 0) sb.append("${hours}h ")
+            if (minutes > 0) sb.append("${minutes}m ")
+            if (seconds > 0) sb.append("${seconds}s ")
             
             val result = sb.toString().trim()
             if (result.isNotEmpty()) return result
             
-            return if (diffMin > 0) "${diffMin}m" else "just now"
+            return "just now"
         } else {
             val parts = mutableListOf<String>()
             if (years > 0) {
@@ -90,21 +111,26 @@ object UiUtils {
             if (months > 0) {
                 parts.add(if (months == 1L) "1 month" else "$months months")
             }
+            if (weeks > 0) {
+                parts.add(if (weeks == 1L) "1 week" else "$weeks weeks")
+            }
             if (days > 0) {
                 parts.add(if (days == 1L) "1 day" else "$days days")
             }
             if (hours > 0) {
                 parts.add(if (hours == 1L) "1 hour" else "$hours hours")
             }
+            if (minutes > 0) {
+                parts.add(if (minutes == 1L) "1 minute" else "$minutes minutes")
+            }
+            if (seconds > 0) {
+                parts.add(if (seconds == 1L) "1 second" else "$seconds seconds")
+            }
 
             if (parts.isNotEmpty()) {
                 return parts.joinToString(", ") + " ago"
             }
-            return if (diffMin > 0) {
-                if (diffMin == 1L) "1 minute ago" else "$diffMin minutes ago"
-            } else {
-                "just now"
-            }
+            return "just now"
         }
     }
 
