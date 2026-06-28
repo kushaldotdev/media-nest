@@ -22,6 +22,7 @@ import com.example.medianest.data.local.entity.DownloadStatus
 import com.example.medianest.data.repository.DownloadRepository
 import com.example.medianest.service.AudioExtractor
 import com.example.medianest.data.model.StreamSource
+import com.example.medianest.data.preferences.DownloadPreferences
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -29,6 +30,9 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.Job
 import javax.inject.Inject
 
 sealed class HomeUiState {
@@ -51,7 +55,8 @@ class HomeViewModel @Inject constructor(
     private val videoDao: VideoDao,
     private val downloadRepository: DownloadRepository,
     private val audioExtractor: AudioExtractor,
-    private val historyDao: HistoryDao
+    private val historyDao: HistoryDao,
+    private val downloadPreferences: DownloadPreferences
 ) : ViewModel() {
 
     companion object {
@@ -357,5 +362,185 @@ class HomeViewModel @Inject constructor(
 
     fun resetState() {
         _uiState.value = HomeUiState.Idle
+    }
+
+    data class BulkFetchProgress(
+        val current: Int,
+        val total: Int,
+        val currentTitle: String
+    )
+
+    data class BulkDownloadConfirmation(
+        val quality: String,
+        val videoCount: Int,
+        val totalSize: Long,
+        val usableSpace: Long,
+        val videosToDownload: List<Pair<ExtractedVideoInfo, StreamSource>>
+    )
+
+    private val _showBulkQualityDialog = MutableStateFlow(false)
+    val showBulkQualityDialog: StateFlow<Boolean> = _showBulkQualityDialog
+
+    fun setBulkQualityDialogVisible(visible: Boolean) {
+        _showBulkQualityDialog.value = visible
+    }
+
+    private val _bulkFetchProgress = MutableStateFlow<BulkFetchProgress?>(null)
+    val bulkFetchProgress: StateFlow<BulkFetchProgress?> = _bulkFetchProgress
+
+    private val _bulkDownloadConfirmation = MutableStateFlow<BulkDownloadConfirmation?>(null)
+    val bulkDownloadConfirmation: StateFlow<BulkDownloadConfirmation?> = _bulkDownloadConfirmation
+
+    fun dismissBulkConfirmation() {
+        _bulkDownloadConfirmation.value = null
+    }
+
+    private fun selectStream(videoInfo: ExtractedVideoInfo, targetQuality: String): StreamSource? {
+        if (targetQuality == "Audio") {
+            return videoInfo.streamSources
+                .filter { it.format == "audio" }
+                .maxByOrNull { it.quality.replace("kbps", "").toIntOrNull() ?: 0 }
+        }
+        
+        val targetHeight = Regex("""\d+""").find(targetQuality)?.value?.toIntOrNull() ?: 360
+        val videoStreams = videoInfo.streamSources.filter { it.format == "video" || it.format == "video_only" }
+        if (videoStreams.isEmpty()) return null
+        
+        val groupedByHeight = videoStreams.groupBy { Regex("""\d+""").find(it.quality)?.value?.toIntOrNull() ?: 0 }
+        if (groupedByHeight.isEmpty()) return null
+        
+        val sortedHeights = (groupedByHeight.keys.filter { it <= targetHeight }.sortedDescending() +
+                             groupedByHeight.keys.filter { it > targetHeight }.sorted())
+        
+        val chosenHeight = sortedHeights.firstOrNull() ?: return null
+        val streamsForHeight = groupedByHeight[chosenHeight] ?: return null
+        
+        return streamsForHeight.firstOrNull { it.format == "video" } 
+            ?: streamsForHeight.firstOrNull { it.format == "video_only" }
+    }
+
+    private var bulkFetchJob: Job? = null
+
+    fun startBulkFetch(videos: List<ExtractedVideoInfo>, targetQuality: String) {
+        _showBulkQualityDialog.value = false
+        _bulkFetchProgress.value = BulkFetchProgress(0, videos.size, "")
+        
+        bulkFetchJob = viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val fetchedList = mutableListOf<Pair<ExtractedVideoInfo, StreamSource>>()
+            var totalSize = 0L
+            
+            try {
+                for ((index, video) in videos.withIndex()) {
+                    if (!isActive) break
+                    
+                    _bulkFetchProgress.value = BulkFetchProgress(index + 1, videos.size, video.title)
+                    
+                    val videoInfo = try {
+                        val cached = lastResultCache.get(video.videoId)
+                        if (cached != null && cached.streamSources.isNotEmpty()) {
+                            cached
+                        } else {
+                            val info = repository.searchAndSave("https://www.youtube.com/watch?v=${video.videoId}")
+                            lastResultCache.put(video.videoId, info)
+                            info
+                        }
+                    } catch (e: Exception) {
+                        if (e is kotlinx.coroutines.CancellationException) throw e
+                        null
+                    }
+                    
+                    if (videoInfo != null) {
+                        val stream = selectStream(videoInfo, targetQuality)
+                        if (stream != null) {
+                            fetchedList.add(videoInfo to stream)
+                            var size = stream.contentLength ?: 0L
+                            if (stream.format == "video_only") {
+                                val bestAudio = videoInfo.streamSources
+                                    .filter { it.format == "audio" }
+                                    .maxByOrNull { it.quality.replace("kbps", "").toIntOrNull() ?: 0 }
+                                size += bestAudio?.contentLength ?: 0L
+                            }
+                            totalSize += size
+                        }
+                    }
+                }
+                
+                if (isActive) {
+                    _bulkFetchProgress.value = null
+                    
+                    val downloadFolderVal = downloadPreferences.downloadFolder.first().trim()
+                    val file = if (downloadFolderVal.isEmpty()) {
+                        context.getExternalFilesDir(null) ?: context.filesDir
+                    } else {
+                        java.io.File(downloadFolderVal)
+                    }
+                    if (!file.exists()) {
+                        file.mkdirs()
+                    }
+                    val usableSpace = file.usableSpace
+                    
+                    _bulkDownloadConfirmation.value = BulkDownloadConfirmation(
+                        quality = targetQuality,
+                        videoCount = fetchedList.size,
+                        totalSize = totalSize,
+                        usableSpace = usableSpace,
+                        videosToDownload = fetchedList
+                    )
+                }
+            } catch (e: Exception) {
+                if (e is kotlinx.coroutines.CancellationException) throw e
+                _bulkFetchProgress.value = null
+            } finally {
+                _bulkFetchProgress.value = null
+            }
+        }
+    }
+
+    fun cancelBulkFetch() {
+        bulkFetchJob?.cancel()
+        _bulkFetchProgress.value = null
+    }
+
+    fun confirmBulkDownload(videosToDownload: List<Pair<ExtractedVideoInfo, StreamSource>>) {
+        _bulkDownloadConfirmation.value = null
+        viewModelScope.launch {
+            var enqueuedCount = 0
+            for ((videoInfo, stream) in videosToDownload) {
+                val dbQuality = if (stream.format == "audio") stream.quality else "${stream.quality} (${stream.codec})"
+                val existing = downloadRepository.getDownload(videoInfo.videoId, stream.format, dbQuality)
+                if (existing != null) {
+                    continue
+                }
+
+                val video = repository.getVideoById(videoInfo.videoId)
+                if (video == null) {
+                    repository.insertVideo(videoInfo.toVideoEntity())
+                }
+
+                val entity = DownloadEntity(
+                    videoId = videoInfo.videoId,
+                    url = stream.url,
+                    videoUrl = "https://www.youtube.com/watch?v=${videoInfo.videoId}",
+                    format = stream.format,
+                    quality = dbQuality,
+                    status = DownloadStatus.QUEUED,
+                    title = videoInfo.title,
+                    thumbnailUrl = videoInfo.thumbnailUrl
+                )
+                downloadRepository.insert(entity)
+                enqueuedCount++
+            }
+            
+            if (enqueuedCount > 0) {
+                try {
+                    context.startForegroundService(android.content.Intent(context, com.example.medianest.service.DownloadService::class.java))
+                    android.widget.Toast.makeText(context, "Enqueued $enqueuedCount downloads", android.widget.Toast.LENGTH_SHORT).show()
+                } catch (e: Exception) {
+                    android.widget.Toast.makeText(context, "Failed to start downloader: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+                }
+            } else {
+                android.widget.Toast.makeText(context, "All selected videos are already in the queue or downloaded", android.widget.Toast.LENGTH_SHORT).show()
+            }
+        }
     }
 }

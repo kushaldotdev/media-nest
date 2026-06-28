@@ -38,6 +38,8 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.Download
@@ -92,6 +94,9 @@ fun HomeScreen(
     val fetchingStreamsFor by viewModel.fetchingStreamsFor.collectAsStateWithLifecycle()
     val fetchedStreams by viewModel.fetchedStreams.collectAsStateWithLifecycle()
     val playbackHistory by viewModel.playbackHistory.collectAsStateWithLifecycle()
+    val showBulkQualityDialog by viewModel.showBulkQualityDialog.collectAsStateWithLifecycle()
+    val bulkFetchProgress by viewModel.bulkFetchProgress.collectAsStateWithLifecycle()
+    val bulkDownloadConfirmation by viewModel.bulkDownloadConfirmation.collectAsStateWithLifecycle()
     var urlInput by remember { mutableStateOf("") }
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
@@ -228,23 +233,36 @@ fun HomeScreen(
                             )
                             Spacer(Modifier.height(4.dp))
                             val isSaved = subscriptions.any { it.sourceId == state.playlist.playlistId }
-                            Button(
-                                onClick = { 
-                                    if (isSaved) {
-                                        viewModel.unsubscribe(state.playlist.playlistId)
-                                        coroutineScope.launch { snackbarHostState.showSnackbar("Removed from Playlist") }
-                                    } else {
-                                        viewModel.subscribe("playlist", state.playlist.playlistId, state.playlist.name, state.playlist.thumbnailUrl)
-                                        coroutineScope.launch { snackbarHostState.showSnackbar("Added to Playlist") }
-                                    }
-                                },
+                            Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                                    containerColor = if (isSaved) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.primary,
-                                    contentColor = if (isSaved) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onPrimary
-                                )
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Text(if (isSaved) "Saved to Playlist" else "Add to Playlist")
+                                Button(
+                                    onClick = { 
+                                        if (isSaved) {
+                                            viewModel.unsubscribe(state.playlist.playlistId)
+                                            coroutineScope.launch { snackbarHostState.showSnackbar("Removed from Playlist") }
+                                        } else {
+                                            viewModel.subscribe("playlist", state.playlist.playlistId, state.playlist.name, state.playlist.thumbnailUrl)
+                                            coroutineScope.launch { snackbarHostState.showSnackbar("Added to Playlist") }
+                                        }
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                                        containerColor = if (isSaved) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.primary,
+                                        contentColor = if (isSaved) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onPrimary
+                                    )
+                                ) {
+                                    Text(if (isSaved) "Saved to Playlist" else "Add to Playlist")
+                                }
+                                Button(
+                                    onClick = { 
+                                        viewModel.setBulkQualityDialogVisible(true)
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("Download All")
+                                }
                             }
                             Spacer(Modifier.height(8.dp))
                             Row(
@@ -315,24 +333,37 @@ fun HomeScreen(
                             )
                             Spacer(Modifier.height(4.dp))
                             val isSubscribed = subscriptions.any { it.sourceId == state.channel.url || it.sourceId == state.channel.channelId }
-                            Button(
-                                onClick = { 
-                                    if (isSubscribed) {
-                                        val subId = subscriptions.firstOrNull { it.sourceId == state.channel.url || it.sourceId == state.channel.channelId }?.sourceId ?: state.channel.url
-                                        viewModel.unsubscribe(subId)
-                                        coroutineScope.launch { snackbarHostState.showSnackbar("Unsubscribed from Channel") }
-                                    } else {
-                                        viewModel.subscribe("channel", state.channel.url, state.channel.name, state.channel.avatarUrl)
-                                        coroutineScope.launch { snackbarHostState.showSnackbar("Subscribed to Channel") }
-                                    }
-                                },
+                            Row(
                                 modifier = Modifier.fillMaxWidth(),
-                                colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                                    containerColor = if (isSubscribed) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.primary,
-                                    contentColor = if (isSubscribed) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onPrimary
-                                )
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Text(if (isSubscribed) "Subscribed" else "Subscribe to Channel")
+                                Button(
+                                    onClick = { 
+                                        if (isSubscribed) {
+                                            val subId = subscriptions.firstOrNull { it.sourceId == state.channel.url || it.sourceId == state.channel.channelId }?.sourceId ?: state.channel.url
+                                            viewModel.unsubscribe(subId)
+                                            coroutineScope.launch { snackbarHostState.showSnackbar("Unsubscribed from Channel") }
+                                        } else {
+                                            viewModel.subscribe("channel", state.channel.url, state.channel.name, state.channel.avatarUrl)
+                                            coroutineScope.launch { snackbarHostState.showSnackbar("Subscribed to Channel") }
+                                        }
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                                        containerColor = if (isSubscribed) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.primary,
+                                        contentColor = if (isSubscribed) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onPrimary
+                                    )
+                                ) {
+                                    Text(if (isSubscribed) "Subscribed" else "Subscribe to Channel")
+                                }
+                                Button(
+                                    onClick = { 
+                                        viewModel.setBulkQualityDialogVisible(true)
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Text("Download All")
+                                }
                             }
                             Spacer(Modifier.height(8.dp))
                             Row(
@@ -469,6 +500,150 @@ fun HomeScreen(
                     showMoveToFolderDialog = false
                     videoToMove = null
                 }) { Text("Cancel") }
+            }
+        )
+    }
+
+    if (showBulkQualityDialog) {
+        val qualities = listOf("1080p", "720p", "480p", "360p", "Audio")
+        var selectedQuality by remember { mutableStateOf("720p") }
+        AlertDialog(
+            onDismissRequest = { viewModel.setBulkQualityDialogVisible(false) },
+            title = { Text("Download All by Resolution") },
+            text = {
+                Column {
+                    Text("Select target resolution/format:")
+                    Spacer(Modifier.height(8.dp))
+                    qualities.forEach { quality ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { selectedQuality = quality }
+                                .padding(vertical = 8.dp)
+                        ) {
+                            RadioButton(
+                                selected = (selectedQuality == quality),
+                                onClick = { selectedQuality = quality }
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = when (quality) {
+                                    "1080p" -> "1080p (Highest video quality)"
+                                    "720p" -> "720p (High definition)"
+                                    "480p" -> "480p (Standard definition)"
+                                    "360p" -> "360p (Low data usage)"
+                                    "Audio" -> "Audio Only (M4A/WebM)"
+                                    else -> quality
+                                }
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val videos = when (val state = uiState) {
+                        is HomeUiState.PlaylistResult -> if (showShorts) state.playlist.videos else state.playlist.videos.filter { !it.isShort }
+                        is HomeUiState.ChannelResult -> if (showShorts) state.channel.uploads else state.channel.uploads.filter { !it.isShort }
+                        else -> emptyList()
+                    }
+                    viewModel.startBulkFetch(videos, selectedQuality)
+                }) {
+                    Text("Next")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.setBulkQualityDialogVisible(false) }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    bulkFetchProgress?.let { progress ->
+        AlertDialog(
+            onDismissRequest = {}, // Force user to cancel or wait
+            title = { Text("Fetching Video Metadata") },
+            text = {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("Retrieving stream details to calculate total size and check disk space.")
+                    Spacer(Modifier.height(16.dp))
+                    Text("Progress: ${progress.current} of ${progress.total} videos")
+                    Spacer(Modifier.height(8.dp))
+                    if (progress.total > 0) {
+                        LinearProgressIndicator(
+                            progress = { progress.current.toFloat() / progress.total.toFloat() },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    } else {
+                        CircularProgressIndicator()
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Text(
+                        text = progress.currentTitle,
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { viewModel.cancelBulkFetch() }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    bulkDownloadConfirmation?.let { confirmation ->
+        val hasSpace = confirmation.usableSpace > confirmation.totalSize
+        val formattedSize = Formatter.formatShortFileSize(context, confirmation.totalSize)
+        val formattedSpace = Formatter.formatShortFileSize(context, confirmation.usableSpace)
+        
+        AlertDialog(
+            onDismissRequest = { viewModel.dismissBulkConfirmation() },
+            title = { Text("Confirm Bulk Download") },
+            text = {
+                Column {
+                    Text("Quality: ${confirmation.quality}")
+                    Spacer(Modifier.height(4.dp))
+                    Text("Total Videos: ${confirmation.videoCount}")
+                    Spacer(Modifier.height(4.dp))
+                    Text("Total Download Size: $formattedSize")
+                    Spacer(Modifier.height(4.dp))
+                    Text("Available Disk Space: $formattedSpace")
+                    Spacer(Modifier.height(12.dp))
+                    
+                    if (hasSpace) {
+                        Text(
+                            text = "Storage check: Sufficient space available.",
+                            color = MaterialTheme.colorScheme.primary,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    } else {
+                        val neededBytes = confirmation.totalSize - confirmation.usableSpace
+                        val formattedNeeded = Formatter.formatShortFileSize(context, neededBytes)
+                        Text(
+                            text = "WARNING: Insufficient storage space!\nYou need an additional $formattedNeeded to complete downloads.",
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.confirmBulkDownload(confirmation.videosToDownload)
+                }) {
+                    Text(if (hasSpace) "Download" else "Download Anyway")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.dismissBulkConfirmation() }) {
+                    Text("Cancel")
+                }
             }
         )
     }
