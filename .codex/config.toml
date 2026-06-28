@@ -1,2 +1,6 @@
 [mcp_servers.codebase-memory-mcp]
 command = "C:/Users/Kushal/AppData/Local/Programs/codebase-memory-mcp/codebase-memory-mcp.exe"
+
+[mcp_servers.agentmemory]
+command = "C:\\Users\\Kushal\\AppData\\Roaming\\npm\\agentmemory.cmd"
+args = ["mcp", "--path", "D:\\dev\\media-nest\\.agentmemory"]
