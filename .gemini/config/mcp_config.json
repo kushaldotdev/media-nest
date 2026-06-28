@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "codebase-memory-mcp": {
+      "args": [],
+      "command": "C:/Users/Kushal/AppData/Local/Programs/codebase-memory-mcp/codebase-memory-mcp.exe"
+    }
+  }
+}
