@@ -16,6 +16,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import com.example.medianest.data.local.dao.VideoDao
 import com.example.medianest.data.mapper.toVideoEntity
 import com.example.medianest.data.repository.SubscriptionRepository
+import com.example.medianest.data.sync.SyncManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -24,23 +25,25 @@ import kotlinx.coroutines.launch
 import java.net.HttpURLConnection
 import java.net.URL
 import javax.inject.Inject
-
+ 
 @HiltViewModel
 class VideoDetailViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val downloadRepository: DownloadRepository,
     private val videoRepository: com.example.medianest.data.repository.VideoRepository,
     private val subscriptionRepository: SubscriptionRepository,
-    private val historyDao: com.example.medianest.data.local.dao.HistoryDao
+    private val historyDao: com.example.medianest.data.local.dao.HistoryDao,
+    private val syncManager: SyncManager
 ) : ViewModel() {
     private val _videoDownloads = MutableStateFlow<List<DownloadEntity>>(emptyList())
     val videoDownloads: StateFlow<List<DownloadEntity>> = _videoDownloads
-
+ 
     private val _localVideo = MutableStateFlow<VideoEntity?>(null)
     val localVideo: StateFlow<VideoEntity?> = _localVideo
 
     private var downloadsJob: kotlinx.coroutines.Job? = null
     private var localVideoJob: kotlinx.coroutines.Job? = null
+    private var historyJob: kotlinx.coroutines.Job? = null
     private var currentVideoId: String = ""
 
     private val _videoInfo = MutableStateFlow<ExtractedVideoInfo?>(null)
@@ -76,8 +79,11 @@ class VideoDetailViewModel @Inject constructor(
                     _localVideo.value = it
                 }
             }
-            viewModelScope.launch {
-                _videoHistory.value = historyDao.getLatestPlayback(videoId)
+            historyJob?.cancel()
+            historyJob = viewModelScope.launch {
+                historyDao.getAllHistory().collect { historyList ->
+                    _videoHistory.value = historyList.find { it.videoId == videoId }
+                }
             }
             viewModelScope.launch {
                 historyDao.getWatchSessions(videoId).collect {
@@ -87,6 +93,15 @@ class VideoDetailViewModel @Inject constructor(
         }
         if (forceRefresh) {
             HomeViewModel.lastResultCache.remove(videoId)
+            viewModelScope.launch {
+                try {
+                    syncManager.sync()
+                } catch (e: Exception) {
+                    android.util.Log.e("VideoDetailViewModel", "Failed to sync during pull-to-refresh", e)
+                }
+                _videoHistory.value = historyDao.getLatestPlayback(videoId)
+                _watchSessions.value = historyDao.getWatchSessions(videoId).firstOrNull() ?: emptyList()
+            }
         }
         val cached = HomeViewModel.lastResultCache.get(videoId)
         if (cached != null && !cached.isOfflineFallback && cached.streamSources.isNotEmpty()) {

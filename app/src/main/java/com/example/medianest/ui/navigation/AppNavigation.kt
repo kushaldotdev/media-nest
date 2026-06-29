@@ -6,6 +6,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -110,8 +111,8 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
                 detailViewModel.loadFavorite(videoId)
             }
 
-            val videoInfo by detailViewModel.videoInfo.collectAsState()
-            val downloads by detailViewModel.videoDownloads.collectAsState()
+            val videoInfo by detailViewModel.videoInfo.collectAsStateWithLifecycle()
+            val downloads by detailViewModel.videoDownloads.collectAsStateWithLifecycle()
 
             LaunchedEffect(videoInfo) {
                 val info = videoInfo ?: return@LaunchedEffect
@@ -119,13 +120,13 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
                 detailViewModel.checkSubscription()
             }
 
-            val isFavorite by detailViewModel.isFavorite.collectAsState()
-            val isSubscribed by detailViewModel.isSubscribed.collectAsState()
+            val isFavorite by detailViewModel.isFavorite.collectAsStateWithLifecycle()
+            val isSubscribed by detailViewModel.isSubscribed.collectAsStateWithLifecycle()
 
-            val videoHistory by detailViewModel.videoHistory.collectAsState()
-            val watchSessions by detailViewModel.watchSessions.collectAsState()
-            val localVideo by detailViewModel.localVideo.collectAsState()
-            val isFetchingOnline by detailViewModel.isFetchingOnline.collectAsState()
+            val videoHistory by detailViewModel.videoHistory.collectAsStateWithLifecycle()
+            val watchSessions by detailViewModel.watchSessions.collectAsStateWithLifecycle()
+            val localVideo by detailViewModel.localVideo.collectAsStateWithLifecycle()
+            val isFetchingOnline by detailViewModel.isFetchingOnline.collectAsStateWithLifecycle()
 
             val info = videoInfo
             if (info != null) {

@@ -20,6 +20,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import com.example.medianest.ui.components.GlassCard
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MusicNote
@@ -63,6 +66,7 @@ import com.example.medianest.ui.viewmodel.DownloadsViewModel
 
 import androidx.compose.runtime.LaunchedEffect
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DownloadsScreen(
     onPlayDownload: (DownloadEntity) -> Unit,
@@ -75,6 +79,11 @@ fun DownloadsScreen(
     val playingUri by viewModel.playingUri.collectAsStateWithLifecycle()
     val isPlaying by viewModel.isPlaying.collectAsStateWithLifecycle()
     val videosMap by viewModel.videosMap.collectAsStateWithLifecycle()
+    val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
+    val lastWatchedDownload by viewModel.lastWatchedDownload.collectAsStateWithLifecycle()
+    val lastWatchedProgress by viewModel.lastWatchedProgress.collectAsStateWithLifecycle()
+    val lastWatchedPositionMs by viewModel.lastWatchedPositionMs.collectAsStateWithLifecycle()
+
     var showDeleteDialogFor by remember { mutableStateOf<DownloadEntity?>(null) }
     var showRestartDialogFor by remember { mutableStateOf<DownloadEntity?>(null) }
     var pendingDialogId by remember { mutableStateOf<Long?>(null) }
@@ -97,60 +106,165 @@ fun DownloadsScreen(
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = { viewModel.refreshDownloads() },
+        modifier = Modifier.fillMaxSize()
+    ) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp)
         ) {
-            Text("Downloads", style = MaterialTheme.typography.titleLarge)
-            var expanded by remember { mutableStateOf(false) }
-            Box {
-                Button(onClick = { expanded = true }) {
-                    Text("Max: ${uiState.maxConcurrent}")
-                }
-                DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                    (1..5).forEach { n ->
-                        DropdownMenuItem(
-                            text = { Text("$n concurrent") },
-                            onClick = {
-                                viewModel.setMaxConcurrent(n)
-                                expanded = false
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Downloads", style = MaterialTheme.typography.titleLarge)
+                    var expanded by remember { mutableStateOf(false) }
+                    Box {
+                        Button(onClick = { expanded = true }) {
+                            Text("Max: ${uiState.maxConcurrent}")
+                        }
+                        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                            (1..5).forEach { n ->
+                                DropdownMenuItem(
+                                    text = { Text("$n concurrent") },
+                                    onClick = {
+                                        viewModel.setMaxConcurrent(n)
+                                        expanded = false
+                                    }
+                                )
                             }
-                        )
+                        }
                     }
                 }
+                Spacer(Modifier.height(4.dp))
             }
-        }
 
-        Spacer(Modifier.height(4.dp))
+            item {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Start,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(onClick = { viewModel.pauseAllDownloads() }) {
+                        Text("Pause All")
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    TextButton(onClick = { viewModel.resumeAllDownloads() }) {
+                        Text("Resume All")
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    TextButton(onClick = { showDeleteAllDialog = true }) {
+                        Text("Delete All")
+                    }
+                }
+                Spacer(Modifier.height(16.dp))
+            }
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.Start,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            TextButton(onClick = { viewModel.pauseAllDownloads() }) {
-                Text("Pause All")
+            // Resume Watching section
+            lastWatchedDownload?.let { download ->
+                item {
+                    Text("Resume Watching", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.height(8.dp))
+                    GlassCard(
+                        onClick = { onPlayDownload(download) },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp).fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(120.dp, 68.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(MaterialTheme.colorScheme.surfaceColorAtElevation(1.dp))
+                            ) {
+                                AsyncImage(
+                                    model = download.thumbnailUrl,
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(Color.Black.copy(alpha = 0.3f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.PlayArrow,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(28.dp)
+                                    )
+                                }
+                                if (lastWatchedProgress > 0f) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(4.dp)
+                                            .align(Alignment.BottomCenter)
+                                            .background(Color.Gray.copy(alpha = 0.5f))
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth(lastWatchedProgress)
+                                                .height(4.dp)
+                                                .background(Color.Red)
+                                        )
+                                    }
+                                }
+                            }
+                            Spacer(Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = download.title.ifEmpty { download.quality },
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    text = if (lastWatchedPositionMs > 0) {
+                                        "Left off at ${com.example.medianest.ui.utils.UiUtils.formatDuration(lastWatchedPositionMs / 1000L)}"
+                                    } else {
+                                        "Not started"
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(20.dp))
+                }
             }
-            Spacer(Modifier.width(8.dp))
-            TextButton(onClick = { viewModel.resumeAllDownloads() }) {
-                Text("Resume All")
-            }
-            Spacer(Modifier.width(8.dp))
-            TextButton(onClick = { showDeleteAllDialog = true }) {
-                Text("Delete All")
-            }
-        }
 
-        Spacer(Modifier.height(8.dp))
-
-        if (downloads.isEmpty()) {
-            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("No downloads yet", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (downloads.isNotEmpty()) {
+                item {
+                    Text("Download Queue & Files", style = MaterialTheme.typography.titleMedium)
+                    Spacer(Modifier.height(8.dp))
+                }
             }
-        } else {
-            LazyColumn {
+
+            if (downloads.isEmpty()) {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillParentMaxSize()
+                            .padding(bottom = 120.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("No downloads yet", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            } else {
                 items(downloads, key = { it.id }) { download ->
                     DownloadItem(
                         download = download,
@@ -319,6 +433,7 @@ private fun DownloadItem(
     isPlaying: Boolean
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val playbackHistory by viewModel.playbackHistory.collectAsStateWithLifecycle()
 
     val formatLabel = when (download.format) {
         "video" -> "Video"
@@ -330,6 +445,12 @@ private fun DownloadItem(
 
     val videoEntity = videosMap[download.videoId]
     val durationSeconds = videoEntity?.durationSeconds ?: 0L
+
+    val history = playbackHistory.find { it.videoId == download.videoId }
+    val positionMillis = history?.positionMillis ?: 0L
+    val progressFraction = if (durationSeconds > 0 && positionMillis > 0) {
+        ((positionMillis.toFloat() / 1000f) / durationSeconds.toFloat()).coerceIn(0f, 1f)
+    } else 0f
 
     Card(
         modifier = Modifier
@@ -409,6 +530,22 @@ private fun DownloadItem(
                                 .padding(horizontal = 4.dp, vertical = 2.dp)
                         )
                     }
+                    if (download.status == DownloadStatus.COMPLETED && durationSeconds > 0 && positionMillis > 0) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(3.dp)
+                                .align(Alignment.BottomCenter)
+                                .background(Color.Gray.copy(alpha = 0.5f))
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth(progressFraction)
+                                    .height(3.dp)
+                                    .background(Color.Red)
+                            )
+                        }
+                    }
                 }
 
                 Spacer(Modifier.width(12.dp))
@@ -441,6 +578,13 @@ private fun DownloadItem(
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        if (download.status == DownloadStatus.COMPLETED && positionMillis > 0) {
+                            Text(
+                                text = "Left off at ${com.example.medianest.ui.utils.UiUtils.formatDuration(positionMillis / 1000L)}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
                     }
                 }
             }

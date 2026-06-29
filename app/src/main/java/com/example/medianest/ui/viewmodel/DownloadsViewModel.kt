@@ -17,8 +17,13 @@ import com.example.medianest.data.local.entity.VideoEntity
 import com.example.medianest.data.preferences.DownloadPreferences
 import com.example.medianest.data.repository.DownloadRepository
 import com.example.medianest.data.repository.VideoRepository
+import com.example.medianest.data.local.dao.VideoDao
+import com.example.medianest.data.local.dao.HistoryDao
+import com.example.medianest.data.local.entity.HistoryEntity
+import com.example.medianest.data.sync.SyncManager
 import com.example.medianest.service.AudioExtractor
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
 import com.example.medianest.service.DownloadService
 import com.example.medianest.service.PlaybackService
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -45,7 +50,10 @@ class DownloadsViewModel @Inject constructor(
     private val downloadRepository: DownloadRepository,
     private val downloadPreferences: DownloadPreferences,
     private val audioExtractor: AudioExtractor,
-    private val videoRepository: VideoRepository
+    private val videoRepository: VideoRepository,
+    private val videoDao: VideoDao,
+    private val historyDao: HistoryDao,
+    private val syncManager: SyncManager
 ) : ViewModel() {
 
     private var mediaController: MediaController? = null
@@ -80,6 +88,84 @@ class DownloadsViewModel @Inject constructor(
     val videosMap: StateFlow<Map<String, VideoEntity>> = videoRepository.getAllVideos()
         .map { list -> list.associateBy { it.id } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
+
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing
+
+    val playbackHistory: StateFlow<List<HistoryEntity>> = historyDao.getAllHistory()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val lastWatchedVideo: StateFlow<VideoEntity?> = combine(
+        videoRepository.getAllVideos(),
+        downloads
+    ) { allVideos, downloadsList ->
+        val completedIds = downloadsList.filter { it.status == DownloadStatus.COMPLETED }.map { it.videoId }.toSet()
+        allVideos.filter { it.id in completedIds && it.lastPlayedAt != null }
+            .maxByOrNull { it.lastPlayedAt!! }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val lastWatchedDownload: StateFlow<DownloadEntity?> = combine(
+        lastWatchedVideo,
+        downloads
+    ) { video, downloadsList ->
+        if (video == null) null
+        else downloadsList.find { it.videoId == video.id && it.status == DownloadStatus.COMPLETED }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val lastWatchedProgress: StateFlow<Float> = combine(
+        lastWatchedVideo,
+        playbackHistory
+    ) { video, historyList ->
+        if (video == null) return@combine 0f
+        val history = historyList.find { it.videoId == video.id }
+        val positionMillis = history?.positionMillis ?: 0L
+        if (video.durationSeconds > 0 && positionMillis > 0) {
+            ((positionMillis.toFloat() / 1000f) / video.durationSeconds.toFloat()).coerceIn(0f, 1f)
+        } else 0f
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0f)
+
+    val lastWatchedPositionMs: StateFlow<Long> = combine(
+        lastWatchedVideo,
+        playbackHistory
+    ) { video, historyList ->
+        if (video == null) return@combine 0L
+        val history = historyList.find { it.videoId == video.id }
+        history?.positionMillis ?: 0L
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
+
+    fun refreshDownloads() {
+        viewModelScope.launch {
+            if (_isRefreshing.value) return@launch
+            _isRefreshing.value = true
+            
+            try {
+                syncManager.sync()
+            } catch (e: Exception) {
+                android.util.Log.e("DownloadsViewModel", "Failed to sync during pull-to-refresh", e)
+            }
+            
+            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                try {
+                    val allDownloads = downloadRepository.getAllDownloadsOnce()
+                    allDownloads.forEach { download ->
+                        if (download.status == DownloadStatus.COMPLETED) {
+                            val file = if (download.filePath.isNotEmpty()) File(download.filePath) else null
+                            if (file == null || !file.exists()) {
+                                downloadRepository.update(download.copy(errorMessage = "file_missing"))
+                            } else if (download.errorMessage == "file_missing") {
+                                downloadRepository.update(download.copy(errorMessage = null))
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    android.util.Log.e("DownloadsViewModel", "Error refreshing downloads on disk", e)
+                }
+            }
+            
+            kotlinx.coroutines.delay(800)
+            _isRefreshing.value = false
+        }
+    }
 
     private val _uiState = MutableStateFlow(DownloadsUiState())
     val uiState: StateFlow<DownloadsUiState> = _uiState
