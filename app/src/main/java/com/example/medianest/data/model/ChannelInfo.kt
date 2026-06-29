@@ -7,5 +7,6 @@ data class ChannelInfo(
     val avatarUrl: String?,
     val subscriberCount: Long?,
     val description: String?,
+    val videoCount: Int,
     val uploads: List<ExtractedVideoInfo>
 )

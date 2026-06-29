@@ -2,6 +2,7 @@ package com.example.medianest.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.medianest.data.local.dao.BulkDownloadDao
 import com.example.medianest.data.model.ChannelInfo
 import com.example.medianest.data.model.ExtractedPlaylistInfo
 import com.example.medianest.data.model.ExtractedVideoInfo
@@ -19,10 +20,15 @@ import com.example.medianest.data.local.dao.HistoryDao
 import com.example.medianest.data.local.entity.HistoryEntity
 import com.example.medianest.data.local.entity.DownloadEntity
 import com.example.medianest.data.local.entity.DownloadStatus
+import com.example.medianest.data.local.entity.BulkDownloadItemEntity
+import com.example.medianest.data.local.entity.BulkDownloadItemStatus
+import com.example.medianest.data.local.entity.BulkDownloadJobEntity
+import com.example.medianest.data.local.entity.BulkDownloadJobStatus
 import com.example.medianest.data.repository.DownloadRepository
 import com.example.medianest.service.AudioExtractor
 import com.example.medianest.data.model.StreamSource
 import com.example.medianest.data.preferences.DownloadPreferences
+import com.example.medianest.worker.WorkScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -31,8 +37,9 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.isActive
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 sealed class HomeUiState {
@@ -54,6 +61,7 @@ class HomeViewModel @Inject constructor(
     private val videoFolderDao: VideoFolderDao,
     private val videoDao: VideoDao,
     private val downloadRepository: DownloadRepository,
+    private val bulkDownloadDao: BulkDownloadDao,
     private val audioExtractor: AudioExtractor,
     private val historyDao: HistoryDao,
     private val downloadPreferences: DownloadPreferences
@@ -365,25 +373,25 @@ class HomeViewModel @Inject constructor(
     }
 
     data class BulkFetchProgress(
+        val jobId: Long,
         val current: Int,
         val total: Int,
         val currentTitle: String
     )
 
     data class BulkDownloadConfirmation(
+        val jobId: Long,
         val quality: String,
+        val totalVideoCount: Int,
         val videoCount: Int,
+        val unavailableVideoCount: Int,
+        val failedVideoCount: Int,
         val totalSize: Long,
-        val usableSpace: Long,
-        val videosToDownload: List<Pair<ExtractedVideoInfo, StreamSource>>
+        val usableSpace: Long
     )
 
     private val _showBulkQualityDialog = MutableStateFlow(false)
     val showBulkQualityDialog: StateFlow<Boolean> = _showBulkQualityDialog
-
-    fun setBulkQualityDialogVisible(visible: Boolean) {
-        _showBulkQualityDialog.value = visible
-    }
 
     private val _bulkFetchProgress = MutableStateFlow<BulkFetchProgress?>(null)
     val bulkFetchProgress: StateFlow<BulkFetchProgress?> = _bulkFetchProgress
@@ -391,155 +399,192 @@ class HomeViewModel @Inject constructor(
     private val _bulkDownloadConfirmation = MutableStateFlow<BulkDownloadConfirmation?>(null)
     val bulkDownloadConfirmation: StateFlow<BulkDownloadConfirmation?> = _bulkDownloadConfirmation
 
+    private val _suppressedBulkJobId = MutableStateFlow<Long?>(null)
+    private var bulkFetchStartJob: Job? = null
+
+    init {
+        viewModelScope.launch {
+            bulkDownloadDao.observeLatestActiveJob().collect { job ->
+                when (job?.status) {
+                    BulkDownloadJobStatus.PENDING,
+                    BulkDownloadJobStatus.RUNNING -> {
+                        _bulkFetchProgress.value = BulkFetchProgress(
+                            jobId = job.id,
+                            current = job.processedVideos,
+                            total = job.totalVideos,
+                            currentTitle = job.currentTitle.ifBlank { "Preparing downloads" }
+                        )
+                        _bulkDownloadConfirmation.value = null
+                        _suppressedBulkJobId.value = null
+                    }
+                    BulkDownloadJobStatus.READY -> {
+                        _bulkFetchProgress.value = null
+                        if (_suppressedBulkJobId.value != job.id) {
+                            _bulkDownloadConfirmation.value = BulkDownloadConfirmation(
+                                jobId = job.id,
+                                quality = job.quality,
+                                totalVideoCount = job.totalVideos,
+                                videoCount = job.downloadableVideos,
+                                unavailableVideoCount = job.unavailableVideos,
+                                failedVideoCount = job.failedVideos,
+                                totalSize = job.totalSizeBytes,
+                                usableSpace = job.usableSpaceBytes
+                            )
+                        }
+                    }
+                    BulkDownloadJobStatus.FAILED,
+                    BulkDownloadJobStatus.CANCELLED -> {
+                        _bulkFetchProgress.value = null
+                        _bulkDownloadConfirmation.value = null
+                        _suppressedBulkJobId.value = job.id
+                        if (job.status == BulkDownloadJobStatus.FAILED) {
+                            android.widget.Toast.makeText(
+                                context,
+                                job.errorMessage ?: "Bulk download preparation failed",
+                                android.widget.Toast.LENGTH_LONG
+                            ).show()
+                        }
+                    }
+                    BulkDownloadJobStatus.CONFIRMED,
+                    null -> {
+                        _bulkFetchProgress.value = null
+                        _bulkDownloadConfirmation.value = null
+                    }
+                }
+            }
+        }
+    }
+
+    fun setBulkQualityDialogVisible(visible: Boolean) {
+        _showBulkQualityDialog.value = visible
+    }
+
     fun dismissBulkConfirmation() {
+        _bulkDownloadConfirmation.value?.let { _suppressedBulkJobId.value = it.jobId }
         _bulkDownloadConfirmation.value = null
     }
 
-    private fun selectStream(videoInfo: ExtractedVideoInfo, targetQuality: String): StreamSource? {
-        if (targetQuality == "Audio") {
-            return videoInfo.streamSources
-                .filter { it.format == "audio" }
-                .maxByOrNull { it.quality.replace("kbps", "").toIntOrNull() ?: 0 }
-        }
-        
-        val targetHeight = Regex("""\d+""").find(targetQuality)?.value?.toIntOrNull() ?: 360
-        val videoStreams = videoInfo.streamSources.filter { it.format == "video" || it.format == "video_only" }
-        if (videoStreams.isEmpty()) return null
-        
-        val groupedByHeight = videoStreams.groupBy { Regex("""\d+""").find(it.quality)?.value?.toIntOrNull() ?: 0 }
-        if (groupedByHeight.isEmpty()) return null
-        
-        val sortedHeights = (groupedByHeight.keys.filter { it <= targetHeight }.sortedDescending() +
-                             groupedByHeight.keys.filter { it > targetHeight }.sorted())
-        
-        val chosenHeight = sortedHeights.firstOrNull() ?: return null
-        val streamsForHeight = groupedByHeight[chosenHeight] ?: return null
-        
-        return streamsForHeight.firstOrNull { it.format == "video" } 
-            ?: streamsForHeight.firstOrNull { it.format == "video_only" }
-    }
-
-    private var bulkFetchJob: Job? = null
-
     fun startBulkFetch(videos: List<ExtractedVideoInfo>, targetQuality: String) {
+        val state = _uiState.value
+        val sourceType = when (state) {
+            is HomeUiState.PlaylistResult -> "playlist"
+            is HomeUiState.ChannelResult -> "channel"
+            else -> return
+        }
+        if (videos.isEmpty()) {
+            android.widget.Toast.makeText(context, "No videos selected for bulk download", android.widget.Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val (sourceId, sourceUrl, sourceName) = when (state) {
+            is HomeUiState.PlaylistResult -> Triple(
+                state.playlist.playlistId,
+                "https://www.youtube.com/playlist?list=${state.playlist.playlistId}",
+                state.playlist.name
+            )
+            is HomeUiState.ChannelResult -> Triple(
+                if (state.channel.channelId.isNotBlank()) state.channel.channelId else state.channel.url,
+                state.channel.url,
+                state.channel.name
+            )
+            else -> return
+        }
+
         _showBulkQualityDialog.value = false
-        _bulkFetchProgress.value = BulkFetchProgress(0, videos.size, "")
-        
-        bulkFetchJob = viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-            val fetchedList = mutableListOf<Pair<ExtractedVideoInfo, StreamSource>>()
-            var totalSize = 0L
-            
-            try {
-                for ((index, video) in videos.withIndex()) {
-                    if (!isActive) break
-                    
-                    _bulkFetchProgress.value = BulkFetchProgress(index + 1, videos.size, video.title)
-                    
-                    val videoInfo = try {
-                        val cached = lastResultCache.get(video.videoId)
-                        if (cached != null && cached.streamSources.isNotEmpty()) {
-                            cached
-                        } else {
-                            val info = repository.searchAndSave("https://www.youtube.com/watch?v=${video.videoId}")
-                            lastResultCache.put(video.videoId, info)
-                            info
-                        }
-                    } catch (e: Exception) {
-                        if (e is kotlinx.coroutines.CancellationException) throw e
-                        null
-                    }
-                    
-                    if (videoInfo != null) {
-                        val stream = selectStream(videoInfo, targetQuality)
-                        if (stream != null) {
-                            fetchedList.add(videoInfo to stream)
-                            var size = stream.contentLength ?: 0L
-                            if (stream.format == "video_only") {
-                                val bestAudio = videoInfo.streamSources
-                                    .filter { it.format == "audio" }
-                                    .maxByOrNull { it.quality.replace("kbps", "").toIntOrNull() ?: 0 }
-                                size += bestAudio?.contentLength ?: 0L
-                            }
-                            totalSize += size
-                        }
-                    }
-                }
-                
-                if (isActive) {
-                    _bulkFetchProgress.value = null
-                    
-                    val downloadFolderVal = downloadPreferences.downloadFolder.first().trim()
-                    val file = if (downloadFolderVal.isEmpty()) {
-                        context.getExternalFilesDir(null) ?: context.filesDir
-                    } else {
-                        java.io.File(downloadFolderVal)
-                    }
-                    if (!file.exists()) {
-                        file.mkdirs()
-                    }
-                    val usableSpace = file.usableSpace
-                    
-                    _bulkDownloadConfirmation.value = BulkDownloadConfirmation(
+        _bulkDownloadConfirmation.value = null
+        _suppressedBulkJobId.value = null
+        _bulkFetchProgress.value = BulkFetchProgress(0, 0, videos.size, "Preparing downloads")
+
+        bulkFetchStartJob?.cancel()
+        bulkFetchStartJob = viewModelScope.launch(Dispatchers.IO) {
+            val jobId = bulkDownloadDao.replaceActiveJobWithItems(
+                BulkDownloadJobEntity(
+                    sourceType = sourceType,
+                    sourceId = sourceId,
+                    sourceUrl = sourceUrl,
+                    sourceName = sourceName,
+                    quality = targetQuality,
+                    totalVideos = videos.size
+                ),
+                videos.mapIndexed { index, video ->
+                    BulkDownloadItemEntity(
+                        jobId = 0,
+                        videoId = video.videoId,
+                        title = video.title,
+                        thumbnailUrl = video.thumbnailUrl,
+                        channelName = video.channelName,
+                        channelId = video.channelId,
                         quality = targetQuality,
-                        videoCount = fetchedList.size,
-                        totalSize = totalSize,
-                        usableSpace = usableSpace,
-                        videosToDownload = fetchedList
+                        displayOrder = index
                     )
                 }
-            } catch (e: Exception) {
-                if (e is kotlinx.coroutines.CancellationException) throw e
-                _bulkFetchProgress.value = null
-            } finally {
-                _bulkFetchProgress.value = null
-            }
+            )
+
+            _bulkFetchProgress.value = BulkFetchProgress(jobId, 0, videos.size, "Preparing downloads")
+            WorkScheduler.enqueueBulkDownloadPreparation(context, jobId)
         }
     }
 
     fun cancelBulkFetch() {
-        bulkFetchJob?.cancel()
+        bulkFetchStartJob?.cancel()
+        bulkFetchStartJob = null
+        val jobId = (_bulkFetchProgress.value?.jobId ?: _bulkDownloadConfirmation.value?.jobId)
+            ?.takeIf { it > 0L }
+        viewModelScope.launch(Dispatchers.IO) {
+            if (jobId != null) {
+                bulkDownloadDao.updateJobStatus(jobId, BulkDownloadJobStatus.CANCELLED)
+            } else {
+                bulkDownloadDao.cancelActiveJobs()
+            }
+            androidx.work.WorkManager.getInstance(context).cancelUniqueWork(WorkScheduler.BULK_DOWNLOAD_PREP_WORK_NAME)
+        }
         _bulkFetchProgress.value = null
+        _bulkDownloadConfirmation.value = null
     }
 
-    fun confirmBulkDownload(videosToDownload: List<Pair<ExtractedVideoInfo, StreamSource>>) {
+    fun confirmBulkDownload(jobId: Long) {
         _bulkDownloadConfirmation.value = null
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
+            val items = bulkDownloadDao.getItemsOnce(jobId)
             var enqueuedCount = 0
-            for ((videoInfo, stream) in videosToDownload) {
-                val dbQuality = if (stream.format == "audio") stream.quality else "${stream.quality} (${stream.codec})"
-                val existing = downloadRepository.getDownload(videoInfo.videoId, stream.format, dbQuality)
-                if (existing != null) {
-                    continue
-                }
 
-                val video = repository.getVideoById(videoInfo.videoId)
-                if (video == null) {
-                    repository.insertVideo(videoInfo.toVideoEntity())
-                }
+            for (item in items.filter { it.status == BulkDownloadItemStatus.READY }) {
+                val dbQuality = if (item.format == "audio") item.quality else "${item.quality} (${item.codec})"
+                val existing = downloadRepository.getDownload(item.videoId, item.format, dbQuality)
+                if (existing != null) continue
 
                 val entity = DownloadEntity(
-                    videoId = videoInfo.videoId,
-                    url = stream.url,
-                    videoUrl = "https://www.youtube.com/watch?v=${videoInfo.videoId}",
-                    format = stream.format,
+                    videoId = item.videoId,
+                    url = item.url,
+                    videoUrl = "https://www.youtube.com/watch?v=${item.videoId}",
+                    format = item.format,
                     quality = dbQuality,
                     status = DownloadStatus.QUEUED,
-                    title = videoInfo.title,
-                    thumbnailUrl = videoInfo.thumbnailUrl
+                    title = item.title,
+                    thumbnailUrl = item.thumbnailUrl
                 )
                 downloadRepository.insert(entity)
                 enqueuedCount++
             }
-            
+
+            bulkDownloadDao.markJobConfirmed(jobId)
+            bulkDownloadDao.pruneFinishedJobs()
+
             if (enqueuedCount > 0) {
                 try {
                     context.startForegroundService(android.content.Intent(context, com.example.medianest.service.DownloadService::class.java))
-                    android.widget.Toast.makeText(context, "Enqueued $enqueuedCount downloads", android.widget.Toast.LENGTH_SHORT).show()
+                    withContext(Dispatchers.Main) {
+                        android.widget.Toast.makeText(context, "Enqueued $enqueuedCount downloads", android.widget.Toast.LENGTH_SHORT).show()
+                    }
                 } catch (e: Exception) {
-                    android.widget.Toast.makeText(context, "Failed to start downloader: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+                    withContext(Dispatchers.Main) {
+                        android.widget.Toast.makeText(context, "Failed to start downloader: ${e.message}", android.widget.Toast.LENGTH_LONG).show()
+                    }
                 }
             } else {
-                android.widget.Toast.makeText(context, "All selected videos are already in the queue or downloaded", android.widget.Toast.LENGTH_SHORT).show()
+                withContext(Dispatchers.Main) {
+                    android.widget.Toast.makeText(context, "All selected videos are already in the queue or downloaded", android.widget.Toast.LENGTH_SHORT).show()
+                }
             }
         }
     }

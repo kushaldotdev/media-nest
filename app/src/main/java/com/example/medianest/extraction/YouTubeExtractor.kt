@@ -44,6 +44,26 @@ class YouTubeExtractor @Inject constructor() {
         }.getOrDefault(url)
     }
 
+    private fun StreamInfoItem.toExtractedVideoInfo(channelNameOverride: String? = null, channelIdOverride: String? = null): ExtractedVideoInfo {
+        return ExtractedVideoInfo(
+            videoId = extractVideoIdFromUrl(url),
+            title = name ?: "Unknown",
+            channelName = channelNameOverride ?: uploaderName ?: "Unknown",
+            channelId = channelIdOverride ?: extractChannelIdFromUrl(uploaderUrl) ?: "",
+            durationSeconds = duration,
+            thumbnailUrl = thumbnails?.firstOrNull()?.url ?: "",
+            description = null,
+            uploadDate = textualUploadDate,
+            isShort = url.contains("/shorts/") || streamType.name.contains("SHORT") || duration <= 180
+        )
+    }
+
+    private fun addUniqueVideo(target: LinkedHashMap<String, ExtractedVideoInfo>, video: ExtractedVideoInfo): Boolean {
+        if (video.videoId.isBlank() || target.containsKey(video.videoId)) return false
+        target[video.videoId] = video
+        return true
+    }
+
     suspend fun extractVideo(url: String): ExtractedVideoInfo = withContext(Dispatchers.IO) {
         val info = NewPipeStreamInfo.getInfo(service, url)
 
@@ -126,27 +146,36 @@ class YouTubeExtractor @Inject constructor() {
     suspend fun extractPlaylist(url: String): ExtractedPlaylistInfo = withContext(Dispatchers.IO) {
         val info = NewPipePlaylistInfo.getInfo(service, url)
 
-        val videos = info.relatedItems?.mapNotNull { item ->
-            runCatching {
-                ExtractedVideoInfo(
-                    videoId = extractVideoIdFromUrl(item.url),
-                    title = item.name ?: "Unknown",
-                    channelName = item.uploaderName ?: "Unknown",
-                    channelId = extractChannelIdFromUrl(item.uploaderUrl) ?: "",
-                    durationSeconds = item.duration,
-                    thumbnailUrl = item.thumbnails?.firstOrNull()?.url ?: "",
-                    description = null,
-                    uploadDate = null,
-                    isShort = item.url.contains("/shorts/") || item.streamType.name.contains("SHORT") || item.duration <= 180
-                )
-            }.getOrNull()
-        } ?: emptyList()
+        val videosById = linkedMapOf<String, ExtractedVideoInfo>()
+        info.relatedItems?.forEach { item ->
+            runCatching { item.toExtractedVideoInfo() }
+                .getOrNull()
+                ?.let { addUniqueVideo(videosById, it) }
+        }
+
+        var nextPage = info.nextPage
+        while (nextPage != null) {
+            val page = NewPipePlaylistInfo.getMoreItems(service, url, nextPage)
+            var addedFromPage = 0
+            page.items?.forEach { item ->
+                runCatching { item.toExtractedVideoInfo() }
+                    .getOrNull()
+                    ?.let { if (addUniqueVideo(videosById, it)) addedFromPage++ }
+            }
+            if (!page.hasNextPage() || addedFromPage == 0) break
+            nextPage = page.nextPage
+        }
+
+        val videos = videosById.values.toList()
+        val reportedCount = info.streamCount
+        val videoCount = if (reportedCount > 0 && reportedCount <= Int.MAX_VALUE) reportedCount.toInt() else videos.size
 
         ExtractedPlaylistInfo(
             playlistId = info.id,
             name = info.name ?: "Unknown",
             thumbnailUrl = info.thumbnails?.firstOrNull()?.url ?: "",
             uploaderName = info.uploaderName,
+            videoCount = videoCount,
             videos = videos
         )
     }
@@ -182,27 +211,37 @@ class YouTubeExtractor @Inject constructor() {
     suspend fun extractChannel(url: String): ModelChannelInfo = withContext(Dispatchers.IO) {
         val cleanChannelUrl = stripChannelTab(url)
         val info = NewPipeChannelInfo.getInfo(service, cleanChannelUrl)
+        val channelId = extractChannelIdFromUrl(info.url) ?: ""
         
         val uploads = runCatching {
             val sanitizedUrl = sanitizeChannelUrl(info.url ?: cleanChannelUrl)
             val tabLinkHandler = service.getChannelTabLHFactory().fromUrl(sanitizedUrl)
             val tabInfo = ChannelTabInfo.getInfo(service, tabLinkHandler)
-            tabInfo.relatedItems?.mapNotNull { item ->
-                if (item !is StreamInfoItem) return@mapNotNull null
-                runCatching {
-                    ExtractedVideoInfo(
-                        videoId = extractVideoIdFromUrl(item.url),
-                        title = item.name ?: "Unknown",
-                        channelName = info.name ?: "Unknown",
-                        channelId = extractChannelIdFromUrl(info.url) ?: "",
-                        durationSeconds = item.duration,
-                        thumbnailUrl = item.thumbnails?.firstOrNull()?.url ?: "",
-                        description = null,
-                        uploadDate = item.textualUploadDate,
-                        isShort = item.url.contains("/shorts/") || item.streamType.name.contains("SHORT") || item.duration <= 180
-                    )
-                }.getOrNull()
+            val videosById = linkedMapOf<String, ExtractedVideoInfo>()
+            tabInfo.relatedItems?.forEach { item ->
+                if (item is StreamInfoItem) {
+                    runCatching { item.toExtractedVideoInfo(info.name ?: "Unknown", channelId) }
+                        .getOrNull()
+                        ?.let { addUniqueVideo(videosById, it) }
+                }
             }
+
+            var nextPage = tabInfo.nextPage
+            while (nextPage != null) {
+                val page = ChannelTabInfo.getMoreItems(service, tabLinkHandler, nextPage)
+                var addedFromPage = 0
+                page.items?.forEach { item ->
+                    if (item is StreamInfoItem) {
+                        runCatching { item.toExtractedVideoInfo(info.name ?: "Unknown", channelId) }
+                            .getOrNull()
+                            ?.let { if (addUniqueVideo(videosById, it)) addedFromPage++ }
+                    }
+                }
+                if (!page.hasNextPage() || addedFromPage == 0) break
+                nextPage = page.nextPage
+            }
+
+            videosById.values.toList()
         }.getOrElse { tabError ->
             runCatching {
                 val uploadsPlaylistId = if (info.id.startsWith("UC")) {
@@ -212,22 +251,27 @@ class YouTubeExtractor @Inject constructor() {
                 }
                 val playlistUrl = "https://www.youtube.com/playlist?list=$uploadsPlaylistId"
                 val playlistInfo = NewPipePlaylistInfo.getInfo(service, playlistUrl)
-                playlistInfo.relatedItems?.mapNotNull { item ->
-                    if (item !is StreamInfoItem) return@mapNotNull null
-                    runCatching {
-                        ExtractedVideoInfo(
-                            videoId = extractVideoIdFromUrl(item.url),
-                            title = item.name ?: "Unknown",
-                            channelName = info.name ?: "Unknown",
-                            channelId = extractChannelIdFromUrl(info.url) ?: "",
-                            durationSeconds = item.duration,
-                            thumbnailUrl = item.thumbnails?.firstOrNull()?.url ?: "",
-                            description = null,
-                            uploadDate = item.textualUploadDate,
-                            isShort = item.url.contains("/shorts/") || item.streamType.name.contains("SHORT") || item.duration <= 180
-                        )
-                    }.getOrNull()
+                val videosById = linkedMapOf<String, ExtractedVideoInfo>()
+                playlistInfo.relatedItems?.forEach { item ->
+                    runCatching { item.toExtractedVideoInfo(info.name ?: "Unknown", channelId) }
+                        .getOrNull()
+                        ?.let { addUniqueVideo(videosById, it) }
                 }
+
+                var nextPage = playlistInfo.nextPage
+                while (nextPage != null) {
+                    val page = NewPipePlaylistInfo.getMoreItems(service, playlistUrl, nextPage)
+                    var addedFromPage = 0
+                    page.items?.forEach { item ->
+                        runCatching { item.toExtractedVideoInfo(info.name ?: "Unknown", channelId) }
+                            .getOrNull()
+                            ?.let { if (addUniqueVideo(videosById, it)) addedFromPage++ }
+                    }
+                    if (!page.hasNextPage() || addedFromPage == 0) break
+                    nextPage = page.nextPage
+                }
+
+                videosById.values.toList()
             }.getOrNull()
         } ?: emptyList()
 
@@ -238,6 +282,7 @@ class YouTubeExtractor @Inject constructor() {
             avatarUrl = info.avatars?.firstOrNull()?.url ?: "",
             subscriberCount = info.subscriberCount,
             description = info.description?.take(500),
+            videoCount = uploads.size,
             uploads = uploads
         )
     }

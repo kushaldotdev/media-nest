@@ -2,13 +2,18 @@ package com.example.medianest.worker
 
 import android.content.Context
 import androidx.work.Constraints
+import androidx.work.Data
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
 import java.util.concurrent.TimeUnit
 
 object WorkScheduler {
+    const val BULK_DOWNLOAD_PREP_WORK_NAME = "bulk_download_prep"
+
     fun scheduleSubscriptionCheck(context: Context) {
         val request = PeriodicWorkRequestBuilder<SubscriptionWorker>(
             6, TimeUnit.HOURS
@@ -79,5 +84,26 @@ object WorkScheduler {
         } else {
             scheduleAutoBackup(context, intervalHours, ExistingPeriodicWorkPolicy.REPLACE)
         }
+    }
+
+    fun enqueueBulkDownloadPreparation(context: Context, jobId: Long) {
+        val request = OneTimeWorkRequestBuilder<BulkDownloadPreparationWorker>()
+            .setInputData(
+                Data.Builder()
+                    .putLong(BulkDownloadPreparationWorker.INPUT_JOB_ID, jobId)
+                    .build()
+            )
+            .setConstraints(
+                Constraints.Builder()
+                    .setRequiredNetworkType(NetworkType.CONNECTED)
+                    .build()
+            )
+            .build()
+
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            BULK_DOWNLOAD_PREP_WORK_NAME,
+            ExistingWorkPolicy.REPLACE,
+            request
+        )
     }
 }

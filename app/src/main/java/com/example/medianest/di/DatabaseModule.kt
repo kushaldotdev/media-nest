@@ -13,6 +13,7 @@ import com.example.medianest.data.local.dao.FolderDao
 import com.example.medianest.data.local.dao.HistoryDao
 import com.example.medianest.data.local.dao.PlaylistDao
 import com.example.medianest.data.local.dao.LinkHistoryDao
+import com.example.medianest.data.local.dao.BulkDownloadDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -143,6 +144,62 @@ object DatabaseModule {
         }
     }
 
+    private val MIGRATION_12_13 = object : Migration(12, 13) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS bulk_download_jobs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    sourceType TEXT NOT NULL,
+                    sourceId TEXT NOT NULL,
+                    sourceUrl TEXT NOT NULL,
+                    sourceName TEXT NOT NULL,
+                    quality TEXT NOT NULL,
+                    totalVideos INTEGER NOT NULL DEFAULT 0,
+                    processedVideos INTEGER NOT NULL DEFAULT 0,
+                    downloadableVideos INTEGER NOT NULL DEFAULT 0,
+                    unavailableVideos INTEGER NOT NULL DEFAULT 0,
+                    failedVideos INTEGER NOT NULL DEFAULT 0,
+                    totalSizeBytes INTEGER NOT NULL DEFAULT 0,
+                    usableSpaceBytes INTEGER NOT NULL DEFAULT 0,
+                    status TEXT NOT NULL DEFAULT 'PENDING',
+                    errorMessage TEXT,
+                    createdAt INTEGER NOT NULL,
+                    updatedAt INTEGER NOT NULL
+                )
+            """)
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_bulk_download_jobs_status ON bulk_download_jobs(status)")
+
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS bulk_download_items (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    jobId INTEGER NOT NULL,
+                    videoId TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    thumbnailUrl TEXT,
+                    channelName TEXT,
+                    channelId TEXT,
+                    quality TEXT NOT NULL,
+                    format TEXT NOT NULL DEFAULT '',
+                    codec TEXT NOT NULL DEFAULT '',
+                    url TEXT NOT NULL DEFAULT '',
+                    contentLengthBytes INTEGER NOT NULL DEFAULT 0,
+                    status TEXT NOT NULL DEFAULT 'PENDING',
+                    errorMessage TEXT,
+                    displayOrder INTEGER NOT NULL DEFAULT 0,
+                    FOREIGN KEY(jobId) REFERENCES bulk_download_jobs(id) ON DELETE CASCADE
+                )
+            """)
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_bulk_download_items_jobId ON bulk_download_items(jobId)")
+            db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_bulk_download_items_jobId_videoId ON bulk_download_items(jobId, videoId)")
+        }
+    }
+
+    private val MIGRATION_13_14 = object : Migration(13, 14) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE bulk_download_jobs ADD COLUMN currentTitle TEXT NOT NULL DEFAULT ''")
+        }
+    }
+
     private val MIGRATION_4_5 = object : Migration(4, 5) {
         override fun migrate(db: SupportSQLiteDatabase) {
             db.execSQL("ALTER TABLE videos ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0")
@@ -186,6 +243,8 @@ object DatabaseModule {
             .addMigrations(MIGRATION_9_10)
             .addMigrations(MIGRATION_10_11)
             .addMigrations(MIGRATION_11_12)
+            .addMigrations(MIGRATION_12_13)
+            .addMigrations(MIGRATION_13_14)
             .fallbackToDestructiveMigration(dropAllTables = true)
             .build()
     }
@@ -213,6 +272,9 @@ object DatabaseModule {
 
     @Provides
     fun provideLinkHistoryDao(database: AppDatabase): LinkHistoryDao = database.linkHistoryDao()
+
+    @Provides
+    fun provideBulkDownloadDao(database: AppDatabase): BulkDownloadDao = database.bulkDownloadDao()
 
     @Provides @Singleton
     fun provideJson(): Json = Json { ignoreUnknownKeys = true }

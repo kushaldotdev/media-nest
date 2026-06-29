@@ -5,5 +5,6 @@ data class ExtractedPlaylistInfo(
     val name: String,
     val thumbnailUrl: String?,
     val uploaderName: String?,
+    val videoCount: Int,
     val videos: List<ExtractedVideoInfo>
 )

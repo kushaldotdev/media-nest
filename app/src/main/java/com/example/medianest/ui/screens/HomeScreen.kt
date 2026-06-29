@@ -231,6 +231,11 @@ fun HomeScreen(
                                 "Playlist: ${state.playlist.name}",
                                 style = MaterialTheme.typography.titleMedium
                             )
+                            Text(
+                                "Videos: ${state.playlist.videoCount}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                             Spacer(Modifier.height(4.dp))
                             val isSaved = subscriptions.any { it.sourceId == state.playlist.playlistId }
                             Row(
@@ -330,6 +335,11 @@ fun HomeScreen(
                             Text(
                                 "Channel: ${state.channel.name}",
                                 style = MaterialTheme.typography.titleMedium
+                            )
+                            Text(
+                                "Videos: ${state.channel.videoCount}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Spacer(Modifier.height(4.dp))
                             val isSubscribed = subscriptions.any { it.sourceId == state.channel.url || it.sourceId == state.channel.channelId }
@@ -609,7 +619,20 @@ fun HomeScreen(
                 Column {
                     Text("Quality: ${confirmation.quality}")
                     Spacer(Modifier.height(4.dp))
-                    Text("Total Videos: ${confirmation.videoCount}")
+                    Text("Total Videos: ${confirmation.totalVideoCount}")
+                    Spacer(Modifier.height(4.dp))
+                    Text("Downloadable Videos: ${confirmation.videoCount}")
+                    if (confirmation.unavailableVideoCount > 0) {
+                        Spacer(Modifier.height(4.dp))
+                        Text("No ${confirmation.quality} stream: ${confirmation.unavailableVideoCount}")
+                    }
+                    if (confirmation.failedVideoCount > 0) {
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "Failed to fetch metadata: ${confirmation.failedVideoCount}",
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
                     Spacer(Modifier.height(4.dp))
                     Text("Total Download Size: $formattedSize")
                     Spacer(Modifier.height(4.dp))
@@ -635,7 +658,7 @@ fun HomeScreen(
             },
             confirmButton = {
                 TextButton(onClick = {
-                    viewModel.confirmBulkDownload(confirmation.videosToDownload)
+                    viewModel.confirmBulkDownload(confirmation.jobId)
                 }) {
                     Text(if (hasSpace) "Download" else "Download Anyway")
                 }
