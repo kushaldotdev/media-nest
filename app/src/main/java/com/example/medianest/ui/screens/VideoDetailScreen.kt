@@ -96,7 +96,8 @@ fun VideoDetailScreen(
     videoHistory: com.example.medianest.data.local.entity.HistoryEntity? = null,
     watchSessions: List<com.example.medianest.data.local.entity.WatchSessionEntity> = emptyList(),
     isFetchingOnline: Boolean = false,
-    onRefresh: () -> Unit = {}
+    onRefresh: () -> Unit = {},
+    onResetWatchPosition: () -> Unit = {}
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
@@ -526,6 +527,15 @@ fun VideoDetailScreen(
                                     val dateStr = dateFormat.format(java.util.Date(session.watchedAt))
                                     Text("• Watched on: $dateStr", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
+                            }
+                        }
+                        if (videoHistory != null && videoHistory.positionMillis > 0) {
+                            Spacer(Modifier.height(12.dp))
+                            androidx.compose.material3.OutlinedButton(
+                                onClick = onResetWatchPosition,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Reset Last Watch Position")
                             }
                         }
                     }

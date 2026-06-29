@@ -49,6 +49,7 @@ data class PlayerUiState(
     val videoId: String? = null,
     val isLocal: Boolean = false,
     val streamIndex: Int = 0,
+    val downloadId: Long? = null,
     val showWatchedAlertCount: Int? = null,
     val videoQuality: String? = null
 )
@@ -238,6 +239,7 @@ class PlayerViewModel @Inject constructor(
                         videoId = videoId,
                         isLocal = localFile != null,
                         streamIndex = streamIndex,
+                        downloadId = localFile?.id,
                         videoQuality = quality
                     )
 

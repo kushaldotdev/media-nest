@@ -152,7 +152,8 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
                     onDownload = { stream ->
                         detailViewModel.enqueueDownload(info, stream)
                     },
-                    onBack = { navController.popBackStack() }
+                    onBack = { navController.popBackStack() },
+                    onResetWatchPosition = { detailViewModel.resetPlaybackPosition() }
                 )
             } else {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

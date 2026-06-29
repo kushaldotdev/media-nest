@@ -49,4 +49,7 @@ interface HistoryDao {
 
     @Query("SELECT COUNT(*) FROM watch_sessions WHERE videoId = :videoId")
     suspend fun getWatchSessionCount(videoId: String): Int
+
+    @Query("UPDATE playback_history SET positionMillis = 0 WHERE videoId = :videoId")
+    suspend fun resetPlaybackPositionForVideo(videoId: String)
 }

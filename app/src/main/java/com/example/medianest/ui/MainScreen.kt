@@ -204,7 +204,7 @@ fun MainScreen() {
                     onClose = { playerViewModel.stopPlayback() },
                     onClick = {
                         val route = if (playerUiState.isLocal) {
-                            "downloads/player/${playerUiState.videoId}"
+                            "downloads/player/${playerUiState.videoId}?downloadId=${playerUiState.downloadId ?: -1L}"
                         } else {
                             "player/${playerUiState.videoId}?streamIndex=${playerUiState.streamIndex}"
                         }

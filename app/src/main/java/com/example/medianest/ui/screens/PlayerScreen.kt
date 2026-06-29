@@ -80,6 +80,7 @@ fun PlayerScreen(
     var localPosition by remember { mutableStateOf<Float?>(null) }
     var isFullScreen by rememberSaveable { mutableStateOf(false) }
     var showControls by remember { mutableStateOf(true) }
+    var showRemainingTime by rememberSaveable { mutableStateOf(false) }
 
     val context = LocalContext.current
     val activity = context as? android.app.Activity
@@ -279,7 +280,18 @@ fun PlayerScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(formatDuration((localPosition ?: state.positionMs.toFloat()).toLong()), color = Color.White)
+                            val currentPos = (localPosition ?: state.positionMs.toFloat()).toLong()
+                            val displayTime = if (showRemainingTime) {
+                                val remaining = state.durationMs - currentPos
+                                if (remaining <= 0) "-0s" else "-${formatDuration(remaining)}"
+                            } else {
+                                formatDuration(currentPos)
+                            }
+                            Text(
+                                text = displayTime,
+                                color = Color.White,
+                                modifier = Modifier.clickable { showRemainingTime = !showRemainingTime }
+                            )
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(formatDuration(state.durationMs), color = Color.White)
                                 Spacer(Modifier.width(8.dp))
@@ -418,16 +430,22 @@ fun PlayerScreen(
                                     shadowElevation = 4.dp
                                 ) {
                                     Row(
-                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(horizontal = 12.dp, vertical = 8.dp),
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Text(
                                             text = "Last watched: ${formatDuration(state.historyPositionMs)}",
                                             style = MaterialTheme.typography.bodyMedium,
-                                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                            modifier = Modifier.weight(1f)
                                         )
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.padding(start = 4.dp)
+                                        ) {
                                             TextButton(onClick = {
                                                 viewModel.seekTo(state.historyPositionMs)
                                                 showResumeButton = false
@@ -531,7 +549,17 @@ fun PlayerScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(formatDuration((localPosition ?: state.positionMs.toFloat()).toLong()))
+                            val currentPos = (localPosition ?: state.positionMs.toFloat()).toLong()
+                            val displayTime = if (showRemainingTime) {
+                                val remaining = state.durationMs - currentPos
+                                if (remaining <= 0) "-0s" else "-${formatDuration(remaining)}"
+                            } else {
+                                formatDuration(currentPos)
+                            }
+                            Text(
+                                text = displayTime,
+                                modifier = Modifier.clickable { showRemainingTime = !showRemainingTime }
+                            )
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(formatDuration(state.durationMs))
                                 Spacer(Modifier.width(8.dp))

@@ -298,4 +298,12 @@ class VideoDetailViewModel @Inject constructor(
             }
         }
     }
+
+    fun resetPlaybackPosition() {
+        val videoId = currentVideoId
+        if (videoId.isEmpty()) return
+        viewModelScope.launch(Dispatchers.IO) {
+            historyDao.resetPlaybackPositionForVideo(videoId)
+        }
+    }
 }
