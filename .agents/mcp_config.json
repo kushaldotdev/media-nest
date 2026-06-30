@@ -1,10 +1,15 @@
 {
   "mcpServers": {
-    "understand-anything": {
-      "command": "node",
+    "codebase-memory-mcp": {
+      "args": [],
+      "command": "C:/Users/Kushal/AppData/Local/Programs/codebase-memory-mcp/codebase-memory-mcp.exe"
+    },
+    "agentmemory": {
+      "command": "C:\\Users\\Kushal\\AppData\\Roaming\\npm\\agentmemory.cmd",
       "args": [
-        "C:/Users/Kushal/.understand-anything/mcp_server.js",
-        "d:/dev/media-nest"
+        "mcp",
+        "--path",
+        "D:\\dev\\media-nest\\.agentmemory"
       ]
     }
   }
