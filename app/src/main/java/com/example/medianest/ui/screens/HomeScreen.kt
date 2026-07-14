@@ -22,6 +22,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -243,23 +244,26 @@ fun HomeScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Button(
-                                    onClick = { 
-                                        if (isSaved) {
+                                if (isSaved) {
+                                    OutlinedButton(
+                                        onClick = { 
                                             viewModel.unsubscribe(state.playlist.playlistId)
                                             coroutineScope.launch { snackbarHostState.showSnackbar("Removed from Playlist") }
-                                        } else {
+                                        },
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text("Saved to Playlist")
+                                    }
+                                } else {
+                                    Button(
+                                        onClick = { 
                                             viewModel.subscribe("playlist", state.playlist.playlistId, state.playlist.name, state.playlist.thumbnailUrl)
                                             coroutineScope.launch { snackbarHostState.showSnackbar("Added to Playlist") }
-                                        }
-                                    },
-                                    modifier = Modifier.weight(1f),
-                                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                                        containerColor = if (isSaved) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.primary,
-                                        contentColor = if (isSaved) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onPrimary
-                                    )
-                                ) {
-                                    Text(if (isSaved) "Saved to Playlist" else "Add to Playlist")
+                                        },
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text("Add to Playlist")
+                                    }
                                 }
                                 Button(
                                     onClick = { 
@@ -344,39 +348,42 @@ fun HomeScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Spacer(Modifier.height(4.dp))
-                            val isSubscribed = subscriptions.any { it.sourceId == state.channel.url || it.sourceId == state.channel.channelId }
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Button(
-                                    onClick = { 
-                                        if (isSubscribed) {
-                                            val subId = subscriptions.firstOrNull { it.sourceId == state.channel.url || it.sourceId == state.channel.channelId }?.sourceId ?: state.channel.url
-                                            viewModel.unsubscribe(subId)
-                                            coroutineScope.launch { snackbarHostState.showSnackbar("Unsubscribed from Channel") }
-                                        } else {
-                                            viewModel.subscribe("channel", state.channel.url, state.channel.name, state.channel.avatarUrl)
-                                            coroutineScope.launch { snackbarHostState.showSnackbar("Subscribed to Channel") }
-                                        }
-                                    },
-                                    modifier = Modifier.weight(1f),
-                                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                                        containerColor = if (isSubscribed) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.primary,
-                                        contentColor = if (isSubscribed) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onPrimary
-                                    )
-                                ) {
-                                    Text(if (isSubscribed) "Subscribed" else "Subscribe to Channel")
-                                }
-                                Button(
-                                    onClick = { 
-                                        viewModel.setBulkQualityDialogVisible(true)
-                                    },
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Text("Download All")
-                                }
-                            }
+                             val isSubscribed = subscriptions.any { it.sourceId == state.channel.url || it.sourceId == state.channel.channelId }
+                             Row(
+                                 modifier = Modifier.fillMaxWidth(),
+                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
+                             ) {
+                                 if (isSubscribed) {
+                                     OutlinedButton(
+                                         onClick = { 
+                                             val subId = subscriptions.firstOrNull { it.sourceId == state.channel.url || it.sourceId == state.channel.channelId }?.sourceId ?: state.channel.url
+                                             viewModel.unsubscribe(subId)
+                                             coroutineScope.launch { snackbarHostState.showSnackbar("Unsubscribed from Channel") }
+                                         },
+                                         modifier = Modifier.weight(1f)
+                                     ) {
+                                         Text("Subscribed")
+                                     }
+                                 } else {
+                                     Button(
+                                         onClick = { 
+                                             viewModel.subscribe("channel", state.channel.url, state.channel.name, state.channel.avatarUrl)
+                                             coroutineScope.launch { snackbarHostState.showSnackbar("Subscribed to Channel") }
+                                         },
+                                         modifier = Modifier.weight(1f)
+                                     ) {
+                                         Text("Subscribe")
+                                     }
+                                 }
+                                 Button(
+                                     onClick = { 
+                                         viewModel.setBulkQualityDialogVisible(true)
+                                     },
+                                     modifier = Modifier.weight(1f)
+                                 ) {
+                                     Text("Download All")
+                                 }
+                             }
                             Spacer(Modifier.height(8.dp))
                             Row(
                                 modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
