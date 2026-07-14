@@ -379,7 +379,8 @@ fun UnifiedVideoRow(
     onDownloadClick: () -> Unit = {},
     onSelectionToggle: () -> Unit = {},
     downloadMenuContent: (@Composable () -> Unit)? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    serialNumber: Int? = null
 ) {
     var isTitleExpanded by remember { mutableStateOf(false) }
 
@@ -489,8 +490,9 @@ fun UnifiedVideoRow(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         // Title (Tap to expand/collapse)
+                        val displayTitle = if (serialNumber != null) "$serialNumber. $title" else title
                         Text(
-                            text = title,
+                            text = displayTitle,
                             style = MaterialTheme.typography.titleSmall,
                             maxLines = if (isTitleExpanded) Int.MAX_VALUE else 2,
                             overflow = TextOverflow.Ellipsis,

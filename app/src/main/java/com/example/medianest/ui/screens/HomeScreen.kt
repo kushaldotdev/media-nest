@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Delete
@@ -285,7 +286,7 @@ fun HomeScreen(
                         }
                     }
                     val filteredVideos = if (showShorts) state.playlist.videos else state.playlist.videos.filter { !it.isShort }
-                    items(filteredVideos) { video ->
+                    itemsIndexed(filteredVideos) { index, video ->
                         val history = playbackHistory.find { it.videoId == video.videoId }
                         val positionMillis = history?.positionMillis ?: 0L
                         val progressFraction = if (video.durationSeconds > 0 && positionMillis > 0) {
@@ -325,7 +326,8 @@ fun HomeScreen(
                                     onDeleteDownload = { entity -> viewModel.deleteDownload(entity) },
                                     onExtractAudio = { entity -> viewModel.extractAudio(entity) }
                                 )
-                            }
+                            },
+                            serialNumber = index + 1
                         )
                     }
                 }
@@ -760,7 +762,8 @@ fun VideoListItem(
     onFavoriteToggle: ((ExtractedVideoInfo, Boolean) -> Unit)? = null,
     onMoveToFolder: ((ExtractedVideoInfo) -> Unit)? = null,
     onDownloadClick: ((String) -> Unit)? = null,
-    downloadMenuContent: (@Composable () -> Unit)? = null
+    downloadMenuContent: (@Composable () -> Unit)? = null,
+    serialNumber: Int? = null
 ) {
     UnifiedVideoRow(
         title = video.title,
@@ -786,6 +789,7 @@ fun VideoListItem(
         },
         onMoveToFolder = { onMoveToFolder?.invoke(video) },
         onDownloadClick = { onDownloadClick?.invoke(video.videoId) },
-        downloadMenuContent = downloadMenuContent
+        downloadMenuContent = downloadMenuContent,
+        serialNumber = serialNumber
     )
 }
