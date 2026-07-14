@@ -155,7 +155,8 @@ class YouTubeExtractor @Inject constructor() {
 
         var nextPage = info.nextPage
         while (nextPage != null) {
-            val page = NewPipePlaylistInfo.getMoreItems(service, url, nextPage)
+            val page = runCatching { NewPipePlaylistInfo.getMoreItems(service, url, nextPage) }.getOrNull()
+            if (page == null) break
             var addedFromPage = 0
             page.items?.forEach { item ->
                 runCatching { item.toExtractedVideoInfo() }
@@ -228,7 +229,8 @@ class YouTubeExtractor @Inject constructor() {
 
             var nextPage = tabInfo.nextPage
             while (nextPage != null) {
-                val page = ChannelTabInfo.getMoreItems(service, tabLinkHandler, nextPage)
+                val page = runCatching { ChannelTabInfo.getMoreItems(service, tabLinkHandler, nextPage) }.getOrNull()
+                if (page == null) break
                 var addedFromPage = 0
                 page.items?.forEach { item ->
                     if (item is StreamInfoItem) {
@@ -258,18 +260,19 @@ class YouTubeExtractor @Inject constructor() {
                         ?.let { addUniqueVideo(videosById, it) }
                 }
 
-                var nextPage = playlistInfo.nextPage
-                while (nextPage != null) {
-                    val page = NewPipePlaylistInfo.getMoreItems(service, playlistUrl, nextPage)
-                    var addedFromPage = 0
-                    page.items?.forEach { item ->
-                        runCatching { item.toExtractedVideoInfo(info.name ?: "Unknown", channelId) }
-                            .getOrNull()
-                            ?.let { if (addUniqueVideo(videosById, it)) addedFromPage++ }
-                    }
-                    if (!page.hasNextPage() || addedFromPage == 0) break
-                    nextPage = page.nextPage
-                }
+                 var nextPage = playlistInfo.nextPage
+                 while (nextPage != null) {
+                     val page = runCatching { NewPipePlaylistInfo.getMoreItems(service, playlistUrl, nextPage) }.getOrNull()
+                     if (page == null) break
+                     var addedFromPage = 0
+                     page.items?.forEach { item ->
+                         runCatching { item.toExtractedVideoInfo(info.name ?: "Unknown", channelId) }
+                             .getOrNull()
+                             ?.let { if (addUniqueVideo(videosById, it)) addedFromPage++ }
+                     }
+                     if (!page.hasNextPage() || addedFromPage == 0) break
+                     nextPage = page.nextPage
+                 }
 
                 videosById.values.toList()
             }.getOrNull()

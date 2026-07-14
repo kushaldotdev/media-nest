@@ -20,3 +20,13 @@ ALWAYS prefer MCP graph tools over grep/glob/file-search for code discovery.
 - Who calls it: `trace_path(function_name="OrderHandler", direction="inbound")`
 - Read source: `get_code_snippet(qualified_name="pkg/orders.OrderHandler")`
 
+## Build & Run Commands
+
+Windows environment does not have standard `JAVA_HOME` in path. Use bundled build scripts:
+- **Build Debug**: `& "D:\dev\media-nest\build-debug.bat"` (or `build-debug.bat clean` for a clean build)
+- **Build Release**: `& "D:\dev\media-nest\build-release.bat"` (or `build-release.bat clean` for a clean build)
+
+These scripts set `JAVA_HOME` to Android Studio's JBR (`C:\Program Files\Android\Android Studio\jbr`) and execute `gradlew.bat`.
+Do not run `./gradlew` or `gradlew` directly unless `JAVA_HOME` is manually configured.
+
+
