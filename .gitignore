@@ -11,7 +11,6 @@ local.properties
 .commandcode/
 .kotlin/
 
-# Understand Anything
-.understand-anything/intermediate/
-.understand-anything/diff-overlay.json
-.understand-anything/.trash-*/
+.opencode/
+.codex/
+.agents/mcp_config.json
