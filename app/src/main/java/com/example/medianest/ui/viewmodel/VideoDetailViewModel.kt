@@ -20,8 +20,12 @@ import com.example.medianest.data.sync.SyncManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
+import com.example.medianest.extraction.YouTubeExtractor
 import java.net.HttpURLConnection
 import java.net.URL
 import javax.inject.Inject
@@ -33,7 +37,8 @@ class VideoDetailViewModel @Inject constructor(
     private val videoRepository: com.example.medianest.data.repository.VideoRepository,
     private val subscriptionRepository: SubscriptionRepository,
     private val historyDao: com.example.medianest.data.local.dao.HistoryDao,
-    private val syncManager: SyncManager
+    private val syncManager: SyncManager,
+    private val youTubeExtractor: YouTubeExtractor
 ) : ViewModel() {
     private val _videoDownloads = MutableStateFlow<List<DownloadEntity>>(emptyList())
     val videoDownloads: StateFlow<List<DownloadEntity>> = _videoDownloads
@@ -55,8 +60,28 @@ class VideoDetailViewModel @Inject constructor(
     private val _isFavorite = MutableStateFlow(false)
     val isFavorite: StateFlow<Boolean> = _isFavorite
 
-    private val _isSubscribed = MutableStateFlow(false)
-    val isSubscribed: StateFlow<Boolean> = _isSubscribed
+    private val _currentChannelId = MutableStateFlow("")
+    val isSubscribed: StateFlow<Boolean> = combine(
+        subscriptionRepository.getAllSubscriptions(),
+        _currentChannelId
+    ) { subscriptions, channelId ->
+        if (channelId.isEmpty()) false
+        else {
+            val cleanId = if (channelId.startsWith("http")) {
+                youTubeExtractor.extractChannelIdFromUrl(channelId) ?: channelId
+            } else {
+                channelId
+            }
+            subscriptions.any { sub ->
+                sub.sourceType == "channel" && (
+                    sub.sourceId == cleanId ||
+                    sub.sourceId.contains(cleanId) ||
+                    cleanId.contains(sub.sourceId.removePrefix("https://").removePrefix("www.youtube.com/").removePrefix("@").removePrefix("channel/").removePrefix("c/").trim()) ||
+                    (sub.name.equals(currentChannelName, ignoreCase = true) || sub.uploaderName.equals(currentChannelName, ignoreCase = true))
+                )
+            }
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     private val _videoHistory = MutableStateFlow<com.example.medianest.data.local.entity.HistoryEntity?>(null)
     val videoHistory: StateFlow<com.example.medianest.data.local.entity.HistoryEntity?> = _videoHistory
@@ -218,33 +243,46 @@ class VideoDetailViewModel @Inject constructor(
         return 0L
     }
 
-    private var currentChannelId: String = ""
     private var currentChannelName: String = ""
     private var currentThumbnailUrl: String? = null
 
     fun initSubscription(channelId: String, channelName: String, thumbnailUrl: String?) {
-        currentChannelId = channelId
+        _currentChannelId.value = channelId
         currentChannelName = channelName
         currentThumbnailUrl = thumbnailUrl
     }
 
     fun checkSubscription() {
-        if (currentChannelId.isEmpty()) return
-        viewModelScope.launch {
-            _isSubscribed.value = subscriptionRepository.isSubscribed("channel", currentChannelId)
-        }
+        // Reactive isSubscribed flow handles this automatically. Kept as a dummy to avoid breaking any callers.
     }
 
     fun toggleSubscription() {
-        if (currentChannelId.isEmpty()) return
+        val channelId = _currentChannelId.value
+        if (channelId.isEmpty()) return
         viewModelScope.launch {
-            if (_isSubscribed.value) {
-                val sub = subscriptionRepository.getBySource("channel", currentChannelId)
-                if (sub != null) subscriptionRepository.unsubscribe(sub.id)
-                _isSubscribed.value = false
+            val isSub = isSubscribed.value
+            val cleanId = if (channelId.startsWith("http")) {
+                youTubeExtractor.extractChannelIdFromUrl(channelId) ?: channelId
             } else {
-                subscriptionRepository.subscribe("channel", currentChannelId, currentChannelName, currentThumbnailUrl)
-                _isSubscribed.value = true
+                channelId
+            }
+            if (isSub) {
+                // Find matching subscription to unsubscribe using its database sourceId
+                val sub = subscriptionRepository.getAllSubscriptionsOnce().firstOrNull { sub ->
+                    sub.sourceType == "channel" && (
+                        sub.sourceId == cleanId ||
+                        sub.sourceId.contains(cleanId) ||
+                        cleanId.contains(sub.sourceId.removePrefix("https://").removePrefix("www.youtube.com/").removePrefix("@").removePrefix("channel/").removePrefix("c/").trim()) ||
+                        (sub.name.equals(currentChannelName, ignoreCase = true) || sub.uploaderName.equals(currentChannelName, ignoreCase = true))
+                    )
+                }
+                if (sub != null) {
+                    subscriptionRepository.unsubscribe(sub.id)
+                } else {
+                    subscriptionRepository.unsubscribeBySourceId(cleanId)
+                }
+            } else {
+                subscriptionRepository.subscribe("channel", cleanId, currentChannelName, currentThumbnailUrl)
             }
         }
     }

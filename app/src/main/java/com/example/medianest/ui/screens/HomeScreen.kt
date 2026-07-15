@@ -73,6 +73,7 @@ import com.example.medianest.ui.utils.UiUtils
 import com.example.medianest.ui.viewmodel.HomeUiState
 import com.example.medianest.ui.viewmodel.HomeViewModel
 import com.example.medianest.ui.components.UnifiedVideoRow
+import com.example.medianest.ui.components.YoutubeSubscribeButton
 import com.example.medianest.ui.components.UnifiedVideoCard
 import com.example.medianest.ui.components.VideoCardConfig
 import com.example.medianest.ui.components.GlassCard
@@ -348,42 +349,51 @@ fun HomeScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Spacer(Modifier.height(4.dp))
-                             val isSubscribed = subscriptions.any { it.sourceId == state.channel.url || it.sourceId == state.channel.channelId }
-                             Row(
-                                 modifier = Modifier.fillMaxWidth(),
-                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
-                             ) {
-                                 if (isSubscribed) {
-                                     OutlinedButton(
-                                         onClick = { 
-                                             val subId = subscriptions.firstOrNull { it.sourceId == state.channel.url || it.sourceId == state.channel.channelId }?.sourceId ?: state.channel.url
-                                             viewModel.unsubscribe(subId)
-                                             coroutineScope.launch { snackbarHostState.showSnackbar("Unsubscribed from Channel") }
-                                         },
-                                         modifier = Modifier.weight(1f)
-                                     ) {
-                                         Text("Subscribed")
-                                     }
-                                 } else {
-                                     Button(
-                                         onClick = { 
-                                             viewModel.subscribe("channel", state.channel.url, state.channel.name, state.channel.avatarUrl)
-                                             coroutineScope.launch { snackbarHostState.showSnackbar("Subscribed to Channel") }
-                                         },
-                                         modifier = Modifier.weight(1f)
-                                     ) {
-                                         Text("Subscribe")
-                                     }
-                                 }
-                                 Button(
-                                     onClick = { 
-                                         viewModel.setBulkQualityDialogVisible(true)
-                                     },
-                                     modifier = Modifier.weight(1f)
-                                 ) {
-                                     Text("Download All")
-                                 }
-                             }
+                              val isSubscribed = subscriptions.any { sub ->
+                                  sub.sourceType == "channel" && (
+                                      sub.sourceId == state.channel.channelId ||
+                                      sub.sourceId == state.channel.url ||
+                                      sub.sourceId.contains(state.channel.channelId) ||
+                                      sub.name.equals(state.channel.name, ignoreCase = true) ||
+                                      (state.channel.url.contains(sub.sourceId.removePrefix("https://").removePrefix("www.youtube.com/").removePrefix("@").removePrefix("channel/").removePrefix("c/").trim()))
+                                  )
+                              }
+                              Row(
+                                  modifier = Modifier.fillMaxWidth(),
+                                  horizontalArrangement = Arrangement.spacedBy(8.dp)
+                              ) {
+                                  YoutubeSubscribeButton(
+                                      isSubscribed = isSubscribed,
+                                      onClick = {
+                                          if (isSubscribed) {
+                                              val matchedSub = subscriptions.firstOrNull { sub ->
+                                                  sub.sourceType == "channel" && (
+                                                      sub.sourceId == state.channel.channelId ||
+                                                      sub.sourceId == state.channel.url ||
+                                                      sub.sourceId.contains(state.channel.channelId) ||
+                                                      sub.name.equals(state.channel.name, ignoreCase = true) ||
+                                                      (state.channel.url.contains(sub.sourceId.removePrefix("https://").removePrefix("www.youtube.com/").removePrefix("@").removePrefix("channel/").removePrefix("c/").trim()))
+                                                  )
+                                              }
+                                              val subId = matchedSub?.sourceId ?: state.channel.channelId
+                                              viewModel.unsubscribe(subId)
+                                              coroutineScope.launch { snackbarHostState.showSnackbar("Unsubscribed from Channel") }
+                                          } else {
+                                              viewModel.subscribe("channel", state.channel.channelId, state.channel.name, state.channel.avatarUrl)
+                                              coroutineScope.launch { snackbarHostState.showSnackbar("Subscribed to Channel") }
+                                          }
+                                      },
+                                      modifier = Modifier.weight(1f)
+                                  )
+                                  Button(
+                                      onClick = { 
+                                          viewModel.setBulkQualityDialogVisible(true)
+                                      },
+                                      modifier = Modifier.weight(1f)
+                                  ) {
+                                      Text("Download All")
+                                  }
+                              }
                             Spacer(Modifier.height(8.dp))
                             Row(
                                 modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),

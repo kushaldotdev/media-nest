@@ -27,7 +27,7 @@ class YouTubeExtractor @Inject constructor() {
         NewPipe.getService(SERVICE_ID)
     }
 
-    private fun extractChannelIdFromUrl(url: String?): String? {
+    fun extractChannelIdFromUrl(url: String?): String? {
         if (url.isNullOrBlank()) return null
         return runCatching {
             service.getChannelLHFactory().fromUrl(url).id
@@ -144,7 +144,12 @@ class YouTubeExtractor @Inject constructor() {
     }
 
     suspend fun extractPlaylist(url: String): ExtractedPlaylistInfo = withContext(Dispatchers.IO) {
-        val info = NewPipePlaylistInfo.getInfo(service, url)
+        val canonicalUrl = if (!url.startsWith("http") && !url.contains("youtube.com")) {
+            "https://www.youtube.com/playlist?list=$url"
+        } else {
+            url
+        }
+        val info = NewPipePlaylistInfo.getInfo(service, canonicalUrl)
 
         val videosById = linkedMapOf<String, ExtractedVideoInfo>()
         info.relatedItems?.forEach { item ->
@@ -155,7 +160,7 @@ class YouTubeExtractor @Inject constructor() {
 
         var nextPage = info.nextPage
         while (nextPage != null) {
-            val page = runCatching { NewPipePlaylistInfo.getMoreItems(service, url, nextPage) }.getOrNull()
+            val page = runCatching { NewPipePlaylistInfo.getMoreItems(service, canonicalUrl, nextPage) }.getOrNull()
             if (page == null) break
             var addedFromPage = 0
             page.items?.forEach { item ->
@@ -210,7 +215,12 @@ class YouTubeExtractor @Inject constructor() {
     }
 
     suspend fun extractChannel(url: String): ModelChannelInfo = withContext(Dispatchers.IO) {
-        val cleanChannelUrl = stripChannelTab(url)
+        val canonicalUrl = if (!url.startsWith("http") && !url.contains("youtube.com")) {
+            "https://www.youtube.com/channel/$url"
+        } else {
+            url
+        }
+        val cleanChannelUrl = stripChannelTab(canonicalUrl)
         val info = NewPipeChannelInfo.getInfo(service, cleanChannelUrl)
         val channelId = extractChannelIdFromUrl(info.url) ?: ""
         

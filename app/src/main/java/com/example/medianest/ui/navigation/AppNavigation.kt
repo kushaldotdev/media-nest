@@ -117,7 +117,6 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
             LaunchedEffect(videoInfo) {
                 val info = videoInfo ?: return@LaunchedEffect
                 detailViewModel.initSubscription(info.channelId ?: "", info.channelName, info.thumbnailUrl)
-                detailViewModel.checkSubscription()
             }
 
             val isFavorite by detailViewModel.isFavorite.collectAsStateWithLifecycle()

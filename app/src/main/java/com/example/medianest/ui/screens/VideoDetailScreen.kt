@@ -43,6 +43,7 @@ import com.example.medianest.data.local.entity.DownloadEntity
 import com.example.medianest.data.local.entity.DownloadStatus
 import com.example.medianest.data.local.entity.VideoEntity
 import com.example.medianest.ui.utils.UiUtils
+import com.example.medianest.ui.components.YoutubeSubscribeButton
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material3.TopAppBar
 import android.content.Intent
@@ -260,21 +261,18 @@ fun VideoDetailScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(videoInfo.channelName, style = MaterialTheme.typography.titleMedium)
-                if (isSubscribed) {
-                    androidx.compose.material3.OutlinedButton(onClick = {
+                YoutubeSubscribeButton(
+                    isSubscribed = isSubscribed,
+                    onClick = {
                         onSubscribe()
-                        coroutineScope.launch { snackbarHostState.showSnackbar("Unsubscribed from ${videoInfo.channelName}") }
-                    }) {
-                        Text("Subscribed")
+                        coroutineScope.launch {
+                            snackbarHostState.showSnackbar(
+                                if (isSubscribed) "Unsubscribed from ${videoInfo.channelName}"
+                                else "Subscribed to ${videoInfo.channelName}"
+                            )
+                        }
                     }
-                } else {
-                    androidx.compose.material3.Button(onClick = {
-                        onSubscribe()
-                        coroutineScope.launch { snackbarHostState.showSnackbar("Subscribed to ${videoInfo.channelName}") }
-                    }) {
-                        Text("Subscribe")
-                    }
-                }
+                )
             }
 
             // Released and Downloaded Metadata
