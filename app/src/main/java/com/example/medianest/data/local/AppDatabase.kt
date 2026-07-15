@@ -39,7 +39,7 @@ import com.example.medianest.data.local.entity.LinkHistoryEntity
         BulkDownloadJobEntity::class,
         BulkDownloadItemEntity::class
     ],
-    version = 14,
+    version = 15,
     exportSchema = true
 )
 @TypeConverters(Converters::class)

@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.Replay5
 import androidx.compose.material.icons.filled.Replay30
@@ -49,6 +50,15 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.SizeTransform
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -217,8 +227,19 @@ fun PlayerScreen(
                                 }
                             }
                         }
-                        IconButton(onClick = { isFullScreen = false }) {
-                            Icon(Icons.Default.FullscreenExit, contentDescription = "Exit Fullscreen", tint = Color.White)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            WatchCountDisplay(
+                                count = state.watchCount,
+                                iconColor = Color.White,
+                                textColor = Color.White,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            IconButton(onClick = { isFullScreen = false }) {
+                                Icon(Icons.Default.FullscreenExit, contentDescription = "Exit Fullscreen", tint = Color.White)
+                            }
                         }
                     }
 
@@ -369,6 +390,19 @@ fun PlayerScreen(
                         IconButton(onClick = onBack) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
+                    },
+                    actions = {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(end = 12.dp)
+                        ) {
+                            WatchCountDisplay(
+                                count = state.watchCount,
+                                iconColor = MaterialTheme.colorScheme.primary,
+                                textColor = MaterialTheme.colorScheme.onSurface,
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
                     }
                 )
             }
@@ -492,35 +526,7 @@ fun PlayerScreen(
                                 }
                             }
 
-                            if (state.showWatchedAlertCount != null) {
-                                Surface(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(bottom = 8.dp),
-                                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.95f),
-                                    shape = MaterialTheme.shapes.small,
-                                    shadowElevation = 4.dp
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(
-                                            text = "Watched ${state.showWatchedAlertCount} times",
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                                        )
-                                        IconButton(onClick = { viewModel.dismissWatchedAlert() }) {
-                                            Icon(
-                                                imageVector = Icons.Default.Close,
-                                                contentDescription = "Dismiss",
-                                                tint = MaterialTheme.colorScheme.onPrimaryContainer
-                                            )
-                                        }
-                                    }
-                                }
-                            }
+
                         }
                     }
 
@@ -672,4 +678,70 @@ fun PlayerScreen(
 
 private fun formatDuration(ms: Long): String {
     return com.example.medianest.ui.utils.UiUtils.formatDuration(ms / 1000)
+}
+
+@Composable
+fun WatchCountDisplay(
+    count: Int,
+    iconColor: Color = MaterialTheme.colorScheme.primary,
+    textColor: Color = MaterialTheme.colorScheme.onSurface,
+    style: androidx.compose.ui.text.TextStyle = MaterialTheme.typography.titleMedium
+) {
+    var previousCount by remember { mutableStateOf(count) }
+    var scaleTrigger by remember { mutableStateOf(false) }
+
+    LaunchedEffect(count) {
+        if (count > previousCount) {
+            scaleTrigger = true
+            kotlinx.coroutines.delay(400)
+            scaleTrigger = false
+        }
+        previousCount = count
+    }
+
+    val iconScale by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (scaleTrigger) 1.5f else 1.0f,
+        animationSpec = androidx.compose.animation.core.spring(
+            dampingRatio = androidx.compose.animation.core.Spring.DampingRatioMediumBouncy,
+            stiffness = androidx.compose.animation.core.Spring.StiffnessLow
+        ),
+        label = "IconScale"
+    )
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = Icons.Default.Visibility,
+            contentDescription = "Watch Count",
+            tint = iconColor,
+            modifier = Modifier
+                .size(20.dp)
+                .graphicsLayer {
+                    scaleX = iconScale
+                    scaleY = iconScale
+                }
+        )
+        Spacer(Modifier.width(6.dp))
+        
+        AnimatedContent(
+            targetState = count,
+            transitionSpec = {
+                if (targetState > initialState) {
+                    (slideInVertically { height -> height } + fadeIn() togetherWith
+                            slideOutVertically { height -> -height } + fadeOut())
+                        .using(SizeTransform(clip = false))
+                } else {
+                    fadeIn() togetherWith fadeOut()
+                }
+            },
+            label = "WatchCountAnimation"
+        ) { targetCount ->
+            Text(
+                text = targetCount.toString(),
+                color = textColor,
+                style = style.copy(fontWeight = FontWeight.Bold)
+            )
+        }
+    }
 }

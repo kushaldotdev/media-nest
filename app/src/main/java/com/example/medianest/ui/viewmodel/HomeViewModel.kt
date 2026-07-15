@@ -37,6 +37,7 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.Dispatchers
@@ -91,6 +92,10 @@ class HomeViewModel @Inject constructor(
 
     private val _showShorts = MutableStateFlow(true)
     val showShorts: StateFlow<Boolean> = _showShorts
+
+    val watchCounts: StateFlow<Map<String, Int>> = videoDao.getAllVideos()
+        .map { list -> list.associate { it.id to it.watchCount } }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     fun toggleShorts(show: Boolean) {
         _showShorts.value = show
@@ -860,6 +865,52 @@ class HomeViewModel @Inject constructor(
                         _uiState.value = updatedState.copy(isFetchingNextPage = false)
                     }
                 }
+            }
+        }
+    }
+
+    fun updateWatchCount(videoId: String, newCount: Int) {
+        viewModelScope.launch {
+            var video = videoDao.getVideoById(videoId)
+            if (video == null) {
+                val cached = lastResultCache.get(videoId)
+                if (cached != null) {
+                    val entity = cached.toVideoEntity()
+                    videoDao.insert(entity)
+                    video = entity
+                } else {
+                    try {
+                        val url = "https://www.youtube.com/watch?v=$videoId"
+                        repository.searchAndSave(url)
+                        video = videoDao.getVideoById(videoId)
+                    } catch (e: Exception) {
+                        // ignore
+                    }
+                }
+            }
+            if (video == null && videoDao.getVideoById(videoId) == null) {
+                val fallback = com.example.medianest.data.local.entity.VideoEntity(
+                    id = videoId,
+                    title = "Video ($videoId)",
+                    channelName = "Unknown Channel",
+                    channelId = "",
+                    durationSeconds = 0L,
+                    thumbnailUrl = "",
+                    description = "",
+                    uploadDate = ""
+                )
+                videoDao.insert(fallback)
+            }
+            val existing = videoDao.getVideoById(videoId)
+            val oldCount = existing?.watchCount ?: 0
+            videoDao.setWatchCount(videoId, newCount)
+            if (newCount > oldCount) {
+                historyDao.insertWatchSession(
+                    com.example.medianest.data.local.entity.WatchSessionEntity(
+                        videoId = videoId,
+                        watchedAt = System.currentTimeMillis()
+                    )
+                )
             }
         }
     }

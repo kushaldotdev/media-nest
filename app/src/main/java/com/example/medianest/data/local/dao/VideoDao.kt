@@ -71,6 +71,24 @@ interface VideoDao {
     @Query("SELECT * FROM videos WHERE channelId = :channelId ORDER BY addedAt DESC")
     suspend fun getVideosByChannel(channelId: String): List<VideoEntity>
 
+    @Query("UPDATE videos SET watchCount = watchCount + 1 WHERE id = :videoId")
+    suspend fun incrementWatchCount(videoId: String)
+
+    @Query("UPDATE videos SET watchCount = :watchCount WHERE id = :videoId")
+    suspend fun setWatchCount(videoId: String, watchCount: Int)
+
+    @Query("SELECT * FROM videos WHERE watchCount > 0 ORDER BY lastPlayedAt DESC, addedAt DESC")
+    fun getWatchedVideos(): Flow<List<VideoEntity>>
+
+    @Query("SELECT * FROM videos WHERE watchCount > 0 ORDER BY lastPlayedAt DESC, addedAt DESC LIMIT :limit")
+    fun getWatchedVideosPaged(limit: Int): Flow<List<VideoEntity>>
+
+    @Query("SELECT COUNT(*) FROM videos WHERE watchCount > 0")
+    suspend fun getWatchedVideosCount(): Int
+
+    @Query("SELECT COALESCE(SUM(watchCount), 0) FROM videos")
+    suspend fun getTotalWatchCountSum(): Int
+
     @Query("DELETE FROM videos WHERE favorite = 0 AND lastPlayedAt IS NULL AND (localFilePath = '' OR localFilePath IS NULL) AND id NOT IN (SELECT videoId FROM video_folder_join)")
     suspend fun deleteSearchedOrphans()
 }

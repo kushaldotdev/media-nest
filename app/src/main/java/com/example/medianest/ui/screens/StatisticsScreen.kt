@@ -19,6 +19,8 @@ import androidx.compose.material.icons.filled.DataUsage
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.VideoLibrary
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -99,6 +101,18 @@ fun StatisticsScreen(
                     title = "Total Time Spent Watching",
                     value = formatWatchTime(uiState.totalWatchTimeMillis),
                     icon = Icons.Default.Timer
+                )
+
+                StatCard(
+                    title = "Total Watched Videos",
+                    value = uiState.totalWatchedVideos.toString(),
+                    icon = Icons.Default.Visibility
+                )
+
+                StatCard(
+                    title = "Total Play Count",
+                    value = uiState.totalPlayCount.toString(),
+                    icon = Icons.Default.PlayArrow
                 )
 
                 if (uiState.mostViewedVideo != null) {

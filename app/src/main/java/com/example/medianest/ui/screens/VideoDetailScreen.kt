@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -79,6 +80,7 @@ import com.example.medianest.data.model.StreamSource
 import androidx.compose.animation.animateContentSize
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.LinearProgressIndicator
+import com.example.medianest.ui.components.WatchCountDialog
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -98,10 +100,12 @@ fun VideoDetailScreen(
     watchSessions: List<com.example.medianest.data.local.entity.WatchSessionEntity> = emptyList(),
     isFetchingOnline: Boolean = false,
     onRefresh: () -> Unit = {},
-    onResetWatchPosition: () -> Unit = {}
+    onResetWatchPosition: () -> Unit = {},
+    onMarkWatched: (Int) -> Unit = {}
 ) {
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
+    var showWatchCountDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
@@ -285,13 +289,37 @@ fun VideoDetailScreen(
 
             // Released and Downloaded Metadata
             val formattedReleaseDate = UiUtils.formatAbsoluteReleaseDate(videoInfo.uploadDate)
-            if (!formattedReleaseDate.isNullOrEmpty()) {
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    text = "Released: $formattedReleaseDate",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (!formattedReleaseDate.isNullOrEmpty()) {
+                    Text(
+                        text = "Released: $formattedReleaseDate",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                val currentWatchCount = localVideo?.watchCount ?: 0
+                if (currentWatchCount > 0) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Visibility,
+                            contentDescription = "Watch count",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(
+                            text = "$currentWatchCount ${if (currentWatchCount == 1) "view" else "views"}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
             }
 
             val completedDownloads = downloads.filter { it.status == DownloadStatus.COMPLETED }
@@ -319,47 +347,72 @@ fun VideoDetailScreen(
 
             val context = LocalContext.current
             Spacer(Modifier.height(12.dp))
-            Button(
-                onClick = {
-                    try {
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=${videoInfo.videoId}"))
-                        context.startActivity(intent)
-                    } catch (e: Exception) {
-                        coroutineScope.launch {
-                            snackbarHostState.showSnackbar("Unable to open YouTube link")
-                        }
-                    }
-                },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color.White,
-                    contentColor = Color(0xFFFF0000)
-                ),
-                border = BorderStroke(1.dp, Color(0xFFFF0000)),
-                modifier = Modifier.fillMaxWidth()
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
+                Button(
+                    onClick = {
+                        try {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=${videoInfo.videoId}"))
+                            context.startActivity(intent)
+                        } catch (e: Exception) {
+                            coroutineScope.launch {
+                                snackbarHostState.showSnackbar("Unable to open YouTube link")
+                            }
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color.White,
+                        contentColor = Color(0xFFFF0000)
+                    ),
+                    border = BorderStroke(1.dp, Color(0xFFFF0000)),
+                    modifier = Modifier.weight(1f)
                 ) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.ic_youtube),
-                        contentDescription = "YouTube Logo",
-                        tint = Color.Unspecified,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = "Open in YouTube",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = Color(0xFFFF0000)
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.OpenInNew,
-                        contentDescription = "Open Externally",
-                        tint = Color(0xFFFF0000),
-                        modifier = Modifier.size(16.dp)
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_youtube),
+                            contentDescription = "YouTube Logo",
+                            tint = Color.Unspecified,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = "YouTube",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = Color(0xFFFF0000)
+                        )
+                    }
+                }
+
+                Button(
+                    onClick = {
+                        showWatchCountDialog = true
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    ),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Visibility,
+                            contentDescription = "Set as Watched",
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = "Set Watched",
+                            style = MaterialTheme.typography.labelLarge
+                        )
+                    }
                 }
             }
 
@@ -414,7 +467,7 @@ fun VideoDetailScreen(
                 }
             }
 
-            if (videoHistory != null || watchSessions.isNotEmpty()) {
+            if (videoHistory != null || watchSessions.isNotEmpty() || (localVideo?.watchCount ?: 0) > 0) {
                 Spacer(Modifier.height(16.dp))
                 Text("Your Statistics", style = MaterialTheme.typography.titleMedium)
                 Card(
@@ -430,6 +483,23 @@ fun VideoDetailScreen(
                     Column(modifier = Modifier.padding(16.dp)) {
                         val totalTimeStr = com.example.medianest.ui.screens.formatWatchTime(videoHistory?.totalWatchTimeMillis ?: 0L)
                         val dateFormat = java.text.SimpleDateFormat("MMM dd, yyyy 'at' hh:mm a", java.util.Locale.getDefault())
+
+                        // Watch Count Row
+                        val currentWatchCount = localVideo?.watchCount ?: 0
+                        if (currentWatchCount > 0) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Visibility,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text("Total Views: ", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("$currentWatchCount ${if (currentWatchCount == 1) "view" else "views"}", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold), color = MaterialTheme.colorScheme.onSurface)
+                            }
+                            Spacer(Modifier.height(8.dp))
+                        }
 
                         // Total Watch Time Row
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -617,6 +687,17 @@ fun VideoDetailScreen(
         }
 
     }
+    }
+
+    if (showWatchCountDialog) {
+        WatchCountDialog(
+            videoTitle = videoInfo.title,
+            initialCount = localVideo?.watchCount ?: 0,
+            onDismiss = { showWatchCountDialog = false },
+            onConfirm = { newCount ->
+                onMarkWatched(newCount)
+            }
+        )
     }
 }
 

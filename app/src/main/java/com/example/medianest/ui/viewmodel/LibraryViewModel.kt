@@ -33,7 +33,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-enum class LibraryTab { HISTORY, FOLDERS, FAVORITES, PLAYLISTS, SUBSCRIPTIONS }
+enum class LibraryTab { HISTORY, WATCHED, FOLDERS, FAVORITES, PLAYLISTS, SUBSCRIPTIONS }
 
 enum class ViewMode { GRID, LIST }
 
@@ -72,6 +72,7 @@ class LibraryViewModel @Inject constructor(
     private val _historyLimit = MutableStateFlow(50)
     private val _favoritesLimit = MutableStateFlow(50)
     private val _folderVideosLimit = MutableStateFlow(50)
+    private val _watchedLimit = MutableStateFlow(50)
 
     fun loadMoreHistory() {
         _historyLimit.value += 50
@@ -83,6 +84,10 @@ class LibraryViewModel @Inject constructor(
 
     fun loadMoreFolderVideos() {
         _folderVideosLimit.value += 50
+    }
+
+    fun loadMoreWatched() {
+        _watchedLimit.value += 50
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -105,6 +110,20 @@ class LibraryViewModel @Inject constructor(
     }.flatMapLatest { (tab, query, limit) ->
         if (tab == LibraryTab.FAVORITES) {
             videoDao.getFavoriteVideosPaged(limit).map { list ->
+                if (query.isBlank()) list
+                else list.filter { it.title.contains(query, ignoreCase = true) || it.channelName.contains(query, ignoreCase = true) }
+            }
+        } else {
+            flowOf(emptyList())
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val watchedVideos: StateFlow<List<VideoEntity>> = combine(_uiState, _searchQuery, _watchedLimit) { state, query, limit ->
+        Triple(state.currentTab, query, limit)
+    }.flatMapLatest { (tab, query, limit) ->
+        if (tab == LibraryTab.WATCHED) {
+            videoDao.getWatchedVideosPaged(limit).map { list ->
                 if (query.isBlank()) list
                 else list.filter { it.title.contains(query, ignoreCase = true) || it.channelName.contains(query, ignoreCase = true) }
             }
@@ -360,7 +379,38 @@ class LibraryViewModel @Inject constructor(
         _historyLimit.value = 50
         _favoritesLimit.value = 50
         _folderVideosLimit.value = 50
+        _watchedLimit.value = 50
         _uiState.value = _uiState.value.copy(currentTab = tab, selectedFolder = null)
+    }
+
+    fun updateWatchCount(videoId: String, newCount: Int) {
+        viewModelScope.launch {
+            var existing = videoDao.getVideoById(videoId)
+            if (existing == null) {
+                val fallback = com.example.medianest.data.local.entity.VideoEntity(
+                    id = videoId,
+                    title = "Video ($videoId)",
+                    channelName = "Unknown Channel",
+                    channelId = "",
+                    durationSeconds = 0L,
+                    thumbnailUrl = "",
+                    description = "",
+                    uploadDate = ""
+                )
+                videoDao.insert(fallback)
+                existing = fallback
+            }
+            val oldCount = existing.watchCount
+            videoDao.setWatchCount(videoId, newCount)
+            if (newCount > oldCount) {
+                historyDao.insertWatchSession(
+                    com.example.medianest.data.local.entity.WatchSessionEntity(
+                        videoId = videoId,
+                        watchedAt = System.currentTimeMillis()
+                    )
+                )
+            }
+        }
     }
 
     fun selectFolder(folder: FolderEntity) {

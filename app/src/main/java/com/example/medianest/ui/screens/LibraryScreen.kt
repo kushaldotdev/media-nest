@@ -43,6 +43,7 @@ import com.example.medianest.data.local.entity.VideoEntity
 import com.example.medianest.ui.utils.UiUtils
 import com.example.medianest.ui.viewmodel.LibraryTab
 import com.example.medianest.ui.viewmodel.LibraryViewModel
+import com.example.medianest.ui.components.WatchCountDialog
 import com.example.medianest.ui.viewmodel.ViewMode
 import com.example.medianest.ui.viewmodel.FolderStats
 import com.example.medianest.ui.components.UnifiedVideoCard
@@ -62,6 +63,7 @@ fun LibraryScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val videos by viewModel.videos.collectAsStateWithLifecycle()
     val favoriteVideos by viewModel.favoriteVideos.collectAsStateWithLifecycle()
+    val watchedVideos by viewModel.watchedVideos.collectAsStateWithLifecycle()
     val folderVideos by viewModel.folderVideos.collectAsStateWithLifecycle()
     val rootFolders by viewModel.rootFolders.collectAsStateWithLifecycle()
     val childFolders by viewModel.childFolders.collectAsStateWithLifecycle()
@@ -84,6 +86,11 @@ fun LibraryScreen(
     val fetchingStreamsFor by viewModel.fetchingStreamsFor.collectAsStateWithLifecycle()
     val fetchedStreams by viewModel.fetchedStreams.collectAsStateWithLifecycle()
     var expandedDownloadVideoId by remember { mutableStateOf<String?>(null) }
+
+    var showWatchCountDialog by remember { mutableStateOf(false) }
+    var watchCountTargetVideoId by remember { mutableStateOf<String?>(null) }
+    var watchCountTargetTitle by remember { mutableStateOf("") }
+    var watchCountTargetInitialCount by remember { mutableStateOf(0) }
 
     androidx.compose.runtime.CompositionLocalProvider(
         LocalMoveToFolder provides { videoId ->
@@ -162,8 +169,8 @@ fun LibraryScreen(
                     .padding(horizontal = 16.dp, vertical = 8.dp)
             )
 
-            val tabs = listOf(LibraryTab.HISTORY, LibraryTab.FOLDERS, LibraryTab.FAVORITES, LibraryTab.PLAYLISTS, LibraryTab.SUBSCRIPTIONS)
-            val tabLabels = listOf("History", "Folders", "Favorites", "Playlists", "Channels")
+            val tabs = listOf(LibraryTab.HISTORY, LibraryTab.WATCHED, LibraryTab.FOLDERS, LibraryTab.FAVORITES, LibraryTab.PLAYLISTS, LibraryTab.SUBSCRIPTIONS)
+            val tabLabels = listOf("History", "Watched", "Folders", "Favorites", "Playlists", "Channels")
             ScrollableTabRow(
                 selectedTabIndex = tabs.indexOf(uiState.currentTab),
                 edgePadding = 8.dp,
@@ -225,7 +232,59 @@ fun LibraryScreen(
                             onEnqueueDownload = { info, stream -> viewModel.enqueueDownload(info, stream) },
                             onDeleteDownload = { entity -> viewModel.deleteDownload(entity) },
                             onExtractAudio = { entity -> viewModel.extractAudio(entity) },
-                            onLoadMore = viewModel::loadMoreHistory
+                            onLoadMore = viewModel::loadMoreHistory,
+                            onMarkWatched = { videoId ->
+                                val video = (videos.find { it.id == videoId } ?: favoriteVideos.find { it.id == videoId } ?: watchedVideos.find { it.id == videoId } ?: folderVideos.find { it.id == videoId })
+                                if (video != null) {
+                                    watchCountTargetVideoId = videoId
+                                    watchCountTargetTitle = video.title
+                                    watchCountTargetInitialCount = video.watchCount
+                                    showWatchCountDialog = true
+                                }
+                            }
+                        )
+                    }
+                }
+                LibraryTab.WATCHED -> {
+                    if (watchedVideos.isEmpty()) {
+                        EmptyState("No watched videos yet")
+                    } else {
+                        VideoListLayout(
+                            videos = watchedVideos,
+                            videoFolderMap = videoFolderMap,
+                            viewMode = uiState.viewMode,
+                            isSelectionMode = uiState.isSelectionMode,
+                            selectedIds = uiState.selectedVideoIds,
+                            expandedDownloadVideoId = expandedDownloadVideoId,
+                            fetchingStreamsFor = fetchingStreamsFor,
+                            fetchedStreams = fetchedStreams,
+                            allDownloads = allDownloads,
+                            playbackHistory = playbackHistory,
+                            onVideoClick = onVideoClick,
+                            onVideoLongClick = { viewModel.toggleSelectionMode(); viewModel.toggleVideoSelection(it) },
+                            onToggleSelection = { viewModel.toggleVideoSelection(it) },
+                            onFavoriteToggle = { video -> 
+                                viewModel.toggleFavorite(video.id, video.favorite)
+                                coroutineScope.launch { snackbarHostState.showSnackbar(if (video.favorite) "Removed from Favorites" else "Added to Favorites") }
+                            },
+                            onDownloadIconClick = { videoId -> 
+                                expandedDownloadVideoId = videoId
+                                viewModel.fetchStreamsFor(videoId)
+                            },
+                            onDismissDownloadMenu = { expandedDownloadVideoId = null },
+                            onEnqueueDownload = { info, stream -> viewModel.enqueueDownload(info, stream) },
+                            onDeleteDownload = { entity -> viewModel.deleteDownload(entity) },
+                            onExtractAudio = { entity -> viewModel.extractAudio(entity) },
+                            onLoadMore = viewModel::loadMoreWatched,
+                            onMarkWatched = { videoId ->
+                                val video = (videos.find { it.id == videoId } ?: favoriteVideos.find { it.id == videoId } ?: watchedVideos.find { it.id == videoId } ?: folderVideos.find { it.id == videoId })
+                                if (video != null) {
+                                    watchCountTargetVideoId = videoId
+                                    watchCountTargetTitle = video.title
+                                    watchCountTargetInitialCount = video.watchCount
+                                    showWatchCountDialog = true
+                                }
+                            }
                         )
                     }
                 }
@@ -279,7 +338,16 @@ fun LibraryScreen(
                         onEnqueueDownload = { info, stream -> viewModel.enqueueDownload(info, stream) },
                         onDeleteDownload = { entity -> viewModel.deleteDownload(entity) },
                         onExtractAudio = { entity -> viewModel.extractAudio(entity) },
-                        onLoadMoreVideos = viewModel::loadMoreFolderVideos
+                        onLoadMoreVideos = viewModel::loadMoreFolderVideos,
+                        onMarkWatched = { videoId ->
+                            val video = (videos.find { it.id == videoId } ?: favoriteVideos.find { it.id == videoId } ?: watchedVideos.find { it.id == videoId } ?: folderVideos.find { it.id == videoId })
+                            if (video != null) {
+                                watchCountTargetVideoId = videoId
+                                watchCountTargetTitle = video.title
+                                watchCountTargetInitialCount = video.watchCount
+                                showWatchCountDialog = true
+                            }
+                        }
                     )
                 }
                 LibraryTab.FAVORITES -> {
@@ -312,7 +380,16 @@ fun LibraryScreen(
                             onEnqueueDownload = { info, stream -> viewModel.enqueueDownload(info, stream) },
                             onDeleteDownload = { entity -> viewModel.deleteDownload(entity) },
                             onExtractAudio = { entity -> viewModel.extractAudio(entity) },
-                            onLoadMore = viewModel::loadMoreFavorites
+                            onLoadMore = viewModel::loadMoreFavorites,
+                            onMarkWatched = { videoId ->
+                                val video = (videos.find { it.id == videoId } ?: favoriteVideos.find { it.id == videoId } ?: watchedVideos.find { it.id == videoId } ?: folderVideos.find { it.id == videoId })
+                                if (video != null) {
+                                    watchCountTargetVideoId = videoId
+                                    watchCountTargetTitle = video.title
+                                    watchCountTargetInitialCount = video.watchCount
+                                    showWatchCountDialog = true
+                                }
+                            }
                         )
                     }
                 }
@@ -447,6 +524,19 @@ fun LibraryScreen(
         }
     }
     }
+
+    if (showWatchCountDialog) {
+        WatchCountDialog(
+            videoTitle = watchCountTargetTitle,
+            initialCount = watchCountTargetInitialCount,
+            onDismiss = { showWatchCountDialog = false },
+            onConfirm = { newCount ->
+                watchCountTargetVideoId?.let { videoId ->
+                    viewModel.updateWatchCount(videoId, newCount)
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -470,7 +560,8 @@ private fun VideoListLayout(
     onEnqueueDownload: (com.example.medianest.data.model.ExtractedVideoInfo, com.example.medianest.data.model.StreamSource) -> Unit,
     onDeleteDownload: (com.example.medianest.data.local.entity.DownloadEntity) -> Unit,
     onExtractAudio: (com.example.medianest.data.local.entity.DownloadEntity) -> Unit,
-    onLoadMore: (() -> Unit)? = null
+    onLoadMore: (() -> Unit)? = null,
+    onMarkWatched: (String) -> Unit = {}
 ) {
     val onMoveToFolderClick = LocalMoveToFolder.current
     val context = LocalContext.current
@@ -532,6 +623,7 @@ private fun VideoListLayout(
                     isDownloaded = video.localFilePath.isNotEmpty(),
                     isSelected = selectedIds.contains(video.id),
                     playbackProgressFraction = progressFraction,
+                    watchCount = video.watchCount,
                     folders = videoFolderMap[video.id] ?: emptyList(),
                     config = VideoCardConfig(
                         showFavoriteButton = !isSelectionMode,
@@ -540,13 +632,15 @@ private fun VideoListLayout(
                         showSelectionCheckbox = isSelectionMode,
                         showFolderBadges = true,
                         showPlaybackProgress = true,
-                        showDownloadedBadge = true
+                        showDownloadedBadge = true,
+                        showMarkWatchedButton = !isSelectionMode
                     ),
                     onClick = { if (isSelectionMode) onToggleSelection(video.id) else onVideoClick(video.id) },
                     onLongClick = { onVideoLongClick(video.id) },
                     onFavoriteToggle = { onFavoriteToggle(video) },
                     onMoveToFolder = { onMoveToFolderClick(video.id) },
                     onDownloadClick = { onDownloadIconClick(video.id) },
+                    onMarkWatched = { onMarkWatched(video.id) },
                     onSelectionToggle = { onToggleSelection(video.id) },
                     downloadMenuContent = {
                         QuickDownloadMenu(
@@ -587,6 +681,7 @@ private fun VideoListLayout(
                     isDownloaded = video.localFilePath.isNotEmpty(),
                     isSelected = selectedIds.contains(video.id),
                     playbackProgressFraction = progressFraction,
+                    watchCount = video.watchCount,
                     folders = videoFolderMap[video.id] ?: emptyList(),
                     config = VideoCardConfig(
                         showFavoriteButton = !isSelectionMode,
@@ -595,13 +690,15 @@ private fun VideoListLayout(
                         showSelectionCheckbox = isSelectionMode,
                         showFolderBadges = true,
                         showPlaybackProgress = true,
-                        showDownloadedBadge = true
+                        showDownloadedBadge = true,
+                        showMarkWatchedButton = !isSelectionMode
                     ),
                     onClick = { if (isSelectionMode) onToggleSelection(video.id) else onVideoClick(video.id) },
                     onLongClick = { onVideoLongClick(video.id) },
                     onFavoriteToggle = { onFavoriteToggle(video) },
                     onMoveToFolder = { onMoveToFolderClick(video.id) },
                     onDownloadClick = { onDownloadIconClick(video.id) },
+                    onMarkWatched = { onMarkWatched(video.id) },
                     onSelectionToggle = { onToggleSelection(video.id) },
                     downloadMenuContent = {
                         QuickDownloadMenu(
@@ -659,7 +756,8 @@ private fun FolderContent(
     onEnqueueDownload: (com.example.medianest.data.model.ExtractedVideoInfo, com.example.medianest.data.model.StreamSource) -> Unit,
     onDeleteDownload: (com.example.medianest.data.local.entity.DownloadEntity) -> Unit,
     onExtractAudio: (com.example.medianest.data.local.entity.DownloadEntity) -> Unit,
-    onLoadMoreVideos: (() -> Unit)? = null
+    onLoadMoreVideos: (() -> Unit)? = null,
+    onMarkWatched: (String) -> Unit = {}
 ) {
     var showCreateDialog by remember { mutableStateOf(false) }
     var newFolderName by remember { mutableStateOf("") }
@@ -765,6 +863,7 @@ private fun FolderContent(
                                     isDownloaded = video.localFilePath.isNotEmpty(),
                                     isSelected = selectedIds.contains(video.id),
                                     playbackProgressFraction = progressFraction,
+                                    watchCount = video.watchCount,
                                     folders = videoFolderMap[video.id] ?: emptyList(),
                                     config = VideoCardConfig(
                                         showFavoriteButton = !isSelectionMode,
@@ -774,7 +873,8 @@ private fun FolderContent(
                                         showSelectionCheckbox = isSelectionMode,
                                         showFolderBadges = true,
                                         showPlaybackProgress = true,
-                                        showDownloadedBadge = true
+                                        showDownloadedBadge = true,
+                                        showMarkWatchedButton = !isSelectionMode
                                     ),
                                     onClick = { if (isSelectionMode) onToggleSelection(video.id) else onVideoClick(video.id) },
                                     onLongClick = { onVideoLongClick(video.id) },
@@ -782,6 +882,7 @@ private fun FolderContent(
                                     onMoveToFolder = { onMoveToFolderClick(video.id) },
                                     onRemoveFromFolder = { selectedFolder?.let { onRemoveFromFolder(video.id, it.id) } },
                                     onDownloadClick = { onDownloadIconClick(video.id) },
+                                    onMarkWatched = { onMarkWatched(video.id) },
                                     onSelectionToggle = { onToggleSelection(video.id) },
                                     downloadMenuContent = {
                                         QuickDownloadMenu(
@@ -818,6 +919,7 @@ private fun FolderContent(
                                     isDownloaded = video.localFilePath.isNotEmpty(),
                                     isSelected = selectedIds.contains(video.id),
                                     playbackProgressFraction = progressFraction,
+                                    watchCount = video.watchCount,
                                     folders = videoFolderMap[video.id] ?: emptyList(),
                                     config = VideoCardConfig(
                                         showFavoriteButton = !isSelectionMode,
@@ -827,7 +929,8 @@ private fun FolderContent(
                                         showSelectionCheckbox = isSelectionMode,
                                         showFolderBadges = true,
                                         showPlaybackProgress = true,
-                                        showDownloadedBadge = true
+                                        showDownloadedBadge = true,
+                                        showMarkWatchedButton = !isSelectionMode
                                     ),
                                     onClick = { if (isSelectionMode) onToggleSelection(video.id) else onVideoClick(video.id) },
                                     onLongClick = { onVideoLongClick(video.id) },
@@ -835,6 +938,7 @@ private fun FolderContent(
                                     onMoveToFolder = { onMoveToFolderClick(video.id) },
                                     onRemoveFromFolder = { selectedFolder?.let { onRemoveFromFolder(video.id, it.id) } },
                                     onDownloadClick = { onDownloadIconClick(video.id) },
+                                    onMarkWatched = { onMarkWatched(video.id) },
                                     onSelectionToggle = { onToggleSelection(video.id) },
                                     downloadMenuContent = {
                                         QuickDownloadMenu(

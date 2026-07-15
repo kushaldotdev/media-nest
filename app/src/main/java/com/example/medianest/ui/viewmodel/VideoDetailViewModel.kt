@@ -356,4 +356,47 @@ class VideoDetailViewModel @Inject constructor(
             historyDao.resetPlaybackPositionForVideo(videoId)
         }
     }
+
+    fun updateWatchCount(newCount: Int) {
+        val videoId = currentVideoId
+        if (videoId.isEmpty()) return
+        viewModelScope.launch {
+            var video = videoRepository.getVideoById(videoId)
+            if (video == null) {
+                val currentInfo = _videoInfo.value
+                if (currentInfo != null) {
+                    val entity = currentInfo.toVideoEntity()
+                    videoRepository.insertVideo(entity)
+                    video = entity
+                }
+            }
+            if (video == null && videoRepository.getVideoById(videoId) == null) {
+                val fallback = com.example.medianest.data.local.entity.VideoEntity(
+                    id = videoId,
+                    title = "Video ($videoId)",
+                    channelName = "Unknown Channel",
+                    channelId = "",
+                    durationSeconds = 0L,
+                    thumbnailUrl = "",
+                    description = "",
+                    uploadDate = ""
+                )
+                videoRepository.insertVideo(fallback)
+                video = fallback
+            }
+            val existing = videoRepository.getVideoById(videoId)
+            val oldCount = existing?.watchCount ?: 0
+            videoRepository.setWatchCount(videoId, newCount)
+            if (newCount > oldCount) {
+                historyDao.insertWatchSession(
+                    com.example.medianest.data.local.entity.WatchSessionEntity(
+                        videoId = videoId,
+                        watchedAt = System.currentTimeMillis()
+                    )
+                )
+            }
+            video = videoRepository.getVideoById(videoId)
+            _localVideo.value = video
+        }
+    }
 }

@@ -22,6 +22,9 @@ class VideoRepository @Inject constructor(
 
     fun getVideoByIdFlow(videoId: String): Flow<VideoEntity?> = videoDao.getVideoByIdFlow(videoId)
 
+    suspend fun incrementWatchCount(videoId: String) = videoDao.incrementWatchCount(videoId)
+    suspend fun setWatchCount(videoId: String, watchCount: Int) = videoDao.setWatchCount(videoId, watchCount)
+
     suspend fun searchAndSave(url: String): ExtractedVideoInfo {
         val info = youTubeExtractor.extractVideo(url)
         val existing = videoDao.getVideoById(info.videoId)
@@ -31,7 +34,8 @@ class VideoRepository @Inject constructor(
                 favorite = existing.favorite,
                 localFilePath = existing.localFilePath,
                 lastPlayedAt = existing.lastPlayedAt,
-                downloadedAt = existing.downloadedAt
+                downloadedAt = existing.downloadedAt,
+                watchCount = existing.watchCount
             )
             videoDao.update(updated)
         } else {

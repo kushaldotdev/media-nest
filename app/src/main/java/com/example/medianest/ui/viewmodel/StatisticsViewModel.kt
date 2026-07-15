@@ -16,6 +16,8 @@ data class StatisticsUiState(
     val totalDownloadedFiles: Int = 0,
     val totalDatabaseEntries: Int = 0,
     val totalWatchTimeMillis: Long = 0L,
+    val totalPlayCount: Int = 0,
+    val totalWatchedVideos: Int = 0,
     val mostViewedVideo: MostViewedVideo? = null,
     val isLoading: Boolean = true
 )
@@ -39,6 +41,8 @@ class StatisticsViewModel @Inject constructor(
             try {
                 val totalEntries = videoDao.getTotalVideoCount()
                 val totalDownloads = videoDao.getDownloadedVideoCount()
+                val totalWatched = videoDao.getWatchedVideosCount()
+                val totalPlayCountSum = videoDao.getTotalWatchCountSum()
                 
                 val totalWatchTime = historyDao.getTotalWatchTime() ?: 0L
                 val mostViewed = historyDao.getMostViewedVideo()
@@ -47,6 +51,8 @@ class StatisticsViewModel @Inject constructor(
                     totalDownloadedFiles = totalDownloads,
                     totalDatabaseEntries = totalEntries,
                     totalWatchTimeMillis = totalWatchTime,
+                    totalPlayCount = totalPlayCountSum,
+                    totalWatchedVideos = totalWatched,
                     mostViewedVideo = mostViewed,
                     isLoading = false
                 )

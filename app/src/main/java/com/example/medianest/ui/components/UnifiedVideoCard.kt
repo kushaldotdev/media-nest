@@ -40,7 +40,8 @@ data class VideoCardConfig(
     val showSelectionCheckbox: Boolean = false,
     val showFolderBadges: Boolean = false,
     val showPlaybackProgress: Boolean = false,
-    val showDownloadedBadge: Boolean = false
+    val showDownloadedBadge: Boolean = false,
+    val showMarkWatchedButton: Boolean = false
 )
 
 /**
@@ -147,6 +148,7 @@ fun UnifiedVideoCard(
     isDownloaded: Boolean = false,
     isSelected: Boolean = false,
     playbackProgressFraction: Float = 0f,
+    watchCount: Int = 0,
     folders: List<FolderEntity> = emptyList(),
     config: VideoCardConfig = VideoCardConfig(),
     onClick: () -> Unit = {},
@@ -155,6 +157,7 @@ fun UnifiedVideoCard(
     onMoveToFolder: () -> Unit = {},
     onRemoveFromFolder: () -> Unit = {},
     onDownloadClick: () -> Unit = {},
+    onMarkWatched: () -> Unit = {},
     onSelectionToggle: () -> Unit = {},
     downloadMenuContent: (@Composable () -> Unit)? = null,
     modifier: Modifier = Modifier
@@ -196,6 +199,34 @@ fun UnifiedVideoCard(
                             .size(24.dp)
                             .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(50))
                     )
+                }
+
+                // Eye icon with view count - TOP RIGHT corner on thumbnail
+                if (watchCount > 0) {
+                    Row(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(8.dp)
+                            .background(
+                                color = Color.Black.copy(alpha = 0.6f),
+                                shape = RoundedCornerShape(4.dp)
+                            )
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Visibility,
+                            contentDescription = "Watch count",
+                            tint = Color.White,
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Text(
+                            text = watchCount.toString(),
+                            color = Color.White,
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    }
                 }
 
                 // Duration badge - BOTTOM RIGHT corner
@@ -294,7 +325,7 @@ fun UnifiedVideoCard(
 
                 // Action buttons row (if selection mode is disabled)
                 if (!config.showSelectionCheckbox &&
-                    (config.showFavoriteButton || config.showMoveToFolderButton || config.showRemoveFromFolderButton || config.showDownloadButton)
+                    (config.showFavoriteButton || config.showMoveToFolderButton || config.showRemoveFromFolderButton || config.showDownloadButton || config.showMarkWatchedButton)
                 ) {
                     Spacer(modifier = Modifier.height(8.dp))
                     Row(
@@ -338,6 +369,16 @@ fun UnifiedVideoCard(
                             }
                         }
 
+                        if (config.showMarkWatchedButton) {
+                            IconButton(onClick = onMarkWatched) {
+                                Icon(
+                                    imageVector = Icons.Default.Visibility,
+                                    contentDescription = "Set as watched",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
                         if (config.showRemoveFromFolderButton) {
                             IconButton(onClick = onRemoveFromFolder) {
                                 Icon(
@@ -369,6 +410,7 @@ fun UnifiedVideoRow(
     isDownloaded: Boolean = false,
     isSelected: Boolean = false,
     playbackProgressFraction: Float = 0f,
+    watchCount: Int = 0,
     folders: List<FolderEntity> = emptyList(),
     config: VideoCardConfig = VideoCardConfig(),
     onClick: () -> Unit = {},
@@ -377,6 +419,7 @@ fun UnifiedVideoRow(
     onMoveToFolder: () -> Unit = {},
     onRemoveFromFolder: () -> Unit = {},
     onDownloadClick: () -> Unit = {},
+    onMarkWatched: () -> Unit = {},
     onSelectionToggle: () -> Unit = {},
     downloadMenuContent: (@Composable () -> Unit)? = null,
     modifier: Modifier = Modifier,
@@ -431,6 +474,34 @@ fun UnifiedVideoRow(
                                 .size(16.dp)
                                 .background(Color.Black.copy(alpha = 0.6f), RoundedCornerShape(50))
                         )
+                    }
+
+                    // Eye icon with view count - TOP RIGHT corner on thumbnail
+                    if (watchCount > 0) {
+                        Row(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(4.dp)
+                                .background(
+                                    color = Color.Black.copy(alpha = 0.6f),
+                                    shape = RoundedCornerShape(4.dp)
+                                )
+                                .padding(horizontal = 4.dp, vertical = 1.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Visibility,
+                                contentDescription = "Watch count",
+                                tint = Color.White,
+                                modifier = Modifier.size(10.dp)
+                            )
+                            Text(
+                                text = watchCount.toString(),
+                                color = Color.White,
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                        }
                     }
 
                     // Duration badge - BOTTOM RIGHT corner
@@ -534,7 +605,7 @@ fun UnifiedVideoRow(
 
                 // Action buttons row (if selection mode is disabled)
                 if (!config.showSelectionCheckbox &&
-                    (config.showFavoriteButton || config.showMoveToFolderButton || config.showRemoveFromFolderButton || config.showDownloadButton)
+                    (config.showFavoriteButton || config.showMoveToFolderButton || config.showRemoveFromFolderButton || config.showDownloadButton || config.showMarkWatchedButton)
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -577,6 +648,17 @@ fun UnifiedVideoRow(
                                     )
                                 }
                                 downloadMenuContent?.invoke()
+                            }
+                        }
+
+                        if (config.showMarkWatchedButton) {
+                            IconButton(onClick = onMarkWatched, modifier = Modifier.size(32.dp)) {
+                                Icon(
+                                    imageVector = Icons.Default.Visibility,
+                                    contentDescription = "Set as watched",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(20.dp)
+                                )
                             }
                         }
 

@@ -18,5 +18,6 @@ data class VideoEntity(
     val addedAt: Long = System.currentTimeMillis(),
     val lastPlayedAt: Long? = null,
     val downloadedAt: Long? = null,
-    val syncVersion: Long = 0
+    val syncVersion: Long = 0,
+    val watchCount: Int = 0
 )

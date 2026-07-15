@@ -32,6 +32,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import com.example.medianest.data.mapper.toVideoEntity
 
 data class PlayerUiState(
     val isPlaying: Boolean = false,
@@ -50,7 +51,7 @@ data class PlayerUiState(
     val isLocal: Boolean = false,
     val streamIndex: Int = 0,
     val downloadId: Long? = null,
-    val showWatchedAlertCount: Int? = null,
+    val watchCount: Int = 0,
     val videoQuality: String? = null
 )
 
@@ -237,6 +238,7 @@ class PlayerViewModel @Inject constructor(
                         positionMs = startPosition,
                         historyPositionMs = savedPosition,
                         videoId = videoId,
+                        watchCount = localVideo?.watchCount ?: 0,
                         isLocal = localFile != null,
                         streamIndex = streamIndex,
                         downloadId = localFile?.id,
@@ -288,6 +290,7 @@ class PlayerViewModel @Inject constructor(
         val controller = _player.value ?: return
         controller.seekTo(positionMs)
         _uiState.value = _uiState.value.copy(positionMs = positionMs)
+        checkAndMarkWatched(positionMs, controller.duration)
     }
 
     fun seekRelative(offsetMs: Long) {
@@ -296,6 +299,7 @@ class PlayerViewModel @Inject constructor(
         controller.seekTo(newPosition)
         _uiState.value = _uiState.value.copy(positionMs = newPosition)
         savePosition()
+        checkAndMarkWatched(newPosition, controller.duration)
     }
 
     fun setSpeed(speed: Float) {
@@ -303,6 +307,47 @@ class PlayerViewModel @Inject constructor(
         controller.setPlaybackSpeed(speed)
         _uiState.value = _uiState.value.copy(currentSpeed = speed)
         viewModelScope.launch { playbackPreferences.setPlaybackSpeed(speed) }
+    }
+
+    private suspend fun ensureVideoExists(videoId: String) {
+        if (videoDao.getVideoById(videoId) == null) {
+            val info = videoInfo ?: lastResultCache.get(videoId)
+            if (info != null) {
+                videoDao.insert(info.toVideoEntity())
+            } else {
+                val fallback = com.example.medianest.data.local.entity.VideoEntity(
+                    id = videoId,
+                    title = _uiState.value.title.ifEmpty { "Video ($videoId)" },
+                    channelName = _uiState.value.channelName.ifEmpty { "Unknown Channel" },
+                    channelId = "",
+                    durationSeconds = _uiState.value.durationMs / 1000,
+                    thumbnailUrl = _uiState.value.thumbnailUrl ?: "",
+                    description = "",
+                    uploadDate = ""
+                )
+                videoDao.insert(fallback)
+            }
+        }
+    }
+
+    private fun checkAndMarkWatched(pos: Long, duration: Long) {
+        val videoId = currentVideoId ?: return
+        if (!countedThisSession && duration > 0 && pos >= duration * 0.9) {
+            countedThisSession = true
+            viewModelScope.launch {
+                ensureVideoExists(videoId)
+                historyDao.insertWatchSession(
+                    com.example.medianest.data.local.entity.WatchSessionEntity(
+                        videoId = videoId,
+                        watchedAt = System.currentTimeMillis()
+                    )
+                )
+                videoDao.incrementWatchCount(videoId)
+                val updatedVideo = videoDao.getVideoById(videoId)
+                val newCount = updatedVideo?.watchCount ?: 0
+                _uiState.value = _uiState.value.copy(watchCount = newCount)
+            }
+        }
     }
 
     private fun startPositionTracking() {
@@ -318,20 +363,7 @@ class PlayerViewModel @Inject constructor(
                     val pos = controller.currentPosition
                     val duration = controller.duration
                     
-                    if (!countedThisSession && duration > 0 && pos >= duration * 0.9) {
-                        countedThisSession = true
-                        val videoId = currentVideoId ?: ""
-                        historyDao.insertWatchSession(
-                            com.example.medianest.data.local.entity.WatchSessionEntity(
-                                videoId = videoId,
-                                watchedAt = System.currentTimeMillis()
-                            )
-                        )
-                        val count = historyDao.getWatchSessionCount(videoId)
-                        if (count >= 2) {
-                            _uiState.value = _uiState.value.copy(showWatchedAlertCount = count)
-                        }
-                    }
+                    checkAndMarkWatched(pos, duration)
 
                     val buf = controller.bufferedPosition
                     _uiState.value = _uiState.value.copy(
@@ -357,6 +389,7 @@ class PlayerViewModel @Inject constructor(
         if (pos > maxSavedPositionMs) {
             maxSavedPositionMs = pos
             viewModelScope.launch {
+                ensureVideoExists(videoId)
                 historyDao.upsert(
                     HistoryEntity(
                         videoId = videoId,
@@ -377,6 +410,7 @@ class PlayerViewModel @Inject constructor(
         if (duration > maxSavedPositionMs) {
             maxSavedPositionMs = duration
             viewModelScope.launch {
+                ensureVideoExists(videoId)
                 historyDao.upsert(
                     HistoryEntity(
                         videoId = videoId,
@@ -411,6 +445,7 @@ class PlayerViewModel @Inject constructor(
         maxSavedPositionMs = pos
         _uiState.value = _uiState.value.copy(historyPositionMs = pos)
         viewModelScope.launch {
+            ensureVideoExists(videoId)
             historyDao.upsert(
                 HistoryEntity(
                     videoId = videoId,
@@ -423,9 +458,7 @@ class PlayerViewModel @Inject constructor(
         }
     }
 
-    fun dismissWatchedAlert() {
-        _uiState.value = _uiState.value.copy(showWatchedAlertCount = null)
-    }
+
 
     fun stopPlayback() {
         val controller = _player.value

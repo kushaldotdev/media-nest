@@ -81,6 +81,7 @@ import com.example.medianest.ui.components.UnifiedVideoCard
 import com.example.medianest.ui.components.VideoCardConfig
 import com.example.medianest.ui.components.GlassCard
 import com.example.medianest.ui.components.QuickDownloadMenu
+import com.example.medianest.ui.components.WatchCountDialog
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -100,6 +101,7 @@ fun HomeScreen(
     val fetchingStreamsFor by viewModel.fetchingStreamsFor.collectAsStateWithLifecycle()
     val fetchedStreams by viewModel.fetchedStreams.collectAsStateWithLifecycle()
     val playbackHistory by viewModel.playbackHistory.collectAsStateWithLifecycle()
+    val watchCounts by viewModel.watchCounts.collectAsStateWithLifecycle()
     val showBulkQualityDialog by viewModel.showBulkQualityDialog.collectAsStateWithLifecycle()
     val bulkFetchProgress by viewModel.bulkFetchProgress.collectAsStateWithLifecycle()
     val bulkDownloadConfirmation by viewModel.bulkDownloadConfirmation.collectAsStateWithLifecycle()
@@ -113,6 +115,11 @@ fun HomeScreen(
     var showMoveToFolderDialog by remember { mutableStateOf(false) }
     var videoToMove by remember { mutableStateOf<ExtractedVideoInfo?>(null) }
     var expandedDownloadVideoId by remember { mutableStateOf<String?>(null) }
+
+    var showWatchCountDialog by remember { mutableStateOf(false) }
+    var watchCountTargetVideoId by remember { mutableStateOf<String?>(null) }
+    var watchCountTargetTitle by remember { mutableStateOf("") }
+    var watchCountTargetInitialCount by remember { mutableStateOf(0) }
 
     val listState = rememberLazyListState()
     val shouldLoadMore = remember {
@@ -242,6 +249,7 @@ fun HomeScreen(
                             isFavorite = favoriteVideoIds.contains(state.video.videoId),
                             folders = videoFolderMap[state.video.videoId] ?: emptyList(),
                             playbackProgressFraction = progressFraction,
+                            watchCount = watchCounts[state.video.videoId] ?: 0,
                             onSelectQuality = { onVideoSelected(state.video.videoId) },
                             onFavoriteToggle = { video, fav -> 
                                 viewModel.toggleFavorite(video, fav)
@@ -250,6 +258,13 @@ fun HomeScreen(
                                         if (fav) "Added to favorites" else "Removed from favorites"
                                     )
                                 }
+                            },
+                            onMarkWatched = {
+                                val currentCount = watchCounts[state.video.videoId] ?: 0
+                                watchCountTargetVideoId = state.video.videoId
+                                watchCountTargetTitle = state.video.title
+                                watchCountTargetInitialCount = currentCount
+                                showWatchCountDialog = true
                             }
                         )
                     }
@@ -329,6 +344,7 @@ fun HomeScreen(
                             isFavorite = favoriteVideoIds.contains(video.videoId),
                             folders = videoFolderMap[video.videoId] ?: emptyList(),
                             playbackProgressFraction = progressFraction,
+                            watchCount = watchCounts[video.videoId] ?: 0,
                             onClick = { onVideoSelected(video.videoId) },
                             onFavoriteToggle = { videoObj, fav -> 
                                 viewModel.toggleFavorite(videoObj, fav)
@@ -337,6 +353,13 @@ fun HomeScreen(
                                         if (fav) "Added to favorites" else "Removed from favorites"
                                     )
                                 }
+                            },
+                            onMarkWatched = {
+                                val currentCount = watchCounts[video.videoId] ?: 0
+                                watchCountTargetVideoId = video.videoId
+                                watchCountTargetTitle = video.title
+                                watchCountTargetInitialCount = currentCount
+                                showWatchCountDialog = true
                             },
                             onMoveToFolder = { 
                                 videoToMove = video
@@ -460,6 +483,7 @@ fun HomeScreen(
                             isFavorite = favoriteVideoIds.contains(video.videoId),
                             folders = videoFolderMap[video.videoId] ?: emptyList(),
                             playbackProgressFraction = progressFraction,
+                            watchCount = watchCounts[video.videoId] ?: 0,
                             onClick = { onVideoSelected(video.videoId) },
                             showChannelName = false,
                             onFavoriteToggle = { videoObj, fav -> 
@@ -469,6 +493,13 @@ fun HomeScreen(
                                         if (fav) "Added to favorites" else "Removed from favorites"
                                     )
                                 }
+                            },
+                            onMarkWatched = {
+                                val currentCount = watchCounts[video.videoId] ?: 0
+                                watchCountTargetVideoId = video.videoId
+                                watchCountTargetTitle = video.title
+                                watchCountTargetInitialCount = currentCount
+                                showWatchCountDialog = true
                             },
                             onMoveToFolder = { 
                                 videoToMove = video
@@ -740,6 +771,19 @@ fun HomeScreen(
             }
         )
     }
+
+    if (showWatchCountDialog) {
+        WatchCountDialog(
+            videoTitle = watchCountTargetTitle,
+            initialCount = watchCountTargetInitialCount,
+            onDismiss = { showWatchCountDialog = false },
+            onConfirm = { newCount ->
+                watchCountTargetVideoId?.let { videoId ->
+                    viewModel.updateWatchCount(videoId, newCount)
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -795,8 +839,10 @@ fun VideoResultCard(
     isFavorite: Boolean,
     folders: List<com.example.medianest.data.local.entity.FolderEntity> = emptyList(),
     playbackProgressFraction: Float = 0f,
+    watchCount: Int = 0,
     onSelectQuality: () -> Unit,
-    onFavoriteToggle: ((ExtractedVideoInfo, Boolean) -> Unit)? = null
+    onFavoriteToggle: ((ExtractedVideoInfo, Boolean) -> Unit)? = null,
+    onMarkWatched: () -> Unit = {}
 ) {
     UnifiedVideoCard(
         title = video.title,
@@ -807,15 +853,18 @@ fun VideoResultCard(
         isFavorite = isFavorite,
         folders = folders,
         playbackProgressFraction = playbackProgressFraction,
+        watchCount = watchCount,
         config = VideoCardConfig(
             showFavoriteButton = onFavoriteToggle != null,
             showFolderBadges = folders.isNotEmpty(),
-            showPlaybackProgress = playbackProgressFraction > 0f
+            showPlaybackProgress = playbackProgressFraction > 0f,
+            showMarkWatchedButton = true
         ),
         onClick = onSelectQuality,
         onFavoriteToggle = {
             onFavoriteToggle?.invoke(video, !isFavorite)
-        }
+        },
+        onMarkWatched = onMarkWatched
     )
 }
 
@@ -825,13 +874,15 @@ fun VideoListItem(
     isFavorite: Boolean,
     folders: List<com.example.medianest.data.local.entity.FolderEntity> = emptyList(),
     playbackProgressFraction: Float = 0f,
+    watchCount: Int = 0,
     onClick: () -> Unit,
     showChannelName: Boolean = true,
     onFavoriteToggle: ((ExtractedVideoInfo, Boolean) -> Unit)? = null,
     onMoveToFolder: ((ExtractedVideoInfo) -> Unit)? = null,
     onDownloadClick: ((String) -> Unit)? = null,
     downloadMenuContent: (@Composable () -> Unit)? = null,
-    serialNumber: Int? = null
+    serialNumber: Int? = null,
+    onMarkWatched: () -> Unit = {}
 ) {
     UnifiedVideoRow(
         title = video.title,
@@ -842,6 +893,7 @@ fun VideoListItem(
         isFavorite = isFavorite,
         isDownloaded = false, // Not tracked on Home screen
         playbackProgressFraction = playbackProgressFraction,
+        watchCount = watchCount,
         folders = folders,
         config = VideoCardConfig(
             showFavoriteButton = onFavoriteToggle != null,
@@ -849,7 +901,8 @@ fun VideoListItem(
             showDownloadButton = onDownloadClick != null,
             showPlaybackProgress = playbackProgressFraction > 0f,
             showDownloadedBadge = false,
-            showFolderBadges = folders.isNotEmpty()
+            showFolderBadges = folders.isNotEmpty(),
+            showMarkWatchedButton = true
         ),
         onClick = onClick,
         onFavoriteToggle = {
@@ -858,6 +911,7 @@ fun VideoListItem(
         onMoveToFolder = { onMoveToFolder?.invoke(video) },
         onDownloadClick = { onDownloadClick?.invoke(video.videoId) },
         downloadMenuContent = downloadMenuContent,
-        serialNumber = serialNumber
+        serialNumber = serialNumber,
+        onMarkWatched = onMarkWatched
     )
 }
