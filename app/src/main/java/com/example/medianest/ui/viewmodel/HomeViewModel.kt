@@ -8,6 +8,7 @@ import com.example.medianest.data.model.ExtractedPlaylistInfo
 import com.example.medianest.data.model.ExtractedVideoInfo
 import com.example.medianest.data.repository.SubscriptionRepository
 import com.example.medianest.data.repository.VideoRepository
+import com.example.medianest.extraction.YouTubeExtractor
 import com.example.medianest.data.local.dao.LinkHistoryDao
 import com.example.medianest.data.local.entity.LinkHistoryEntity
 import com.example.medianest.data.local.dao.FolderDao
@@ -47,8 +48,18 @@ sealed class HomeUiState {
     data object Loading : HomeUiState()
     data class Success(val video: ExtractedVideoInfo) : HomeUiState()
     data class Error(val message: String) : HomeUiState()
-    data class PlaylistResult(val playlist: ExtractedPlaylistInfo) : HomeUiState()
-    data class ChannelResult(val channel: ChannelInfo) : HomeUiState()
+    data class PlaylistResult(
+        val playlist: ExtractedPlaylistInfo,
+        val currentPage: YouTubeExtractor.PlaylistPage?,
+        val isFetchingNextPage: Boolean = false,
+        val hasMore: Boolean = true
+    ) : HomeUiState()
+    data class ChannelResult(
+        val channel: ChannelInfo,
+        val currentPage: YouTubeExtractor.ChannelPage?,
+        val isFetchingNextPage: Boolean = false,
+        val hasMore: Boolean = true
+    ) : HomeUiState()
 }
 
 @HiltViewModel
@@ -124,9 +135,14 @@ class HomeViewModel @Inject constructor(
                         val playlistUrl = "https://www.youtube.com/playlist?list=$listId"
                         
                         try {
-                            val playlist = repository.extractPlaylist(playlistUrl)
+                            val (playlist, page) = repository.extractPlaylistFirstPage(playlistUrl)
                             if (playlist.videos.isNotEmpty()) {
-                                HomeUiState.PlaylistResult(playlist)
+                                HomeUiState.PlaylistResult(
+                                    playlist = playlist,
+                                    currentPage = page,
+                                    isFetchingNextPage = false,
+                                    hasMore = page.nextPage != null
+                                )
                             } else {
                                 val video = repository.searchAndSave(sanitizedUrl)
                                 HomeUiState.Success(video)
@@ -145,8 +161,13 @@ class HomeViewModel @Inject constructor(
                         }
                     }
                     "/channel/" in sanitizedUrl || "/c/" in sanitizedUrl || "/@" in sanitizedUrl || sanitizedUrl.contains("youtube.com/@") -> {
-                        val channel = repository.extractChannel(sanitizedUrl)
-                        HomeUiState.ChannelResult(channel)
+                        val (channel, page) = repository.extractChannelFirstPage(sanitizedUrl)
+                        HomeUiState.ChannelResult(
+                            channel = channel,
+                            currentPage = page,
+                            isFetchingNextPage = false,
+                            hasMore = page.nextPage != null
+                        )
                     }
                     else -> {
                         val video = repository.searchAndSave(sanitizedUrl)
@@ -584,6 +605,79 @@ class HomeViewModel @Inject constructor(
             } else {
                 withContext(Dispatchers.Main) {
                     android.widget.Toast.makeText(context, "All selected videos are already in the queue or downloaded", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    fun loadNextPage() {
+        val currentState = _uiState.value
+        if (currentState is HomeUiState.ChannelResult) {
+            if (currentState.isFetchingNextPage || !currentState.hasMore || currentState.currentPage?.nextPage == null) return
+            
+            _uiState.value = currentState.copy(isFetchingNextPage = true)
+            viewModelScope.launch {
+                runCatching {
+                    repository.extractChannelNextPage(currentState.currentPage)
+                }.onSuccess { nextPageData ->
+                    val updatedState = _uiState.value as? HomeUiState.ChannelResult
+                    if (updatedState != null) {
+                        val newVideos = nextPageData.videos
+                        val existingIds = updatedState.channel.uploads.map { it.videoId }.toSet()
+                        val uniqueNewVideos = newVideos.filter { it.videoId !in existingIds }
+                        
+                        val updatedUploads = updatedState.channel.uploads + uniqueNewVideos
+                        val updatedChannel = updatedState.channel.copy(
+                            uploads = updatedUploads,
+                            videoCount = updatedUploads.size
+                        )
+                        
+                        _uiState.value = updatedState.copy(
+                            channel = updatedChannel,
+                            currentPage = nextPageData,
+                            isFetchingNextPage = false,
+                            hasMore = nextPageData.nextPage != null && nextPageData.videos.isNotEmpty()
+                        )
+                    }
+                }.onFailure {
+                    val updatedState = _uiState.value as? HomeUiState.ChannelResult
+                    if (updatedState != null) {
+                        _uiState.value = updatedState.copy(isFetchingNextPage = false)
+                    }
+                }
+            }
+        } else if (currentState is HomeUiState.PlaylistResult) {
+            if (currentState.isFetchingNextPage || !currentState.hasMore || currentState.currentPage?.nextPage == null) return
+            
+            _uiState.value = currentState.copy(isFetchingNextPage = true)
+            viewModelScope.launch {
+                runCatching {
+                    repository.extractPlaylistNextPage(currentState.currentPage)
+                }.onSuccess { nextPageData ->
+                    val updatedState = _uiState.value as? HomeUiState.PlaylistResult
+                    if (updatedState != null) {
+                        val newVideos = nextPageData.videos
+                        val existingIds = updatedState.playlist.videos.map { it.videoId }.toSet()
+                        val uniqueNewVideos = newVideos.filter { it.videoId !in existingIds }
+                        
+                        val updatedVideos = updatedState.playlist.videos + uniqueNewVideos
+                        val updatedPlaylist = updatedState.playlist.copy(
+                            videos = updatedVideos,
+                            videoCount = if (updatedState.playlist.videoCount > updatedVideos.size) updatedState.playlist.videoCount else updatedVideos.size
+                        )
+                        
+                        _uiState.value = updatedState.copy(
+                            playlist = updatedPlaylist,
+                            currentPage = nextPageData,
+                            isFetchingNextPage = false,
+                            hasMore = nextPageData.nextPage != null && nextPageData.videos.isNotEmpty()
+                        )
+                    }
+                }.onFailure {
+                    val updatedState = _uiState.value as? HomeUiState.PlaylistResult
+                    if (updatedState != null) {
+                        _uiState.value = updatedState.copy(isFetchingNextPage = false)
+                    }
                 }
             }
         }

@@ -43,8 +43,20 @@ class VideoRepository @Inject constructor(
     suspend fun extractPlaylist(url: String): ExtractedPlaylistInfo =
         youTubeExtractor.extractPlaylist(url)
 
+    suspend fun extractPlaylistFirstPage(url: String): Pair<ExtractedPlaylistInfo, YouTubeExtractor.PlaylistPage> =
+        youTubeExtractor.extractPlaylistFirstPage(url)
+
+    suspend fun extractPlaylistNextPage(currentPage: YouTubeExtractor.PlaylistPage): YouTubeExtractor.PlaylistPage =
+        youTubeExtractor.extractPlaylistNextPage(currentPage)
+
     suspend fun extractChannel(url: String): ChannelInfo =
         youTubeExtractor.extractChannel(url)
+
+    suspend fun extractChannelFirstPage(url: String): Pair<ChannelInfo, YouTubeExtractor.ChannelPage> =
+        youTubeExtractor.extractChannelFirstPage(url)
+
+    suspend fun extractChannelNextPage(currentPage: YouTubeExtractor.ChannelPage): YouTubeExtractor.ChannelPage =
+        youTubeExtractor.extractChannelNextPage(currentPage)
 
     suspend fun deleteVideo(video: VideoEntity) = videoDao.delete(video)
 

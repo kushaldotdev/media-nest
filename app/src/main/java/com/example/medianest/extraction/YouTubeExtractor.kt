@@ -143,7 +143,21 @@ class YouTubeExtractor @Inject constructor() {
         )
     }
 
-    suspend fun extractPlaylist(url: String): ExtractedPlaylistInfo = withContext(Dispatchers.IO) {
+    data class ChannelPage(
+        val videos: List<ExtractedVideoInfo>,
+        val nextPage: Any?,
+        val pageType: String,
+        val tabLinkHandler: Any?,
+        val playlistUrl: String?
+    )
+
+    data class PlaylistPage(
+        val videos: List<ExtractedVideoInfo>,
+        val nextPage: Any?,
+        val playlistUrl: String
+    )
+
+    suspend fun extractPlaylistFirstPage(url: String): Pair<ExtractedPlaylistInfo, PlaylistPage> = withContext(Dispatchers.IO) {
         val canonicalUrl = if (!url.startsWith("http") && !url.contains("youtube.com")) {
             "https://www.youtube.com/playlist?list=$url"
         } else {
@@ -158,31 +172,78 @@ class YouTubeExtractor @Inject constructor() {
                 ?.let { addUniqueVideo(videosById, it) }
         }
 
-        var nextPage = info.nextPage
-        while (nextPage != null) {
-            val page = runCatching { NewPipePlaylistInfo.getMoreItems(service, canonicalUrl, nextPage) }.getOrNull()
-            if (page == null) break
-            var addedFromPage = 0
-            page.items?.forEach { item ->
-                runCatching { item.toExtractedVideoInfo() }
-                    .getOrNull()
-                    ?.let { if (addUniqueVideo(videosById, it)) addedFromPage++ }
-            }
-            if (!page.hasNextPage() || addedFromPage == 0) break
-            nextPage = page.nextPage
-        }
-
         val videos = videosById.values.toList()
         val reportedCount = info.streamCount
         val videoCount = if (reportedCount > 0 && reportedCount <= Int.MAX_VALUE) reportedCount.toInt() else videos.size
 
-        ExtractedPlaylistInfo(
+        val playlistInfo = ExtractedPlaylistInfo(
             playlistId = info.id,
             name = info.name ?: "Unknown",
             thumbnailUrl = info.thumbnails?.firstOrNull()?.url ?: "",
             uploaderName = info.uploaderName,
             videoCount = videoCount,
             videos = videos
+        )
+        val playlistPage = PlaylistPage(
+            videos = videos,
+            nextPage = info.nextPage,
+            playlistUrl = canonicalUrl
+        )
+        Pair(playlistInfo, playlistPage)
+    }
+
+    suspend fun extractPlaylistNextPage(currentPage: PlaylistPage): PlaylistPage = withContext(Dispatchers.IO) {
+        val nextPageToken = currentPage.nextPage as? org.schabi.newpipe.extractor.Page
+        if (nextPageToken == null) {
+            return@withContext PlaylistPage(emptyList(), null, currentPage.playlistUrl)
+        }
+
+        val page = runCatching {
+            NewPipePlaylistInfo.getMoreItems(service, currentPage.playlistUrl, nextPageToken)
+        }.getOrNull()
+
+        if (page == null) {
+            return@withContext PlaylistPage(emptyList(), null, currentPage.playlistUrl)
+        }
+
+        val videosById = linkedMapOf<String, ExtractedVideoInfo>()
+        page.items?.forEach { item ->
+            runCatching { item.toExtractedVideoInfo() }
+                .getOrNull()
+                ?.let { addUniqueVideo(videosById, it) }
+        }
+
+        PlaylistPage(
+            videos = videosById.values.toList(),
+            nextPage = if (page.hasNextPage()) page.nextPage else null,
+            playlistUrl = currentPage.playlistUrl
+        )
+    }
+
+    suspend fun extractPlaylist(url: String): ExtractedPlaylistInfo = withContext(Dispatchers.IO) {
+        val (firstInfo, firstPage) = extractPlaylistFirstPage(url)
+        val allVideos = firstInfo.videos.toMutableList()
+        val videosById = linkedMapOf<String, ExtractedVideoInfo>()
+        allVideos.forEach { addUniqueVideo(videosById, it) }
+
+        var currentPage = firstPage
+        while (currentPage.nextPage != null) {
+            val nextPageData = extractPlaylistNextPage(currentPage)
+            if (nextPageData.videos.isEmpty()) break
+            var addedFromPage = 0
+            nextPageData.videos.forEach { video ->
+                if (addUniqueVideo(videosById, video)) {
+                    addedFromPage++
+                }
+            }
+            if (addedFromPage == 0 || nextPageData.nextPage == null) break
+            currentPage = nextPageData
+        }
+
+        val videos = videosById.values.toList()
+        firstInfo.copy(
+            videos = videos,
+            videoCount = if (firstInfo.videoCount > videos.size) firstInfo.videoCount else videos.size
         )
     }
 
@@ -214,7 +275,7 @@ class YouTubeExtractor @Inject constructor() {
         return "$trimmed/videos"
     }
 
-    suspend fun extractChannel(url: String): ModelChannelInfo = withContext(Dispatchers.IO) {
+    suspend fun extractChannelFirstPage(url: String): Pair<ModelChannelInfo, ChannelPage> = withContext(Dispatchers.IO) {
         val canonicalUrl = if (!url.startsWith("http") && !url.contains("youtube.com")) {
             "https://www.youtube.com/channel/$url"
         } else {
@@ -223,11 +284,17 @@ class YouTubeExtractor @Inject constructor() {
         val cleanChannelUrl = stripChannelTab(canonicalUrl)
         val info = NewPipeChannelInfo.getInfo(service, cleanChannelUrl)
         val channelId = extractChannelIdFromUrl(info.url) ?: ""
-        
+
+        var tabLinkHandler: org.schabi.newpipe.extractor.linkhandler.ListLinkHandler? = null
+        var playlistUrl: String? = null
+        var pageType = "tab"
+        var nextPage: Any? = null
+
         val uploads = runCatching {
             val sanitizedUrl = sanitizeChannelUrl(info.url ?: cleanChannelUrl)
-            val tabLinkHandler = service.getChannelTabLHFactory().fromUrl(sanitizedUrl)
-            val tabInfo = ChannelTabInfo.getInfo(service, tabLinkHandler)
+            val handler = service.getChannelTabLHFactory().fromUrl(sanitizedUrl)
+            tabLinkHandler = handler
+            val tabInfo = ChannelTabInfo.getInfo(service, handler)
             val videosById = linkedMapOf<String, ExtractedVideoInfo>()
             tabInfo.relatedItems?.forEach { item ->
                 if (item is StreamInfoItem) {
@@ -236,23 +303,8 @@ class YouTubeExtractor @Inject constructor() {
                         ?.let { addUniqueVideo(videosById, it) }
                 }
             }
-
-            var nextPage = tabInfo.nextPage
-            while (nextPage != null) {
-                val page = runCatching { ChannelTabInfo.getMoreItems(service, tabLinkHandler, nextPage) }.getOrNull()
-                if (page == null) break
-                var addedFromPage = 0
-                page.items?.forEach { item ->
-                    if (item is StreamInfoItem) {
-                        runCatching { item.toExtractedVideoInfo(info.name ?: "Unknown", channelId) }
-                            .getOrNull()
-                            ?.let { if (addUniqueVideo(videosById, it)) addedFromPage++ }
-                    }
-                }
-                if (!page.hasNextPage() || addedFromPage == 0) break
-                nextPage = page.nextPage
-            }
-
+            nextPage = tabInfo.nextPage
+            pageType = "tab"
             videosById.values.toList()
         }.getOrElse { tabError ->
             runCatching {
@@ -261,42 +313,128 @@ class YouTubeExtractor @Inject constructor() {
                 } else {
                     info.id
                 }
-                val playlistUrl = "https://www.youtube.com/playlist?list=$uploadsPlaylistId"
-                val playlistInfo = NewPipePlaylistInfo.getInfo(service, playlistUrl)
+                val pUrl = "https://www.youtube.com/playlist?list=$uploadsPlaylistId"
+                playlistUrl = pUrl
+                val playlistInfo = NewPipePlaylistInfo.getInfo(service, pUrl)
                 val videosById = linkedMapOf<String, ExtractedVideoInfo>()
                 playlistInfo.relatedItems?.forEach { item ->
                     runCatching { item.toExtractedVideoInfo(info.name ?: "Unknown", channelId) }
                         .getOrNull()
                         ?.let { addUniqueVideo(videosById, it) }
                 }
-
-                 var nextPage = playlistInfo.nextPage
-                 while (nextPage != null) {
-                     val page = runCatching { NewPipePlaylistInfo.getMoreItems(service, playlistUrl, nextPage) }.getOrNull()
-                     if (page == null) break
-                     var addedFromPage = 0
-                     page.items?.forEach { item ->
-                         runCatching { item.toExtractedVideoInfo(info.name ?: "Unknown", channelId) }
-                             .getOrNull()
-                             ?.let { if (addUniqueVideo(videosById, it)) addedFromPage++ }
-                     }
-                     if (!page.hasNextPage() || addedFromPage == 0) break
-                     nextPage = page.nextPage
-                 }
-
+                nextPage = playlistInfo.nextPage
+                pageType = "playlist"
                 videosById.values.toList()
-            }.getOrNull()
-        } ?: emptyList()
+            }.getOrNull() ?: emptyList()
+        }
 
-        ModelChannelInfo(
+        val channelInfo = ModelChannelInfo(
             channelId = info.id,
-            url = info.url,
+            url = info.url ?: cleanChannelUrl,
             name = info.name ?: "Unknown",
             avatarUrl = info.avatars?.firstOrNull()?.url ?: "",
             subscriberCount = info.subscriberCount,
             description = info.description?.take(500),
             videoCount = uploads.size,
             uploads = uploads
+        )
+
+        val channelPage = ChannelPage(
+            videos = uploads,
+            nextPage = nextPage,
+            pageType = pageType,
+            tabLinkHandler = tabLinkHandler,
+            playlistUrl = playlistUrl
+        )
+
+        Pair(channelInfo, channelPage)
+    }
+
+    suspend fun extractChannelNextPage(currentPage: ChannelPage): ChannelPage = withContext(Dispatchers.IO) {
+        val nextPageToken = currentPage.nextPage as? org.schabi.newpipe.extractor.Page
+        if (nextPageToken == null) {
+            return@withContext ChannelPage(
+                videos = emptyList(),
+                nextPage = null,
+                pageType = currentPage.pageType,
+                tabLinkHandler = currentPage.tabLinkHandler,
+                playlistUrl = currentPage.playlistUrl
+            )
+        }
+
+        val channelName = currentPage.videos.firstOrNull()?.channelName ?: "Unknown"
+        val channelId = currentPage.videos.firstOrNull()?.channelId ?: ""
+
+        val videosById = linkedMapOf<String, ExtractedVideoInfo>()
+        var nextNextPage: Any? = null
+
+        if (currentPage.pageType == "tab") {
+            val handler = currentPage.tabLinkHandler as? org.schabi.newpipe.extractor.linkhandler.ListLinkHandler
+            if (handler != null) {
+                runCatching {
+                    val page = ChannelTabInfo.getMoreItems(service, handler, nextPageToken)
+                    page?.items?.forEach { item ->
+                        if (item is StreamInfoItem) {
+                            runCatching { item.toExtractedVideoInfo(channelName, channelId) }
+                                .getOrNull()
+                                ?.let { addUniqueVideo(videosById, it) }
+                        }
+                    }
+                    if (page != null && page.hasNextPage()) {
+                        nextNextPage = page.nextPage
+                    }
+                }
+            }
+        } else {
+            val pUrl = currentPage.playlistUrl
+            if (pUrl != null) {
+                runCatching {
+                    val page = NewPipePlaylistInfo.getMoreItems(service, pUrl, nextPageToken)
+                    page?.items?.forEach { item ->
+                        runCatching { item.toExtractedVideoInfo(channelName, channelId) }
+                            .getOrNull()
+                            ?.let { addUniqueVideo(videosById, it) }
+                    }
+                    if (page != null && page.hasNextPage()) {
+                        nextNextPage = page.nextPage
+                    }
+                }
+            }
+        }
+
+        ChannelPage(
+            videos = videosById.values.toList(),
+            nextPage = nextNextPage,
+            pageType = currentPage.pageType,
+            tabLinkHandler = currentPage.tabLinkHandler,
+            playlistUrl = currentPage.playlistUrl
+        )
+    }
+
+    suspend fun extractChannel(url: String): ModelChannelInfo = withContext(Dispatchers.IO) {
+        val (channelInfo, firstPage) = extractChannelFirstPage(url)
+        val allUploads = channelInfo.uploads.toMutableList()
+        val videosById = linkedMapOf<String, ExtractedVideoInfo>()
+        allUploads.forEach { addUniqueVideo(videosById, it) }
+
+        var currentPage = firstPage
+        while (currentPage.nextPage != null) {
+            val nextPageData = extractChannelNextPage(currentPage)
+            if (nextPageData.videos.isEmpty()) break
+            var addedFromPage = 0
+            nextPageData.videos.forEach { video ->
+                if (addUniqueVideo(videosById, video)) {
+                    addedFromPage++
+                }
+            }
+            if (addedFromPage == 0 || nextPageData.nextPage == null) break
+            currentPage = nextPageData
+        }
+
+        val uploads = videosById.values.toList()
+        channelInfo.copy(
+            uploads = uploads,
+            videoCount = uploads.size
         )
     }
 }
