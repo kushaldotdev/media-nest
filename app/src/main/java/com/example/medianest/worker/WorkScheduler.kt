@@ -106,4 +106,25 @@ object WorkScheduler {
             request
         )
     }
+
+    fun enqueueUpdateDownload(context: Context, downloadUrl: String) {
+        val request = OneTimeWorkRequestBuilder<UpdateDownloadWorker>()
+            .setInputData(
+                Data.Builder()
+                    .putString(UpdateDownloadWorker.KEY_URL, downloadUrl)
+                    .build()
+            )
+            .setConstraints(
+                Constraints.Builder()
+                    .setRequiredNetworkType(NetworkType.CONNECTED)
+                    .build()
+            )
+            .build()
+
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            "update_download",
+            ExistingWorkPolicy.REPLACE,
+            request
+        )
+    }
 }

@@ -13,6 +13,7 @@ import com.example.medianest.data.sync.SyncRepository
 import com.example.medianest.data.sync.SyncState
 import com.example.medianest.data.preferences.DownloadPreferences
 import com.example.medianest.worker.WorkScheduler
+import com.example.medianest.worker.UpdateDownloadWorker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -180,6 +181,35 @@ class ExportImportViewModel @Inject constructor(
             downloadFolder.collect {
                 loadLocalBackups()
             }
+        }
+        viewModelScope.launch {
+            WorkManager.getInstance(appContext)
+                .getWorkInfosForUniqueWorkFlow("update_download")
+                .collect { workInfos ->
+                    val info = workInfos.firstOrNull() ?: return@collect
+                    when (info.state) {
+                        WorkInfo.State.RUNNING, WorkInfo.State.ENQUEUED -> {
+                            val progress = info.progress.getFloat(UpdateDownloadWorker.KEY_PROGRESS, 0f)
+                            _updateState.value = UpdateState.Downloading(progress)
+                        }
+                        WorkInfo.State.SUCCEEDED -> {
+                            if (_updateState.value is UpdateState.Downloading) {
+                                _updateState.value = UpdateState.ReadyToInstall
+                                val file = File(appContext.cacheDir, "update.apk")
+                                if (file.exists()) {
+                                    installApk(file)
+                                }
+                            }
+                        }
+                        WorkInfo.State.FAILED -> {
+                            if (_updateState.value is UpdateState.Downloading) {
+                                val error = info.outputData.getString(UpdateDownloadWorker.KEY_ERROR) ?: "Download failed"
+                                _updateState.value = UpdateState.Error(error)
+                            }
+                        }
+                        else -> {}
+                    }
+                }
         }
     }
 
@@ -465,39 +495,7 @@ class ExportImportViewModel @Inject constructor(
 
     fun downloadAndInstallUpdate(downloadUrl: String) {
         _updateState.value = UpdateState.Downloading(0f)
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                val request = Request.Builder().url(downloadUrl).build()
-                okHttpClient.newCall(request).execute().use { response ->
-                    if (!response.isSuccessful) throw Exception("Download failed: ${response.code}")
-                    val body = response.body ?: throw Exception("Response body is empty")
-                    val totalBytes = body.contentLength()
-                    val file = File(appContext.cacheDir, "update.apk")
-                    if (file.exists()) file.delete()
-
-                    body.byteStream().use { input ->
-                        file.outputStream().use { output ->
-                            val buffer = ByteArray(8192)
-                            var bytesRead: Int
-                            var totalBytesRead = 0L
-                            while (input.read(buffer).also { bytesRead = it } != -1) {
-                                output.write(buffer, 0, bytesRead)
-                                totalBytesRead += bytesRead
-                                if (totalBytes > 0) {
-                                    val progress = totalBytesRead.toFloat() / totalBytes.toFloat()
-                                    _updateState.value = UpdateState.Downloading(progress)
-                                }
-                            }
-                        }
-                    }
-
-                    _updateState.value = UpdateState.ReadyToInstall
-                    installApk(file)
-                }
-            } catch (e: Exception) {
-                _updateState.value = UpdateState.Error("Download failed: ${e.message ?: "Unknown error"}")
-            }
-        }
+        WorkScheduler.enqueueUpdateDownload(appContext, downloadUrl)
     }
 
     private fun installApk(file: File) {

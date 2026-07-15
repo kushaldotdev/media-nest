@@ -42,6 +42,11 @@ class MediaNestApp : Application(), Configuration.Provider {
             .build()
         NotificationManagerCompat.from(this).createNotificationChannel(bulkDownloadChannel)
 
+        val updateChannel = NotificationChannelCompat.Builder("app_updates", NotificationManagerCompat.IMPORTANCE_LOW)
+            .setName("App Updates")
+            .build()
+        NotificationManagerCompat.from(this).createNotificationChannel(updateChannel)
+
         WorkScheduler.scheduleSubscriptionCheck(this)
 
         // Schedule auto-backup on app startup if enabled
