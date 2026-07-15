@@ -66,4 +66,7 @@ class VideoRepository @Inject constructor(
     suspend fun insertVideo(video: VideoEntity) = videoDao.insert(video)
 
     suspend fun updateVideo(video: VideoEntity) = videoDao.update(video)
+
+    suspend fun getVideosByChannel(channelId: String): List<VideoEntity> =
+        videoDao.getVideosByChannel(channelId)
 }

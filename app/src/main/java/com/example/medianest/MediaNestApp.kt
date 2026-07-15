@@ -15,18 +15,53 @@ import kotlinx.coroutines.launch
 import org.schabi.newpipe.extractor.NewPipe
 import timber.log.Timber
 import javax.inject.Inject
+import coil.ImageLoader
+import coil.ImageLoaderFactory
+import coil.disk.DiskCache
+import coil.memory.MemoryCache
+import okhttp3.OkHttpClient
+import com.example.medianest.data.local.dao.VideoDao
+import kotlinx.coroutines.Dispatchers
 
 @HiltAndroidApp
-class MediaNestApp : Application(), Configuration.Provider {
+class MediaNestApp : Application(), Configuration.Provider, ImageLoaderFactory {
     @Inject lateinit var hiltWorkerFactory: HiltWorkerFactory
+    @Inject lateinit var okHttpClient: OkHttpClient
+    @Inject lateinit var videoDao: VideoDao
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
             .setWorkerFactory(hiltWorkerFactory)
             .build()
 
+    override fun newImageLoader(): ImageLoader {
+        return ImageLoader.Builder(this)
+            .okHttpClient(okHttpClient)
+            .respectCacheHeaders(false)
+            .diskCache {
+                DiskCache.Builder()
+                    .directory(cacheDir.resolve("image_cache"))
+                    .maxSizeBytes(250 * 1024 * 1024)
+                    .build()
+            }
+            .memoryCache {
+                MemoryCache.Builder(this)
+                    .maxSizePercent(0.25)
+                    .build()
+            }
+            .crossfade(true)
+            .build()
+    }
+
     override fun onCreate() {
         super.onCreate()
+        MainScope().launch(Dispatchers.IO) {
+            runCatching {
+                videoDao.deleteSearchedOrphans()
+            }.onFailure {
+                Timber.e(it, "Failed to prune searched orphans on startup")
+            }
+        }
         NewPipe.init(DownloaderProvider.getDownloader())
         if (BuildConfig.DEBUG) {
             Timber.plant(Timber.DebugTree())

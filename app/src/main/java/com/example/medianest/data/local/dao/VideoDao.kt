@@ -67,4 +67,10 @@ interface VideoDao {
 
     @Query("SELECT COUNT(*) FROM videos WHERE localFilePath != '' AND localFilePath IS NOT NULL")
     suspend fun getDownloadedVideoCount(): Int
+
+    @Query("SELECT * FROM videos WHERE channelId = :channelId ORDER BY addedAt DESC")
+    suspend fun getVideosByChannel(channelId: String): List<VideoEntity>
+
+    @Query("DELETE FROM videos WHERE favorite = 0 AND lastPlayedAt IS NULL AND (localFilePath = '' OR localFilePath IS NULL) AND id NOT IN (SELECT videoId FROM video_folder_join)")
+    suspend fun deleteSearchedOrphans()
 }

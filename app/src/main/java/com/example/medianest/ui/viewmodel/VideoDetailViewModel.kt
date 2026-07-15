@@ -205,7 +205,19 @@ class VideoDetailViewModel @Inject constructor(
         }
     }
 
+    private fun isNetworkAvailable(): Boolean {
+        val cm = context.getSystemService(android.content.Context.CONNECTIVITY_SERVICE) as? android.net.ConnectivityManager
+        return cm?.activeNetwork?.let { network ->
+            cm.getNetworkCapabilities(network)?.run {
+                hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) ||
+                        hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR) ||
+                        hasTransport(android.net.NetworkCapabilities.TRANSPORT_ETHERNET)
+            }
+        } ?: false
+    }
+
     private fun resolveStreamSizes(videoId: String) {
+        if (!isNetworkAvailable()) return
         viewModelScope.launch(Dispatchers.IO) {
             val currentInfo = _videoInfo.value ?: return@launch
             val updatedSources = currentInfo.streamSources.map { source ->

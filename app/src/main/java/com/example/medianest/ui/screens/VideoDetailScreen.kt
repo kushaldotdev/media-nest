@@ -106,27 +106,35 @@ fun VideoDetailScreen(
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
-            TopAppBar(
-                title = { Text(videoInfo.title, maxLines = 1) },
-                navigationIcon = {
-                    TextButton(onClick = onBack) { Text("Back") }
-                },
-                actions = {
-                    IconToggleButton(
-                        checked = isFavorite,
-                        onCheckedChange = { 
-                            onToggleFavorite()
-                            coroutineScope.launch { snackbarHostState.showSnackbar(if (isFavorite) "Removed from favorites" else "Added to favorites") }
+            androidx.compose.foundation.layout.Column {
+                TopAppBar(
+                    title = { Text(videoInfo.title, maxLines = 1) },
+                    navigationIcon = {
+                        TextButton(onClick = onBack) { Text("Back") }
+                    },
+                    actions = {
+                        IconToggleButton(
+                            checked = isFavorite,
+                            onCheckedChange = { 
+                                onToggleFavorite()
+                                coroutineScope.launch { snackbarHostState.showSnackbar(if (isFavorite) "Removed from favorites" else "Added to favorites") }
+                            }
+                        ) {
+                            Icon(
+                                Icons.Default.Favorite,
+                                contentDescription = "Favorite",
+                                tint = if (isFavorite) Color.Red else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
-                    ) {
-                        Icon(
-                            Icons.Default.Favorite,
-                            contentDescription = "Favorite",
-                            tint = if (isFavorite) Color.Red else MaterialTheme.colorScheme.onSurfaceVariant
-                        )
                     }
+                )
+                if (isFetchingOnline) {
+                    LinearProgressIndicator(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = MaterialTheme.colorScheme.primary
+                    )
                 }
-            )
+            }
         }
     ) { padding ->
         Box(
@@ -607,14 +615,7 @@ fun VideoDetailScreen(
             }
         }
         }
-        if (isFetchingOnline) {
-            LinearProgressIndicator(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.TopCenter),
-                color = MaterialTheme.colorScheme.primary
-            )
-        }
+
     }
     }
 }

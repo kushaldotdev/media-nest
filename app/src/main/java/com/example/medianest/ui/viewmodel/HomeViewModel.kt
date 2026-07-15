@@ -76,11 +76,14 @@ class HomeViewModel @Inject constructor(
     private val bulkDownloadDao: BulkDownloadDao,
     private val audioExtractor: AudioExtractor,
     private val historyDao: HistoryDao,
-    private val downloadPreferences: DownloadPreferences
+    private val downloadPreferences: DownloadPreferences,
+    private val youTubeExtractor: YouTubeExtractor
 ) : ViewModel() {
 
     companion object {
-        val lastResultCache = android.util.LruCache<String, ExtractedVideoInfo>(50)
+        val lastResultCache = android.util.LruCache<String, ExtractedVideoInfo>(100)
+        val lastPlaylistCache = android.util.LruCache<String, ExtractedPlaylistInfo>(50)
+        val lastChannelCache = android.util.LruCache<String, ChannelInfo>(50)
     }
 
     private val _uiState = MutableStateFlow<HomeUiState>(HomeUiState.Idle)
@@ -128,7 +131,131 @@ class HomeViewModel @Inject constructor(
             }
         }
 
+        val isPlaylist = "youtube.com/playlist" in sanitizedUrl || "list=" in sanitizedUrl
+        val isChannel = "/channel/" in sanitizedUrl || "/c/" in sanitizedUrl || "/@" in sanitizedUrl || sanitizedUrl.contains("youtube.com/@")
+        val videoId = if (!isPlaylist && !isChannel) {
+            when {
+                "v=" in sanitizedUrl -> sanitizedUrl.substringAfter("v=").substringBefore("&")
+                "youtu.be/" in sanitizedUrl -> sanitizedUrl.substringAfter("youtu.be/").substringBefore("?")
+                else -> sanitizedUrl.substringAfterLast("/").substringBefore("?")
+            }
+        } else null
+
         viewModelScope.launch {
+            val localVideo = videoId?.let { videoDao.getVideoById(it) }
+            if (localVideo != null) {
+                val allDownloads = downloadRepository.getDownloadsForVideoFlow(localVideo.id).first()
+                val mockSources = allDownloads.map { download ->
+                    val quality = if (download.format == "audio") {
+                        download.quality
+                    } else {
+                        download.quality.substringBefore(" (")
+                    }
+                    val codec = if (download.format == "audio") {
+                        ""
+                    } else {
+                        download.quality.substringAfter(" (", "").substringBefore(")")
+                    }
+                    StreamSource(
+                        url = download.url,
+                        format = download.format,
+                        quality = quality,
+                        mimeType = "",
+                        codec = codec,
+                        contentLength = download.fileSizeBytes
+                    )
+                }
+                val fallbackInfo = ExtractedVideoInfo(
+                    videoId = localVideo.id,
+                    title = localVideo.title,
+                    channelName = localVideo.channelName,
+                    channelId = localVideo.channelId,
+                    durationSeconds = localVideo.durationSeconds,
+                    thumbnailUrl = localVideo.thumbnailUrl,
+                    description = localVideo.description,
+                    uploadDate = localVideo.uploadDate,
+                    streamSources = mockSources,
+                    isOfflineFallback = true
+                )
+                lastResultCache.put(localVideo.id, fallbackInfo)
+                _uiState.value = HomeUiState.Success(fallbackInfo)
+                saveLinkToHistory(url, HomeUiState.Success(fallbackInfo))
+
+                launch {
+                    try {
+                        val video = repository.searchAndSave(sanitizedUrl)
+                        lastResultCache.put(video.videoId, video)
+                        _uiState.value = HomeUiState.Success(video)
+                    } catch (e: Exception) {
+                        android.util.Log.w("HomeViewModel", "Background search and save failed offline", e)
+                    }
+                }
+                return@launch
+            }
+
+            if (isPlaylist) {
+                val listId = sanitizedUrl.substringAfter("list=").substringBefore("&")
+                val playlistUrl = "https://www.youtube.com/playlist?list=$listId"
+                val cachedPlaylist = lastPlaylistCache.get(listId)
+                if (cachedPlaylist != null) {
+                    val cachedState = HomeUiState.PlaylistResult(
+                        playlist = cachedPlaylist,
+                        currentPage = null,
+                        isFetchingNextPage = false,
+                        hasMore = false
+                    )
+                    _uiState.value = cachedState
+                    saveLinkToHistory(url, cachedState)
+                    launch {
+                        try {
+                            val (playlist, page) = repository.extractPlaylistFirstPage(playlistUrl)
+                            if (playlist.videos.isNotEmpty()) {
+                                lastPlaylistCache.put(listId, playlist)
+                                _uiState.value = HomeUiState.PlaylistResult(
+                                    playlist = playlist,
+                                    currentPage = page,
+                                    isFetchingNextPage = false,
+                                    hasMore = page.nextPage != null
+                                )
+                            }
+                        } catch (e: Exception) {
+                            android.util.Log.w("HomeViewModel", "Background playlist update failed offline", e)
+                        }
+                    }
+                    return@launch
+                }
+            }
+
+            if (isChannel) {
+                val cleanChannelUrl = sanitizedUrl.removeSuffix("/videos").removeSuffix("/streams").removeSuffix("/shorts").removeSuffix("/playlists").removeSuffix("/")
+                val cachedChannel = lastChannelCache.get(cleanChannelUrl)
+                if (cachedChannel != null) {
+                    val cachedState = HomeUiState.ChannelResult(
+                        channel = cachedChannel,
+                        currentPage = null,
+                        isFetchingNextPage = false,
+                        hasMore = false
+                    )
+                    _uiState.value = cachedState
+                    saveLinkToHistory(url, cachedState)
+                    launch {
+                        try {
+                            val (channel, page) = repository.extractChannelFirstPage(sanitizedUrl)
+                            lastChannelCache.put(cleanChannelUrl, channel)
+                            _uiState.value = HomeUiState.ChannelResult(
+                                channel = channel,
+                                currentPage = page,
+                                isFetchingNextPage = false,
+                                hasMore = page.nextPage != null
+                            )
+                        } catch (e: Exception) {
+                            android.util.Log.w("HomeViewModel", "Background channel update failed offline", e)
+                        }
+                    }
+                    return@launch
+                }
+            }
+
             _uiState.value = HomeUiState.Loading
             runCatching {
                 when {
@@ -139,6 +266,7 @@ class HomeViewModel @Inject constructor(
                         try {
                             val (playlist, page) = repository.extractPlaylistFirstPage(playlistUrl)
                             if (playlist.videos.isNotEmpty()) {
+                                lastPlaylistCache.put(listId, playlist)
                                 HomeUiState.PlaylistResult(
                                     playlist = playlist,
                                     currentPage = page,
@@ -150,11 +278,9 @@ class HomeViewModel @Inject constructor(
                                 HomeUiState.Success(video)
                             }
                         } catch (e: Exception) {
-                            // If playlist extraction fails (e.g. YouTube Mixes or v1/next errors), fallback to single video
-                            // NewPipe rejects URLs with &list= for stream extraction, so we must clean it:
                             if ("v=" in sanitizedUrl) {
-                                val videoId = sanitizedUrl.substringAfter("v=").substringBefore("&")
-                                val cleanVideoUrl = "https://www.youtube.com/watch?v=$videoId"
+                                val vId = sanitizedUrl.substringAfter("v=").substringBefore("&")
+                                val cleanVideoUrl = "https://www.youtube.com/watch?v=$vId"
                                 val video = repository.searchAndSave(cleanVideoUrl)
                                 HomeUiState.Success(video)
                             } else {
@@ -163,13 +289,58 @@ class HomeViewModel @Inject constructor(
                         }
                     }
                     "/channel/" in sanitizedUrl || "/c/" in sanitizedUrl || "/@" in sanitizedUrl || sanitizedUrl.contains("youtube.com/@") -> {
-                        val (channel, page) = repository.extractChannelFirstPage(sanitizedUrl)
-                        HomeUiState.ChannelResult(
-                            channel = channel,
-                            currentPage = page,
-                            isFetchingNextPage = false,
-                            hasMore = page.nextPage != null
-                        )
+                        val cleanChannelUrl = sanitizedUrl.removeSuffix("/videos").removeSuffix("/streams").removeSuffix("/shorts").removeSuffix("/playlists").removeSuffix("/")
+                        try {
+                            val (channel, page) = repository.extractChannelFirstPage(sanitizedUrl)
+                            lastChannelCache.put(cleanChannelUrl, channel)
+                            HomeUiState.ChannelResult(
+                                channel = channel,
+                                currentPage = page,
+                                isFetchingNextPage = false,
+                                  hasMore = page.nextPage != null
+                            )
+                        } catch (e: Exception) {
+                            val channelId = youTubeExtractor.extractChannelIdFromUrl(cleanChannelUrl) ?: cleanChannelUrl.substringAfterLast("/")
+                            val localVideos = repository.getVideosByChannel(channelId)
+                            val localSub = subscriptionRepository.getAllSubscriptionsOnce().firstOrNull { sub ->
+                                sub.sourceType == "channel" && sub.sourceId == channelId
+                            }
+                            if (localVideos.isNotEmpty() || localSub != null) {
+                                val channelName = localSub?.name ?: localVideos.firstOrNull()?.channelName ?: "Channel"
+                                val thumbnailUrl = localSub?.thumbnailUrl ?: localVideos.firstOrNull()?.thumbnailUrl
+                                val mockChannel = ChannelInfo(
+                                    channelId = channelId,
+                                    url = sanitizedUrl,
+                                    name = channelName,
+                                    avatarUrl = thumbnailUrl,
+                                    subscriberCount = -1L,
+                                    description = "Offline Fallback",
+                                    videoCount = localVideos.size,
+                                    uploads = localVideos.map { local ->
+                                        ExtractedVideoInfo(
+                                            videoId = local.id,
+                                            title = local.title,
+                                            channelName = local.channelName,
+                                            channelId = local.channelId,
+                                            durationSeconds = local.durationSeconds,
+                                            thumbnailUrl = local.thumbnailUrl,
+                                            description = local.description,
+                                            uploadDate = local.uploadDate,
+                                            streamSources = emptyList()
+                                        )
+                                    }
+                                )
+                                lastChannelCache.put(cleanChannelUrl, mockChannel)
+                                HomeUiState.ChannelResult(
+                                    channel = mockChannel,
+                                    currentPage = null,
+                                    isFetchingNextPage = false,
+                                    hasMore = false
+                                )
+                            } else {
+                                throw e
+                            }
+                        }
                     }
                     else -> {
                         val video = repository.searchAndSave(sanitizedUrl)
