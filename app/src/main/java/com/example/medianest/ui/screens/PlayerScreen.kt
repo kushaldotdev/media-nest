@@ -29,6 +29,9 @@ import androidx.compose.material.icons.filled.Replay5
 import androidx.compose.material.icons.filled.Replay30
 import androidx.compose.material.icons.filled.Forward5
 import androidx.compose.material.icons.filled.Forward30
+import android.content.Context
+import android.content.ContextWrapper
+import android.app.Activity
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.material3.Button
@@ -64,6 +67,17 @@ import coil.compose.AsyncImage
 import androidx.media3.ui.PlayerView
 import com.example.medianest.ui.viewmodel.PlayerViewModel
 
+private fun Context.findActivity(): Activity? {
+    var currentContext = this
+    while (currentContext is ContextWrapper) {
+        if (currentContext is Activity) {
+            return currentContext
+        }
+        currentContext = currentContext.baseContext
+    }
+    return null
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlayerScreen(
@@ -83,7 +97,7 @@ fun PlayerScreen(
     var showRemainingTime by rememberSaveable { mutableStateOf(false) }
 
     val context = LocalContext.current
-    val activity = context as? android.app.Activity
+    val activity = remember(context) { context.findActivity() }
     DisposableEffect(isFullScreen) {
         activity?.requestedOrientation = if (isFullScreen) {
             android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
@@ -135,6 +149,7 @@ fun PlayerScreen(
                 },
                 update = { playerView ->
                     playerView.player = player
+                    playerView.keepScreenOn = state.isPlaying
                 },
                 onRelease = { playerView ->
                     playerView.player = null
@@ -393,6 +408,7 @@ fun PlayerScreen(
                                 },
                                 update = { playerView ->
                                     playerView.player = player
+                                    playerView.keepScreenOn = state.isPlaying
                                 },
                                 onRelease = { playerView ->
                                     playerView.player = null
