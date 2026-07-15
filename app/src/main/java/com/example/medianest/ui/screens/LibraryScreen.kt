@@ -8,11 +8,13 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -222,7 +224,8 @@ fun LibraryScreen(
                             onDismissDownloadMenu = { expandedDownloadVideoId = null },
                             onEnqueueDownload = { info, stream -> viewModel.enqueueDownload(info, stream) },
                             onDeleteDownload = { entity -> viewModel.deleteDownload(entity) },
-                            onExtractAudio = { entity -> viewModel.extractAudio(entity) }
+                            onExtractAudio = { entity -> viewModel.extractAudio(entity) },
+                            onLoadMore = viewModel::loadMoreHistory
                         )
                     }
                 }
@@ -275,7 +278,8 @@ fun LibraryScreen(
                         onDismissDownloadMenu = { expandedDownloadVideoId = null },
                         onEnqueueDownload = { info, stream -> viewModel.enqueueDownload(info, stream) },
                         onDeleteDownload = { entity -> viewModel.deleteDownload(entity) },
-                        onExtractAudio = { entity -> viewModel.extractAudio(entity) }
+                        onExtractAudio = { entity -> viewModel.extractAudio(entity) },
+                        onLoadMoreVideos = viewModel::loadMoreFolderVideos
                     )
                 }
                 LibraryTab.FAVORITES -> {
@@ -307,7 +311,8 @@ fun LibraryScreen(
                             onDismissDownloadMenu = { expandedDownloadVideoId = null },
                             onEnqueueDownload = { info, stream -> viewModel.enqueueDownload(info, stream) },
                             onDeleteDownload = { entity -> viewModel.deleteDownload(entity) },
-                            onExtractAudio = { entity -> viewModel.extractAudio(entity) }
+                            onExtractAudio = { entity -> viewModel.extractAudio(entity) },
+                            onLoadMore = viewModel::loadMoreFavorites
                         )
                     }
                 }
@@ -464,13 +469,47 @@ private fun VideoListLayout(
     onDismissDownloadMenu: () -> Unit,
     onEnqueueDownload: (com.example.medianest.data.model.ExtractedVideoInfo, com.example.medianest.data.model.StreamSource) -> Unit,
     onDeleteDownload: (com.example.medianest.data.local.entity.DownloadEntity) -> Unit,
-    onExtractAudio: (com.example.medianest.data.local.entity.DownloadEntity) -> Unit
+    onExtractAudio: (com.example.medianest.data.local.entity.DownloadEntity) -> Unit,
+    onLoadMore: (() -> Unit)? = null
 ) {
     val onMoveToFolderClick = LocalMoveToFolder.current
     val context = LocalContext.current
 
+    val gridState = rememberLazyGridState()
+    val listState = rememberLazyListState()
+
+    if (onLoadMore != null) {
+        val shouldLoadMoreGrid = remember {
+            derivedStateOf {
+                val layoutInfo = gridState.layoutInfo
+                val totalItems = layoutInfo.totalItemsCount
+                val lastVisibleItem = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+                lastVisibleItem >= totalItems - 5 && totalItems > 0
+            }
+        }
+        val shouldLoadMoreList = remember {
+            derivedStateOf {
+                val layoutInfo = listState.layoutInfo
+                val totalItems = layoutInfo.totalItemsCount
+                val lastVisibleItem = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+                lastVisibleItem >= totalItems - 5 && totalItems > 0
+            }
+        }
+        LaunchedEffect(shouldLoadMoreGrid.value) {
+            if (shouldLoadMoreGrid.value) {
+                onLoadMore()
+            }
+        }
+        LaunchedEffect(shouldLoadMoreList.value) {
+            if (shouldLoadMoreList.value) {
+                onLoadMore()
+            }
+        }
+    }
+
     if (viewMode == ViewMode.GRID) {
         LazyVerticalGrid(
+            state = gridState,
             columns = GridCells.Adaptive(160.dp),
             modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -527,6 +566,7 @@ private fun VideoListLayout(
         }
     } else {
         LazyColumn(
+            state = listState,
             modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
@@ -618,13 +658,32 @@ private fun FolderContent(
     onDismissDownloadMenu: () -> Unit,
     onEnqueueDownload: (com.example.medianest.data.model.ExtractedVideoInfo, com.example.medianest.data.model.StreamSource) -> Unit,
     onDeleteDownload: (com.example.medianest.data.local.entity.DownloadEntity) -> Unit,
-    onExtractAudio: (com.example.medianest.data.local.entity.DownloadEntity) -> Unit
+    onExtractAudio: (com.example.medianest.data.local.entity.DownloadEntity) -> Unit,
+    onLoadMoreVideos: (() -> Unit)? = null
 ) {
     var showCreateDialog by remember { mutableStateOf(false) }
     var newFolderName by remember { mutableStateOf("") }
     var showMoveToFolderDialog by remember { mutableStateOf(false) }
     var singleVideoToMove by remember { mutableStateOf<String?>(null) }
     var expandedDownloadVideoId by remember { mutableStateOf<String?>(null) }
+
+    val gridState = rememberLazyGridState()
+
+    if (onLoadMoreVideos != null) {
+        val shouldLoadMore = remember {
+            derivedStateOf {
+                val layoutInfo = gridState.layoutInfo
+                val totalItems = layoutInfo.totalItemsCount
+                val lastVisibleItem = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+                lastVisibleItem >= totalItems - 5 && totalItems > 0
+            }
+        }
+        LaunchedEffect(shouldLoadMore.value) {
+            if (shouldLoadMore.value) {
+                onLoadMoreVideos()
+            }
+        }
+    }
 
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp)) {
         Row(
@@ -665,6 +724,7 @@ private fun FolderContent(
                 }
             } else {
                 LazyVerticalGrid(
+                    state = gridState,
                     columns = GridCells.Adaptive(160.dp),
                     modifier = Modifier.weight(1f),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),

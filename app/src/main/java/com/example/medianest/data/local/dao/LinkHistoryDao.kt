@@ -13,6 +13,9 @@ interface LinkHistoryDao {
     @Query("SELECT * FROM link_history ORDER BY extractedAt DESC")
     fun getAllLinkHistory(): Flow<List<LinkHistoryEntity>>
 
+    @Query("SELECT * FROM link_history ORDER BY extractedAt DESC LIMIT :limit")
+    fun getLinkHistoryPaged(limit: Int): Flow<List<LinkHistoryEntity>>
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(linkHistory: LinkHistoryEntity)
 

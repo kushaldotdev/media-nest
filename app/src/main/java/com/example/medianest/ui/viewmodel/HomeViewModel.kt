@@ -36,6 +36,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.Dispatchers
@@ -93,6 +94,7 @@ class HomeViewModel @Inject constructor(
     }
 
     fun onUrlSubmitted(inputUrl: String) {
+        _linkHistoryLimit.value = 10
         val url = inputUrl.trim()
         if (url.isBlank()) {
             _uiState.value = HomeUiState.Error("Please enter a URL")
@@ -353,8 +355,16 @@ class HomeViewModel @Inject constructor(
     val subscriptions: StateFlow<List<com.example.medianest.data.local.entity.SubscriptionEntity>> = subscriptionRepository.getAllSubscriptions()
         .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val linkHistory: StateFlow<List<LinkHistoryEntity>> = linkHistoryDao.getAllLinkHistory()
-        .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000), emptyList())
+    private val _linkHistoryLimit = MutableStateFlow(10)
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val linkHistory: StateFlow<List<LinkHistoryEntity>> = _linkHistoryLimit.flatMapLatest { limit ->
+        linkHistoryDao.getLinkHistoryPaged(limit)
+    }.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000), emptyList())
+
+    fun loadMoreLinkHistory() {
+        _linkHistoryLimit.value += 10
+    }
 
     val playbackHistory: StateFlow<List<HistoryEntity>> = historyDao.getAllHistory()
         .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000), emptyList())

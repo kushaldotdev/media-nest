@@ -14,6 +14,9 @@ interface VideoFolderDao {
     @Query("SELECT v.* FROM videos v INNER JOIN video_folder_join vfj ON v.id = vfj.videoId WHERE vfj.folderId = :folderId ORDER BY vfj.addedAt DESC")
     fun getVideosInFolder(folderId: Long): Flow<List<VideoEntity>>
 
+    @Query("SELECT v.* FROM videos v INNER JOIN video_folder_join vfj ON v.id = vfj.videoId WHERE vfj.folderId = :folderId ORDER BY vfj.addedAt DESC LIMIT :limit")
+    fun getVideosInFolderPaged(folderId: Long, limit: Int): Flow<List<VideoEntity>>
+
     @Query("SELECT COUNT(*) FROM video_folder_join WHERE folderId = :folderId")
     suspend fun getVideoCountInFolder(folderId: Long): Int
 

@@ -69,6 +69,22 @@ class LibraryViewModel @Inject constructor(
 
     private val _searchQuery = MutableStateFlow("")
 
+    private val _historyLimit = MutableStateFlow(50)
+    private val _favoritesLimit = MutableStateFlow(50)
+    private val _folderVideosLimit = MutableStateFlow(50)
+
+    fun loadMoreHistory() {
+        _historyLimit.value += 50
+    }
+
+    fun loadMoreFavorites() {
+        _favoritesLimit.value += 50
+    }
+
+    fun loadMoreFolderVideos() {
+        _folderVideosLimit.value += 50
+    }
+
     @OptIn(ExperimentalCoroutinesApi::class)
     val videos: StateFlow<List<VideoEntity>> = _searchQuery.flatMapLatest { query ->
         if (query.isBlank()) {
@@ -78,15 +94,17 @@ class LibraryViewModel @Inject constructor(
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    val playbackHistory: StateFlow<List<com.example.medianest.data.local.entity.HistoryEntity>> = historyDao.getAllHistory()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val playbackHistory: StateFlow<List<com.example.medianest.data.local.entity.HistoryEntity>> = _historyLimit.flatMapLatest { limit ->
+        historyDao.getHistoryPaged(limit)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    val favoriteVideos: StateFlow<List<VideoEntity>> = combine(_uiState, _searchQuery) { state, query ->
-        state.currentTab to query
-    }.flatMapLatest { (tab, query) ->
+    val favoriteVideos: StateFlow<List<VideoEntity>> = combine(_uiState, _searchQuery, _favoritesLimit) { state, query, limit ->
+        Triple(state.currentTab, query, limit)
+    }.flatMapLatest { (tab, query, limit) ->
         if (tab == LibraryTab.FAVORITES) {
-            videoDao.getFavoriteVideos().map { list ->
+            videoDao.getFavoriteVideosPaged(limit).map { list ->
                 if (query.isBlank()) list
                 else list.filter { it.title.contains(query, ignoreCase = true) || it.channelName.contains(query, ignoreCase = true) }
             }
@@ -96,12 +114,12 @@ class LibraryViewModel @Inject constructor(
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    val folderVideos: StateFlow<List<VideoEntity>> = combine(_uiState, _searchQuery) { state, query ->
-        state.selectedFolder to query
-    }.flatMapLatest { (selectedFolder, query) ->
+    val folderVideos: StateFlow<List<VideoEntity>> = combine(_uiState, _searchQuery, _folderVideosLimit) { state, query, limit ->
+        Triple(state.selectedFolder, query, limit)
+    }.flatMapLatest { (selectedFolder, query, limit) ->
         if (selectedFolder != null) {
             if (query.isBlank()) {
-                videoFolderDao.getVideosInFolder(selectedFolder.id)
+                videoFolderDao.getVideosInFolderPaged(selectedFolder.id, limit)
             } else {
                 videoFolderDao.searchVideosInFolder(selectedFolder.id, query)
             }
@@ -339,14 +357,19 @@ class LibraryViewModel @Inject constructor(
     }
 
     fun setTab(tab: LibraryTab) {
+        _historyLimit.value = 50
+        _favoritesLimit.value = 50
+        _folderVideosLimit.value = 50
         _uiState.value = _uiState.value.copy(currentTab = tab, selectedFolder = null)
     }
 
     fun selectFolder(folder: FolderEntity) {
+        _folderVideosLimit.value = 50
         _uiState.value = _uiState.value.copy(currentTab = LibraryTab.FOLDERS, selectedFolder = folder)
     }
 
     fun navigateBackFromFolder() {
+        _folderVideosLimit.value = 50
         val currentFolder = _uiState.value.selectedFolder
         if (currentFolder?.parentId != null) {
             viewModelScope.launch {

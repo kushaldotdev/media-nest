@@ -125,7 +125,15 @@ fun HomeScreen(
     }
     LaunchedEffect(shouldLoadMore.value) {
         if (shouldLoadMore.value) {
-            viewModel.loadNextPage()
+            when (uiState) {
+                is HomeUiState.ChannelResult -> viewModel.loadNextPage()
+                is HomeUiState.PlaylistResult -> viewModel.loadNextPage()
+                else -> {
+                    if (linkHistory.isNotEmpty()) {
+                        viewModel.loadMoreLinkHistory()
+                    }
+                }
+            }
         }
     }
 

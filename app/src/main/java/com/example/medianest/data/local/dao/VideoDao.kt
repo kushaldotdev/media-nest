@@ -35,6 +35,9 @@ interface VideoDao {
     @Query("SELECT * FROM videos WHERE favorite = 1 ORDER BY max(addedAt, COALESCE(lastPlayedAt, 0), COALESCE(downloadedAt, 0)) DESC")
     fun getFavoriteVideos(): Flow<List<VideoEntity>>
 
+    @Query("SELECT * FROM videos WHERE favorite = 1 ORDER BY max(addedAt, COALESCE(lastPlayedAt, 0), COALESCE(downloadedAt, 0)) DESC LIMIT :limit")
+    fun getFavoriteVideosPaged(limit: Int): Flow<List<VideoEntity>>
+
     @Query("SELECT * FROM videos WHERE lastPlayedAt IS NOT NULL ORDER BY lastPlayedAt DESC LIMIT 100")
     fun getWatchHistoryVideos(): Flow<List<VideoEntity>>
 
