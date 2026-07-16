@@ -16,6 +16,14 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.unit.dp
 import com.example.medianest.ui.screens.DownloadsScreen
 import com.example.medianest.ui.screens.HomeScreen
 import com.example.medianest.ui.screens.LibraryScreen
@@ -63,7 +71,25 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
             arguments = listOf(
                 navArgument("videoId") { type = NavType.StringType },
                 navArgument("streamIndex") { type = NavType.IntType; defaultValue = 0 }
-            )
+            ),
+            enterTransition = {
+                slideInVertically(
+                    initialOffsetY = { it },
+                    animationSpec = tween(450, easing = FastOutSlowInEasing)
+                ) + fadeIn(animationSpec = tween(450))
+            },
+            exitTransition = {
+                fadeOut(animationSpec = tween(450))
+            },
+            popEnterTransition = {
+                fadeIn(animationSpec = tween(450))
+            },
+            popExitTransition = {
+                slideOutVertically(
+                    targetOffsetY = { it },
+                    animationSpec = tween(450, easing = FastOutSlowInEasing)
+                ) + fadeOut(animationSpec = tween(450))
+            }
         ) { backStackEntry ->
             val videoId = backStackEntry.arguments?.getString("videoId") ?: return@composable
             val streamIndex = backStackEntry.arguments?.getInt("streamIndex") ?: 0
@@ -79,7 +105,21 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
         }
         composable(
             route = BottomNavItem.Home.route + "?url={url}",
-            arguments = listOf(navArgument("url") { type = NavType.StringType; nullable = true; defaultValue = null })
+            arguments = listOf(navArgument("url") { type = NavType.StringType; nullable = true; defaultValue = null }),
+            exitTransition = {
+                if (targetState.destination.route?.contains("player") == true) {
+                    fadeOut(animationSpec = tween(450), targetAlpha = 0.9f)
+                } else {
+                    null
+                }
+            },
+            popEnterTransition = {
+                if (initialState.destination.route?.contains("player") == true) {
+                    fadeIn(animationSpec = tween(450), initialAlpha = 0.9f)
+                } else {
+                    null
+                }
+            }
         ) { backStackEntry ->
             val homeViewModel: HomeViewModel = hiltViewModel()
             val urlToLoad = backStackEntry.arguments?.getString("url")
@@ -90,18 +130,34 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
                 }
             }
 
-            HomeScreen(
-                onVideoSelected = { videoId ->
-                    navController.navigate("videoDetail/$videoId")
-                },
-                onSubscribe = { sourceType, sourceId, name, thumbnailUrl ->
-                    homeViewModel.subscribe(sourceType, sourceId, name, thumbnailUrl)
-                }
-            )
+            Box(modifier = Modifier.padding(bottom = 80.dp)) {
+                HomeScreen(
+                    onVideoSelected = { videoId ->
+                        navController.navigate("videoDetail/$videoId")
+                    },
+                    onSubscribe = { sourceType, sourceId, name, thumbnailUrl ->
+                        homeViewModel.subscribe(sourceType, sourceId, name, thumbnailUrl)
+                    }
+                )
+            }
         }
         composable(
             route = NavigationRoutes.VIDEO_DETAIL,
-            arguments = listOf(navArgument("videoId") { type = NavType.StringType })
+            arguments = listOf(navArgument("videoId") { type = NavType.StringType }),
+            exitTransition = {
+                if (targetState.destination.route?.contains("player") == true) {
+                    fadeOut(animationSpec = tween(450), targetAlpha = 0.9f)
+                } else {
+                    null
+                }
+            },
+            popEnterTransition = {
+                if (initialState.destination.route?.contains("player") == true) {
+                    fadeIn(animationSpec = tween(450), initialAlpha = 0.9f)
+                } else {
+                    null
+                }
+            }
         ) { backStackEntry ->
             val videoId = backStackEntry.arguments?.getString("videoId") ?: return@composable
             val detailViewModel: com.example.medianest.ui.viewmodel.VideoDetailViewModel = hiltViewModel()
@@ -129,54 +185,92 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
 
             val info = videoInfo
             if (info != null) {
-                VideoDetailScreen(
-                    videoInfo = info,
-                    localVideo = localVideo,
-                    downloads = downloads,
-                    isFavorite = isFavorite,
-                    isSubscribed = isSubscribed,
-                    videoHistory = videoHistory,
-                    watchSessions = watchSessions,
-                    isFetchingOnline = isFetchingOnline,
-                    onSubscribe = { detailViewModel.toggleSubscription() },
-                    onToggleFavorite = { detailViewModel.toggleFavorite() },
-                    onRefresh = { detailViewModel.loadVideoInfo(videoId, forceRefresh = true) },
-                    onPlay = { stream ->
-                        val streamIndex = info.streamSources.indexOf(stream)
-                        navController.navigate("player/$videoId?streamIndex=$streamIndex")
-                    },
-                    onPlayDownload = { download ->
-                        navController.navigate("downloads/player/${download.videoId}?downloadId=${download.id}")
-                    },
-                    onDownload = { stream ->
-                        detailViewModel.enqueueDownload(info, stream)
-                    },
-                    onBack = { navController.popBackStack() },
-                    onResetWatchPosition = { detailViewModel.resetPlaybackPosition() },
-                    onMarkWatched = { count -> detailViewModel.updateWatchCount(count) }
-                )
+                Box(modifier = Modifier.padding(bottom = 80.dp)) {
+                    VideoDetailScreen(
+                        videoInfo = info,
+                        localVideo = localVideo,
+                        downloads = downloads,
+                        isFavorite = isFavorite,
+                        isSubscribed = isSubscribed,
+                        videoHistory = videoHistory,
+                        watchSessions = watchSessions,
+                        isFetchingOnline = isFetchingOnline,
+                        onSubscribe = { detailViewModel.toggleSubscription() },
+                        onToggleFavorite = { detailViewModel.toggleFavorite() },
+                        onRefresh = { detailViewModel.loadVideoInfo(videoId, forceRefresh = true) },
+                        onPlay = { stream ->
+                            val streamIndex = info.streamSources.indexOf(stream)
+                            navController.navigate("player/$videoId?streamIndex=$streamIndex")
+                        },
+                        onPlayDownload = { download ->
+                            navController.navigate("downloads/player/${download.videoId}?downloadId=${download.id}")
+                        },
+                        onDownload = { stream ->
+                            detailViewModel.enqueueDownload(info, stream)
+                        },
+                        onBack = { navController.popBackStack() },
+                        onResetWatchPosition = { detailViewModel.resetPlaybackPosition() },
+                        onMarkWatched = { count -> detailViewModel.updateWatchCount(count) }
+                    )
+                }
             } else {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator()
                 }
             }
         }
-        composable(BottomNavItem.Downloads.route) {
-            DownloadsScreen(
-                onPlayDownload = { download ->
-                    navController.navigate("downloads/player/${download.videoId}?downloadId=${download.id}")
-                },
-                onVideoClick = { videoId ->
-                    navController.navigate("videoDetail/$videoId")
+        composable(
+            route = BottomNavItem.Downloads.route,
+            exitTransition = {
+                if (targetState.destination.route?.contains("player") == true) {
+                    fadeOut(animationSpec = tween(450), targetAlpha = 0.9f)
+                } else {
+                    null
                 }
-            )
+            },
+            popEnterTransition = {
+                if (initialState.destination.route?.contains("player") == true) {
+                    fadeIn(animationSpec = tween(450), initialAlpha = 0.9f)
+                } else {
+                    null
+                }
+            }
+        ) {
+            Box(modifier = Modifier.padding(bottom = 80.dp)) {
+                DownloadsScreen(
+                    onPlayDownload = { download ->
+                        navController.navigate("downloads/player/${download.videoId}?downloadId=${download.id}")
+                    },
+                    onVideoClick = { videoId ->
+                        navController.navigate("videoDetail/$videoId")
+                    }
+                )
+            }
         }
         composable(
             route = NavigationRoutes.PLAYER_OFFLINE,
             arguments = listOf(
                 navArgument("videoId") { type = NavType.StringType },
                 navArgument("downloadId") { type = NavType.LongType; defaultValue = -1L }
-            )
+            ),
+            enterTransition = {
+                slideInVertically(
+                    initialOffsetY = { it },
+                    animationSpec = tween(450, easing = FastOutSlowInEasing)
+                ) + fadeIn(animationSpec = tween(450))
+            },
+            exitTransition = {
+                fadeOut(animationSpec = tween(450))
+            },
+            popEnterTransition = {
+                fadeIn(animationSpec = tween(450))
+            },
+            popExitTransition = {
+                slideOutVertically(
+                    targetOffsetY = { it },
+                    animationSpec = tween(450, easing = FastOutSlowInEasing)
+                ) + fadeOut(animationSpec = tween(450))
+            }
         ) { backStackEntry ->
             val videoId = backStackEntry.arguments?.getString("videoId") ?: return@composable
             val downloadIdArg = backStackEntry.arguments?.getLong("downloadId") ?: -1L
@@ -192,48 +286,102 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
                 onBack = { navController.popBackStack() }
             )
         }
-        composable(BottomNavItem.Library.route) {
-            LibraryScreen(
-                onVideoClick = { videoId ->
-                    navController.navigate("videoDetail/$videoId")
-                },
-                onSubscriptionClick = { type, id ->
-                    var url = if (id.startsWith("http")) {
-                        id
-                    } else if (id.contains("youtube.com")) {
-                        if (id.startsWith("//")) "https:$id" else "https://$id"
-                    } else if (type == "playlist") {
-                        val cleanId = id.substringAfter("list=")
-                        "https://www.youtube.com/playlist?list=$cleanId"
-                    } else if (id.startsWith("@")) {
-                        "https://www.youtube.com/$id"
-                    } else {
-                        val cleanId = id.removePrefix("/").removePrefix("channel/").removePrefix("c/")
-                        "https://www.youtube.com/channel/$cleanId"
-                    }
-                    if (type != "playlist") {
-                        val cleanUrl = url.trim().removeSuffix("/")
-                        if (!cleanUrl.endsWith("/videos")) {
-                            url = "$cleanUrl/videos"
-                        }
-                    }
-                    navController.navigate(BottomNavItem.Home.route + "?url=${java.net.URLEncoder.encode(url, "UTF-8")}") {
-                        popUpTo(navController.graph.startDestinationId) {
-                            saveState = false
-                        }
-                        launchSingleTop = true
-                        restoreState = false
-                    }
+        composable(
+            route = BottomNavItem.Library.route,
+            exitTransition = {
+                if (targetState.destination.route?.contains("player") == true) {
+                    fadeOut(animationSpec = tween(450), targetAlpha = 0.9f)
+                } else {
+                    null
                 }
-            )
+            },
+            popEnterTransition = {
+                if (initialState.destination.route?.contains("player") == true) {
+                    fadeIn(animationSpec = tween(450), initialAlpha = 0.9f)
+                } else {
+                    null
+                }
+            }
+        ) {
+            Box(modifier = Modifier.padding(bottom = 80.dp)) {
+                LibraryScreen(
+                    onVideoClick = { videoId ->
+                        navController.navigate("videoDetail/$videoId")
+                    },
+                    onSubscriptionClick = { type, id ->
+                        var url = if (id.startsWith("http")) {
+                            id
+                        } else if (id.contains("youtube.com")) {
+                            if (id.startsWith("//")) "https:$id" else "https://$id"
+                        } else if (type == "playlist") {
+                            val cleanId = id.substringAfter("list=")
+                            "https://www.youtube.com/playlist?list=$cleanId"
+                        } else if (id.startsWith("@")) {
+                            "https://www.youtube.com/$id"
+                        } else {
+                            val cleanId = id.removePrefix("/").removePrefix("channel/").removePrefix("c/")
+                            "https://www.youtube.com/channel/$cleanId"
+                        }
+                        if (type != "playlist") {
+                            val cleanUrl = url.trim().removeSuffix("/")
+                            if (!cleanUrl.endsWith("/videos")) {
+                                url = "$cleanUrl/videos"
+                            }
+                        }
+                        navController.navigate(BottomNavItem.Home.route + "?url=${java.net.URLEncoder.encode(url, "UTF-8")}") {
+                            popUpTo(navController.graph.startDestinationId) {
+                                saveState = false
+                            }
+                            launchSingleTop = true
+                            restoreState = false
+                        }
+                    }
+                )
+            }
         }
-        composable(BottomNavItem.Settings.route) { 
-            SettingsScreen(
-                onNavigateToStatistics = { navController.navigate(NavigationRoutes.STATISTICS) }
-            ) 
+        composable(
+            route = BottomNavItem.Settings.route,
+            exitTransition = {
+                if (targetState.destination.route?.contains("player") == true) {
+                    fadeOut(animationSpec = tween(450), targetAlpha = 0.9f)
+                } else {
+                    null
+                }
+            },
+            popEnterTransition = {
+                if (initialState.destination.route?.contains("player") == true) {
+                    fadeIn(animationSpec = tween(450), initialAlpha = 0.9f)
+                } else {
+                    null
+                }
+            }
+        ) { 
+            Box(modifier = Modifier.padding(bottom = 80.dp)) {
+                SettingsScreen(
+                    onNavigateToStatistics = { navController.navigate(NavigationRoutes.STATISTICS) }
+                ) 
+            }
         }
-        composable(NavigationRoutes.STATISTICS) {
-            StatisticsScreen(onBack = { navController.popBackStack() })
+        composable(
+            route = NavigationRoutes.STATISTICS,
+            exitTransition = {
+                if (targetState.destination.route?.contains("player") == true) {
+                    fadeOut(animationSpec = tween(450), targetAlpha = 0.9f)
+                } else {
+                    null
+                }
+            },
+            popEnterTransition = {
+                if (initialState.destination.route?.contains("player") == true) {
+                    fadeIn(animationSpec = tween(450), initialAlpha = 0.9f)
+                } else {
+                    null
+                }
+            }
+        ) {
+            Box(modifier = Modifier.padding(bottom = 80.dp)) {
+                StatisticsScreen(onBack = { navController.popBackStack() })
+            }
         }
     }
 }

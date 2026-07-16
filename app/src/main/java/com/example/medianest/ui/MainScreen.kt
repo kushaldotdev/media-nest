@@ -145,9 +145,23 @@ fun MainScreen() {
                 offsetY = 0f
             }
 
-            Scaffold(
-                bottomBar = {
-                    if (showBottomBar) {
+            Scaffold { innerPadding ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(innerPadding)
+                ) {
+                    AppNavigation(
+                        navController = navController,
+                        modifier = Modifier.fillMaxSize()
+                    )
+
+                    AnimatedVisibility(
+                        visible = showBottomBar,
+                        enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+                        exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
+                        modifier = Modifier.align(Alignment.BottomCenter)
+                    ) {
                         NavigationBar {
                             listOf(
                                 BottomNavItem.Home,
@@ -174,11 +188,6 @@ fun MainScreen() {
                         }
                     }
                 }
-            ) { innerPadding ->
-                AppNavigation(
-                    navController = navController,
-                    modifier = Modifier.padding(innerPadding)
-                )
             }
 
             AnimatedVisibility(

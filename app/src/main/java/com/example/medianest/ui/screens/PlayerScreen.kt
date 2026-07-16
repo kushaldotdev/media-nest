@@ -6,11 +6,13 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -30,6 +32,7 @@ import androidx.compose.material.icons.filled.Replay5
 import androidx.compose.material.icons.filled.Replay30
 import androidx.compose.material.icons.filled.Forward5
 import androidx.compose.material.icons.filled.Forward30
+import androidx.compose.material.icons.filled.CheckCircle
 import android.content.Context
 import android.content.ContextWrapper
 import android.app.Activity
@@ -41,8 +44,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.MenuDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -76,6 +79,18 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import androidx.media3.ui.PlayerView
 import com.example.medianest.ui.viewmodel.PlayerViewModel
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.foundation.shape.RoundedCornerShape
 
 private fun Context.findActivity(): Activity? {
     var currentContext = this
@@ -104,7 +119,25 @@ fun PlayerScreen(
     var localPosition by remember { mutableStateOf<Float?>(null) }
     var isFullScreen by rememberSaveable { mutableStateOf(false) }
     var showControls by remember { mutableStateOf(true) }
-    var showRemainingTime by rememberSaveable { mutableStateOf(false) }
+    var timeDisplayMode by rememberSaveable { mutableStateOf(0) } // 0 = Elapsed, 1 = Remaining, 2 = Both
+    var isTitleExpanded by rememberSaveable { mutableStateOf(false) }
+
+    var showLeftSeekOverlay by remember { mutableStateOf(false) }
+    var showRightSeekOverlay by remember { mutableStateOf(false) }
+    var leftSeekTrigger by remember { mutableStateOf(0) }
+    var rightSeekTrigger by remember { mutableStateOf(0) }
+
+    var prevIsPlaying by remember { mutableStateOf(state.isPlaying) }
+    var showPlayPauseOverlay by remember { mutableStateOf<Boolean?>(null) }
+    var overlayTrigger by remember { mutableStateOf(0) }
+
+    LaunchedEffect(state.isPlaying) {
+        if (state.isPlaying != prevIsPlaying) {
+            showPlayPauseOverlay = state.isPlaying
+            overlayTrigger++
+            prevIsPlaying = state.isPlaying
+        }
+    }
 
     val context = LocalContext.current
     val activity = remember(context) { context.findActivity() }
@@ -170,8 +203,135 @@ fun PlayerScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .clickable { showControls = !showControls }
+                    .pointerInput(Unit) {
+                        detectTapGestures(
+                            onDoubleTap = { offset ->
+                                val isLeftHalf = offset.x < size.width / 2f
+                                if (isLeftHalf) {
+                                    showLeftSeekOverlay = true
+                                    leftSeekTrigger++
+                                    viewModel.seekRelative(-10_000L)
+                                } else {
+                                    showRightSeekOverlay = true
+                                    rightSeekTrigger++
+                                    viewModel.seekRelative(10_000L)
+                                }
+                            },
+                            onTap = {
+                                showControls = !showControls
+                            }
+                        )
+                    }
             )
+
+            showPlayPauseOverlay?.let { playing ->
+                var visible by remember(overlayTrigger) { mutableStateOf(true) }
+                LaunchedEffect(overlayTrigger) {
+                    kotlinx.coroutines.delay(500)
+                    visible = false
+                }
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = visible,
+                    enter = fadeIn() + scaleIn(initialScale = 0.5f),
+                    exit = fadeOut() + scaleOut(targetScale = 0.5f),
+                    modifier = Modifier.align(Alignment.Center)
+                ) {
+                    Surface(
+                        shape = androidx.compose.foundation.shape.CircleShape,
+                        color = Color.Black.copy(alpha = 0.6f),
+                        modifier = Modifier.size(72.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = if (playing) Icons.Default.PlayArrow else Icons.Default.Pause,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(40.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Left Seek Overlay (Rewind 10s) - opposite side (CenterEnd), no backdrop
+            if (showLeftSeekOverlay) {
+                var visible by remember(leftSeekTrigger) { mutableStateOf(true) }
+                LaunchedEffect(leftSeekTrigger) {
+                    kotlinx.coroutines.delay(650)
+                    visible = false
+                    showLeftSeekOverlay = false
+                }
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = visible,
+                    enter = fadeIn(),
+                    exit = fadeOut(),
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .fillMaxHeight()
+                        .fillMaxWidth(0.4f)
+                ) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(
+                                imageVector = Icons.Default.Replay10,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(36.dp)
+                            )
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                text = "-10s",
+                                color = Color.White,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Right Seek Overlay (Forward 10s) - opposite side (CenterStart), no backdrop
+            if (showRightSeekOverlay) {
+                var visible by remember(rightSeekTrigger) { mutableStateOf(true) }
+                LaunchedEffect(rightSeekTrigger) {
+                    kotlinx.coroutines.delay(650)
+                    visible = false
+                    showRightSeekOverlay = false
+                }
+                androidx.compose.animation.AnimatedVisibility(
+                    visible = visible,
+                    enter = fadeIn(),
+                    exit = fadeOut(),
+                    modifier = Modifier
+                        .align(Alignment.CenterStart)
+                        .fillMaxHeight()
+                        .fillMaxWidth(0.4f)
+                ) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(
+                                imageVector = Icons.Default.Forward10,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(36.dp)
+                            )
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                text = "+10s",
+                                color = Color.White,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
 
             if (state.isBuffering) {
                 CircularProgressIndicator(
@@ -203,8 +363,11 @@ fun PlayerScreen(
                                 text = state.title,
                                 color = Color.White,
                                 style = MaterialTheme.typography.titleMedium,
-                                maxLines = 1,
-                                modifier = Modifier.weight(1f, fill = false)
+                                maxLines = if (isTitleExpanded) Int.MAX_VALUE else 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier
+                                    .weight(1f, fill = false)
+                                    .clickable { isTitleExpanded = !isTitleExpanded }
                             )
                             val quality = state.videoQuality
                             val qualityText = if (!quality.isNullOrEmpty()) {
@@ -226,17 +389,30 @@ fun PlayerScreen(
                                     )
                                 }
                             }
+                            val watchCount = state.watchCount
+                            if (watchCount > 0) {
+                                Spacer(Modifier.width(8.dp))
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Visibility,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Text(
+                                        text = "$watchCount",
+                                        color = Color.White,
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                }
+                            }
                         }
                         Row(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            WatchCountDisplay(
-                                count = state.watchCount,
-                                iconColor = Color.White,
-                                textColor = Color.White,
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                            Spacer(Modifier.width(8.dp))
                             IconButton(onClick = { isFullScreen = false }) {
                                 Icon(Icons.Default.FullscreenExit, contentDescription = "Exit Fullscreen", tint = Color.White)
                             }
@@ -317,16 +493,22 @@ fun PlayerScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             val currentPos = (localPosition ?: state.positionMs.toFloat()).toLong()
-                            val displayTime = if (showRemainingTime) {
-                                val remaining = state.durationMs - currentPos
-                                if (remaining <= 0) "-0s" else "-${formatDuration(remaining)}"
-                            } else {
-                                formatDuration(currentPos)
+                            val displayTime = when (timeDisplayMode) {
+                                1 -> {
+                                    val remaining = state.durationMs - currentPos
+                                    if (remaining <= 0) "-0s" else "-${formatDuration(remaining)}"
+                                }
+                                2 -> {
+                                    val remaining = state.durationMs - currentPos
+                                    val remStr = if (remaining <= 0) "-0s" else "-${formatDuration(remaining)}"
+                                    "${formatDuration(currentPos)} / $remStr"
+                                }
+                                else -> formatDuration(currentPos)
                             }
                             Text(
                                 text = displayTime,
                                 color = Color.White,
-                                modifier = Modifier.clickable { showRemainingTime = !showRemainingTime }
+                                modifier = Modifier.clickable { timeDisplayMode = (timeDisplayMode + 1) % 3 }
                             )
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(formatDuration(state.durationMs), color = Color.White)
@@ -346,40 +528,86 @@ fun PlayerScreen(
                 TopAppBar(
                     title = {
                         Column {
-                            Text(state.title, maxLines = 1, style = MaterialTheme.typography.titleMedium)
+                            Text(
+                                text = state.title,
+                                maxLines = if (isTitleExpanded) Int.MAX_VALUE else 1,
+                                overflow = TextOverflow.Ellipsis,
+                                style = MaterialTheme.typography.titleMedium,
+                                modifier = Modifier.clickable { isTitleExpanded = !isTitleExpanded }
+                            )
                             val quality = state.videoQuality
                             val qualityText = if (!quality.isNullOrEmpty()) {
                                 if (state.isLocal) "$quality • Local" else "$quality • Stream"
                             } else {
                                 if (state.isLocal) "Local" else "Stream"
                             }
-                            if (state.channelName.isNotEmpty() || qualityText.isNotEmpty()) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    if (state.channelName.isNotEmpty()) {
-                                        Text(
-                                            text = state.channelName,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
+                            if (state.channelName.isNotEmpty() || qualityText.isNotEmpty() || state.watchCount > 0) {
+                                BoxWithConstraints {
+                                    val isNarrow = maxWidth < 280.dp
+                                    val displayQualityText = if (isNarrow && !quality.isNullOrEmpty()) {
+                                        if (state.isLocal) "$quality • Local" else quality
+                                    } else {
+                                        qualityText
                                     }
-                                    if (state.channelName.isNotEmpty() && qualityText.isNotEmpty()) {
-                                        Text(
-                                            text = " • ",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                    if (qualityText.isNotEmpty()) {
-                                        Surface(
-                                            color = MaterialTheme.colorScheme.secondaryContainer,
-                                            shape = MaterialTheme.shapes.extraSmall
-                                        ) {
+
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        if (state.channelName.isNotEmpty()) {
                                             Text(
-                                                text = qualityText,
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                                text = state.channelName,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                                modifier = Modifier.weight(1f, fill = false)
                                             )
+                                        }
+                                        if (state.channelName.isNotEmpty() && (displayQualityText.isNotEmpty() || state.watchCount > 0)) {
+                                            Text(
+                                                text = " • ",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                        if (displayQualityText.isNotEmpty()) {
+                                            Surface(
+                                                color = MaterialTheme.colorScheme.secondaryContainer,
+                                                shape = MaterialTheme.shapes.extraSmall
+                                            ) {
+                                                Text(
+                                                    text = displayQualityText,
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                                                    maxLines = 1
+                                                )
+                                            }
+                                        }
+                                        val watchCount = state.watchCount
+                                        if (watchCount > 0) {
+                                            if (displayQualityText.isNotEmpty()) {
+                                                Text(
+                                                    text = " • ",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Visibility,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.size(12.dp)
+                                                )
+                                                Text(
+                                                    text = "$watchCount",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    maxLines = 1
+                                                )
+                                            }
                                         }
                                     }
                                 }
@@ -391,19 +619,7 @@ fun PlayerScreen(
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                         }
                     },
-                    actions = {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(end = 12.dp)
-                        ) {
-                            WatchCountDisplay(
-                                count = state.watchCount,
-                                iconColor = MaterialTheme.colorScheme.primary,
-                                textColor = MaterialTheme.colorScheme.onSurface,
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                        }
-                    }
+                    actions = {}
                 )
             }
         ) { padding ->
@@ -452,8 +668,135 @@ fun PlayerScreen(
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()
-                                    .clickable { viewModel.togglePlayPause() }
+                                    .pointerInput(Unit) {
+                                        detectTapGestures(
+                                            onDoubleTap = { offset ->
+                                                val isLeftHalf = offset.x < size.width / 2f
+                                                if (isLeftHalf) {
+                                                    showLeftSeekOverlay = true
+                                                    leftSeekTrigger++
+                                                    viewModel.seekRelative(-10_000L)
+                                                } else {
+                                                    showRightSeekOverlay = true
+                                                    rightSeekTrigger++
+                                                    viewModel.seekRelative(10_000L)
+                                                }
+                                            },
+                                            onTap = {
+                                                viewModel.togglePlayPause()
+                                            }
+                                        )
+                                    }
                             )
+
+                            showPlayPauseOverlay?.let { playing ->
+                                var visible by remember(overlayTrigger) { mutableStateOf(true) }
+                                LaunchedEffect(overlayTrigger) {
+                                    kotlinx.coroutines.delay(500)
+                                    visible = false
+                                }
+                                androidx.compose.animation.AnimatedVisibility(
+                                    visible = visible,
+                                    enter = fadeIn() + scaleIn(initialScale = 0.5f),
+                                    exit = fadeOut() + scaleOut(targetScale = 0.5f),
+                                    modifier = Modifier.align(Alignment.Center)
+                                ) {
+                                    Surface(
+                                        shape = androidx.compose.foundation.shape.CircleShape,
+                                        color = Color.Black.copy(alpha = 0.6f),
+                                        modifier = Modifier.size(72.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                imageVector = if (playing) Icons.Default.PlayArrow else Icons.Default.Pause,
+                                                contentDescription = null,
+                                                tint = Color.White,
+                                                modifier = Modifier.size(40.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Left Seek Overlay (Rewind 10s) - opposite side (CenterEnd), no backdrop
+                            if (showLeftSeekOverlay) {
+                                var visible by remember(leftSeekTrigger) { mutableStateOf(true) }
+                                LaunchedEffect(leftSeekTrigger) {
+                                    kotlinx.coroutines.delay(650)
+                                    visible = false
+                                    showLeftSeekOverlay = false
+                                }
+                                androidx.compose.animation.AnimatedVisibility(
+                                    visible = visible,
+                                    enter = fadeIn(),
+                                    exit = fadeOut(),
+                                    modifier = Modifier
+                                        .align(Alignment.CenterEnd)
+                                        .fillMaxHeight()
+                                        .fillMaxWidth(0.4f)
+                                ) {
+                                    Box(
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                            Icon(
+                                                imageVector = Icons.Default.Replay10,
+                                                contentDescription = null,
+                                                tint = Color.White,
+                                                modifier = Modifier.size(36.dp)
+                                            )
+                                            Spacer(Modifier.height(6.dp))
+                                            Text(
+                                                text = "-10s",
+                                                color = Color.White,
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Right Seek Overlay (Forward 10s) - opposite side (CenterStart), no backdrop
+                            if (showRightSeekOverlay) {
+                                var visible by remember(rightSeekTrigger) { mutableStateOf(true) }
+                                LaunchedEffect(rightSeekTrigger) {
+                                    kotlinx.coroutines.delay(650)
+                                    visible = false
+                                    showRightSeekOverlay = false
+                                }
+                                androidx.compose.animation.AnimatedVisibility(
+                                    visible = visible,
+                                    enter = fadeIn(),
+                                    exit = fadeOut(),
+                                    modifier = Modifier
+                                        .align(Alignment.CenterStart)
+                                        .fillMaxHeight()
+                                        .fillMaxWidth(0.4f)
+                                ) {
+                                    Box(
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                            Icon(
+                                                imageVector = Icons.Default.Forward10,
+                                                contentDescription = null,
+                                                tint = Color.White,
+                                                modifier = Modifier.size(36.dp)
+                                            )
+                                            Spacer(Modifier.height(6.dp))
+                                            Text(
+                                                text = "+10s",
+                                                color = Color.White,
+                                                style = MaterialTheme.typography.titleMedium,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                    }
+                                }
+                            }
 
                             if (state.isBuffering) {
                                 CircularProgressIndicator(
@@ -572,15 +915,21 @@ fun PlayerScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             val currentPos = (localPosition ?: state.positionMs.toFloat()).toLong()
-                            val displayTime = if (showRemainingTime) {
-                                val remaining = state.durationMs - currentPos
-                                if (remaining <= 0) "-0s" else "-${formatDuration(remaining)}"
-                            } else {
-                                formatDuration(currentPos)
+                            val displayTime = when (timeDisplayMode) {
+                                1 -> {
+                                    val remaining = state.durationMs - currentPos
+                                    if (remaining <= 0) "-0s" else "-${formatDuration(remaining)}"
+                                }
+                                2 -> {
+                                    val remaining = state.durationMs - currentPos
+                                    val remStr = if (remaining <= 0) "-0s" else "-${formatDuration(remaining)}"
+                                    "${formatDuration(currentPos)} / $remStr"
+                                }
+                                else -> formatDuration(currentPos)
                             }
                             Text(
                                 text = displayTime,
-                                modifier = Modifier.clickable { showRemainingTime = !showRemainingTime }
+                                modifier = Modifier.clickable { timeDisplayMode = (timeDisplayMode + 1) % 3 }
                             )
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(formatDuration(state.durationMs))
@@ -626,26 +975,199 @@ fun PlayerScreen(
                             }
                         }
 
-                        Spacer(Modifier.height(4.dp))
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.fillMaxWidth()
+                        Spacer(Modifier.height(8.dp))
+
+                        // Combined Speed & Quality Row
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                            ),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
                         ) {
-                            Text("Speed", style = MaterialTheme.typography.labelMedium)
                             Row(
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .horizontalScroll(rememberScrollState()),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.fillMaxWidth().height(48.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f).forEach { speed ->
-                                    FilterChip(
-                                        selected = state.currentSpeed == speed,
-                                        onClick = { viewModel.setSpeed(speed) },
-                                        label = { Text("${speed}x") }
-                                    )
+                                // Speed Selector
+                                var showSpeedMenu by remember { mutableStateOf(false) }
+                                val speeds = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
+
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxSize()
+                                        .combinedClickable(
+                                            onClick = {
+                                                val nextSpeedIndex = (speeds.indexOf(state.currentSpeed) + 1) % speeds.size
+                                                viewModel.setSpeed(speeds[nextSpeedIndex])
+                                            },
+                                            onLongClick = { showSpeedMenu = true }
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Default.PlayArrow,
+                                            contentDescription = "Playback Speed",
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(Modifier.width(6.dp))
+                                        Text(
+                                            text = "Speed: ${state.currentSpeed}x",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+
+                                    DropdownMenu(
+                                        expanded = showSpeedMenu,
+                                        onDismissRequest = { showSpeedMenu = false }
+                                    ) {
+                                        speeds.forEach { speed ->
+                                            DropdownMenuItem(
+                                                text = { Text("${speed}x") },
+                                                onClick = {
+                                                    viewModel.setSpeed(speed)
+                                                    showSpeedMenu = false
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+
+                                // Divider
+                                androidx.compose.material3.VerticalDivider(
+                                    modifier = Modifier.height(24.dp),
+                                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                                )
+
+                                // Quality Selector
+                                var showQualityMenu by remember { mutableStateOf(false) }
+                                val videoStreams = remember(state.availableStreams) {
+                                    val recommendedQualities = listOf("1080p", "720p", "480p", "360p", "240p", "144p")
+                                    state.availableStreams
+                                        .filter { it.format == "video" || it.format == "video_only" }
+                                        .groupBy { stream ->
+                                            recommendedQualities.firstOrNull { req -> stream.quality.startsWith(req) }
+                                                ?: stream.quality.takeWhile { it.isDigit() }.let { if (it.isEmpty()) "Unknown" else "${it}p" }
+                                        }
+                                        .mapNotNull { (resName, streams) ->
+                                            if (resName == "Unknown") null else {
+                                                streams.maxByOrNull { (it.contentLength ?: 0L) + (if (it.format == "video") 1_000_000_000L else 0L) }
+                                            }
+                                        }
+                                        .sortedByDescending { stream ->
+                                            stream.quality.takeWhile { it.isDigit() }.toIntOrNull() ?: 0
+                                        }
+                                }
+                                val currentQualityRes = state.videoQuality?.takeWhile { it.isDigit() } ?: ""
+                                val currentIdxInVideo = videoStreams.indexOfFirst { it.quality.startsWith(currentQualityRes) }
+
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxSize()
+                                        .combinedClickable(
+                                            enabled = videoStreams.isNotEmpty(),
+                                            onClick = {
+                                                if (videoStreams.isNotEmpty()) {
+                                                    var nextIdx = (currentIdxInVideo - 1 + videoStreams.size) % videoStreams.size
+                                                    var attempts = 0
+                                                    while (attempts < videoStreams.size) {
+                                                        val candidateStream = videoStreams[nextIdx]
+                                                        val candRes = candidateStream.quality.takeWhile { it.isDigit() }
+                                                        val isCandDownloaded = state.completedDownloadQualities.any { it.takeWhile { c -> c.isDigit() } == candRes }
+                                                        val isOnline = state.availableStreams.any { it.url.startsWith("http") }
+                                                        if (isOnline || isCandDownloaded) {
+                                                            val nextStreamIndex = state.availableStreams.indexOf(candidateStream)
+                                                            if (nextStreamIndex != -1) {
+                                                                viewModel.changeStreamQuality(nextStreamIndex)
+                                                            }
+                                                            break
+                                                        }
+                                                        nextIdx = (nextIdx - 1 + videoStreams.size) % videoStreams.size
+                                                        attempts++
+                                                    }
+                                                }
+                                            },
+                                            onLongClick = { showQualityMenu = true }
+                                        ),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            imageVector = Icons.Default.Fullscreen,
+                                            contentDescription = "Video Quality",
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(Modifier.width(6.dp))
+                                        Text(
+                                            text = "Quality: ${state.videoQuality ?: "Auto"}",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+
+                                    if (videoStreams.isNotEmpty()) {
+                                        DropdownMenu(
+                                            expanded = showQualityMenu,
+                                            onDismissRequest = { showQualityMenu = false }
+                                        ) {
+                                            videoStreams.forEach { streamSource ->
+                                                val streamRes = streamSource.quality.takeWhile { it.isDigit() }
+                                                val isDownloaded = state.completedDownloadQualities.any { it.takeWhile { c -> c.isDigit() } == streamRes }
+                                                val isSelected = remember(state.videoQuality, streamSource) {
+                                                    val currentRes = state.videoQuality?.takeWhile { it.isDigit() } ?: ""
+                                                    streamSource.quality.startsWith(currentRes)
+                                                }
+
+                                                val qualityLabel = if (!streamSource.codec.isNullOrEmpty()) {
+                                                    "${streamSource.quality} (${streamSource.codec})"
+                                                } else {
+                                                    streamSource.quality
+                                                }
+                                                DropdownMenuItem(
+                                                    modifier = if (isSelected) {
+                                                        Modifier.background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f))
+                                                    } else {
+                                                        Modifier
+                                                    },
+                                                    text = {
+                                                        Row(
+                                                            verticalAlignment = Alignment.CenterVertically,
+                                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                                        ) {
+                                                            Text(
+                                                                text = qualityLabel,
+                                                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                                            )
+                                                            if (isDownloaded) {
+                                                                Icon(
+                                                                    imageVector = Icons.Default.CheckCircle,
+                                                                    contentDescription = "Downloaded",
+                                                                    tint = Color(0xFF4CAF50),
+                                                                    modifier = Modifier.size(16.dp)
+                                                                )
+                                                            }
+                                                        }
+                                                    },
+                                                    onClick = {
+                                                        val targetIndex = state.availableStreams.indexOf(streamSource)
+                                                        if (targetIndex != -1) {
+                                                            viewModel.changeStreamQuality(targetIndex)
+                                                        }
+                                                        showQualityMenu = false
+                                                    }
+                                                )
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }

@@ -20,6 +20,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Card
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -46,6 +47,7 @@ import com.example.medianest.data.local.entity.VideoEntity
 import com.example.medianest.ui.utils.UiUtils
 import com.example.medianest.ui.components.YoutubeSubscribeButton
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.material3.TopAppBar
 import android.content.Intent
 import android.net.Uri
@@ -170,6 +172,34 @@ fun VideoDetailScreen(
                     contentScale = ContentScale.Crop
                 )
 
+                val localWatches = localVideo?.watchCount ?: 0
+                if (localWatches > 0) {
+                    Surface(
+                        color = Color.Black.copy(alpha = 0.7f),
+                        contentColor = Color.White,
+                        shape = RoundedCornerShape(bottomStart = 8.dp),
+                        modifier = Modifier.align(Alignment.TopEnd)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Visibility,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Text(
+                                text = "Watched: $localWatches",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+
                 // Play overlay button in the center of the thumbnail
                 IconButton(
                     onClick = {
@@ -183,7 +213,8 @@ fun VideoDetailScreen(
                             }
                         } else {
                             val videoStreams = videoInfo.streamSources.filter { it.format == "video" || it.format == "video_only" }
-                            val targetStream = videoStreams.find { it.quality.startsWith("1080p") }
+                            val targetStream = videoStreams.find { it.format == "video" && it.quality.startsWith("360p") }
+                                ?: videoStreams.find { it.format == "video" }
                                 ?: videoStreams.maxByOrNull { it.quality.substringBefore("p").toIntOrNull() ?: 0 }
                             if (targetStream != null) {
                                 onPlay(targetStream)
@@ -289,10 +320,8 @@ fun VideoDetailScreen(
 
             // Released and Downloaded Metadata
             val formattedReleaseDate = UiUtils.formatAbsoluteReleaseDate(videoInfo.uploadDate)
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)
             ) {
                 if (!formattedReleaseDate.isNullOrEmpty()) {
                     Text(
@@ -300,25 +329,29 @@ fun VideoDetailScreen(
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    Spacer(Modifier.height(4.dp))
                 }
-                val currentWatchCount = localVideo?.watchCount ?: 0
-                if (currentWatchCount > 0) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Visibility,
-                            contentDescription = "Watch count",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Text(
-                            text = "$currentWatchCount ${if (currentWatchCount == 1) "view" else "views"}",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                val publicViews = videoInfo.viewCount
+                val formattedViews = if (publicViews > 0) {
+                    java.text.NumberFormat.getInstance(java.util.Locale.forLanguageTag("en-IN")).format(publicViews) + " views"
+                } else {
+                    "0 views"
+                }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Visibility,
+                        contentDescription = "Watch count",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Text(
+                        text = formattedViews,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
 

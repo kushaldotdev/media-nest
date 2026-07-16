@@ -54,7 +54,8 @@ class YouTubeExtractor @Inject constructor() {
             thumbnailUrl = thumbnails?.firstOrNull()?.url ?: "",
             description = null,
             uploadDate = textualUploadDate,
-            isShort = url.contains("/shorts/") || streamType.name.contains("SHORT") || duration <= 180
+            isShort = url.contains("/shorts/") || streamType.name.contains("SHORT") || duration <= 180,
+            viewCount = if (viewCount > 0L) viewCount else 0L
         )
     }
 
@@ -139,7 +140,8 @@ class YouTubeExtractor @Inject constructor() {
             description = info.description?.content?.take(1000),
             uploadDate = info.textualUploadDate,
             isShort = info.url?.contains("/shorts/") == true || info.duration <= 180,
-            streamSources = streams
+            streamSources = streams,
+            viewCount = if (info.viewCount > 0L) info.viewCount else 0L
         )
     }
 
