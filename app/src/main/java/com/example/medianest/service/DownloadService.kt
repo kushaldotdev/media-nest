@@ -32,6 +32,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.delay
 import kotlin.coroutines.coroutineContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -551,7 +553,17 @@ class DownloadService : Service() {
                                 if (shouldUpdate) {
                                     if (!isPaused(download.id) && !isCancelled(download.id) && !isPutToQueue(download.id)) {
                                         val payload = if (progressMessage != null) {
-                                            if (currentSpeedString != null) "$progressMessage|$currentSpeedString" else progressMessage
+                                            if (progressMessage.startsWith("downloading_video")) {
+                                                val parts = progressMessage.split("|")
+                                                val aSize = parts.getOrNull(1)?.toLongOrNull() ?: 0L
+                                                "downloading_video|$offset|$totalSize|$aSize|${currentSpeedString ?: ""}"
+                                            } else if (progressMessage.startsWith("downloading_audio")) {
+                                                val parts = progressMessage.split("|")
+                                                val vSize = parts.getOrNull(1)?.toLongOrNull() ?: 0L
+                                                "downloading_audio|$offset|$totalSize|$vSize|${currentSpeedString ?: ""}"
+                                            } else {
+                                                if (currentSpeedString != null) "$progressMessage|$currentSpeedString" else progressMessage
+                                            }
                                         } else {
                                             currentSpeedString
                                         }
@@ -633,6 +645,79 @@ class DownloadService : Service() {
         return false
     }
 
+    private fun getStreamSize(url: String): Long {
+        return try {
+            val req = Request.Builder().url(url).head().build()
+            okHttpClient.newCall(req).execute().use { resp ->
+                if (resp.isSuccessful) {
+                    resp.header("Content-Length")?.toLongOrNull() ?: 0L
+                } else 0L
+            }
+        } catch (e: Exception) {
+            0L
+        }
+    }
+
+    private suspend fun runFFmpegCommandWithProgress(
+        command: String,
+        downloadId: Long,
+        durationSeconds: Long,
+        startProgress: Float,
+        endProgress: Float
+    ): Boolean {
+        if (durationSeconds <= 0) {
+            val session = withContext(Dispatchers.IO) {
+                com.arthenica.ffmpegkit.FFmpegKit.execute(command)
+            }
+            return com.arthenica.ffmpegkit.ReturnCode.isSuccess(session.returnCode)
+        }
+
+        com.arthenica.ffmpegkit.FFmpegKitConfig.enableStatisticsCallback { stats ->
+            val timeInMs = stats.time
+            val ffmpegProgress = (timeInMs / 1000f) / durationSeconds
+            val boundedProgress = ffmpegProgress.coerceIn(0.0, 1.0).toFloat()
+            val overallProgress = startProgress + boundedProgress * (endProgress - startProgress)
+            val pct = (boundedProgress * 100).toInt()
+            
+            serviceScope.launch {
+                if (!isPaused(downloadId) && !isCancelled(downloadId) && !isPutToQueue(downloadId)) {
+                    repository.updateProgressAndMessage(downloadId, overallProgress, "merging|$pct")
+                    activeProgress[downloadId]?.let { progress ->
+                        activeProgress[downloadId] = progress.copy(
+                            bytesDownloaded = (overallProgress * progress.totalBytes).toLong()
+                        )
+                    }
+                    updateNotification()
+                }
+            }
+        }
+
+        val monitorJob = serviceScope.launch {
+            while (isActive) {
+                if (isPaused(downloadId) || isCancelled(downloadId) || isPutToQueue(downloadId)) {
+                    val activeSessions = com.arthenica.ffmpegkit.FFmpegKitConfig.getSessions()
+                    for (s in activeSessions) {
+                        if (s.state == com.arthenica.ffmpegkit.SessionState.RUNNING) {
+                            com.arthenica.ffmpegkit.FFmpegKit.cancel(s.sessionId)
+                        }
+                    }
+                    break
+                }
+                delay(200)
+            }
+        }
+
+        return try {
+            val session = withContext(Dispatchers.IO) {
+                com.arthenica.ffmpegkit.FFmpegKit.execute(command)
+            }
+            com.arthenica.ffmpegkit.ReturnCode.isSuccess(session.returnCode)
+        } finally {
+            monitorJob.cancel()
+            com.arthenica.ffmpegkit.FFmpegKitConfig.enableStatisticsCallback(null)
+        }
+    }
+
     private suspend fun downloadFile(download: DownloadEntity) {
         if (isPaused(download.id)) {
             updateDownloadStatus(download.id, DownloadStatus.PAUSED, download.progress)
@@ -654,6 +739,43 @@ class DownloadService : Service() {
         
         var ext = if (download.url.contains("webm", ignoreCase = true) || download.quality.contains("webm", ignoreCase = true)) "webm" else "mp4"
         var videoDownloadCompleted = false
+
+        var audioSize = 0L
+        var preResolvedAudioUrl: String? = null
+        if (download.format == "video_only") {
+            try {
+                val watchUrl = download.videoUrl ?: ("https://www.youtube.com/watch?v=" + download.videoId)
+                val freshInfo = extractor.extractVideo(watchUrl)
+                val isWebmVideo = ext.contains("webm", ignoreCase = true)
+                val compatibleAudioStreams = freshInfo.streamSources
+                    .filter { it.format == "audio" }
+                    .filter {
+                        val mime = it.mimeType.lowercase()
+                        val codec = it.codec.lowercase()
+                        if (isWebmVideo) {
+                            mime.contains("webm") || mime.contains("ogg") || codec.contains("webm") || codec.contains("opus")
+                        } else {
+                            mime.contains("mp4") || mime.contains("m4a") || codec.contains("m4a") || codec.contains("aac")
+                        }
+                    }
+                val audioStreamsToUse = if (compatibleAudioStreams.isNotEmpty()) compatibleAudioStreams else {
+                    freshInfo.streamSources.filter { it.format == "audio" }
+                }
+                val audioStream = audioStreamsToUse
+                    .maxByOrNull { it.quality.replace("kbps", "").toIntOrNull() ?: 0 }
+                if (audioStream != null) {
+                    preResolvedAudioUrl = audioStream.url
+                    audioSize = audioStream.contentLength ?: 0L
+                    if (audioSize <= 0L) {
+                        withContext(Dispatchers.IO) {
+                            audioSize = getStreamSize(audioStream.url)
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.e("DownloadService", "Failed to pre-resolve audio size", e)
+            }
+        }
 
         if (download.format == "video_only" && tmpFile.exists() && download.fileSizeBytes > 0L && tmpFile.length() >= download.fileSizeBytes) {
             videoDownloadCompleted = true
@@ -700,7 +822,7 @@ class DownloadService : Service() {
                 tmpFile = tmpFile,
                 startProgress = 0.0f,
                 endProgress = if (download.format == "video_only") 0.90f else 1.0f,
-                progressMessage = null,
+                progressMessage = if (download.format == "video_only") "downloading_video|$audioSize" else null,
                 isAudioStream = false
             ) {
                 val freshInfo = extractor.extractVideo(download.videoUrl ?: ("https://www.youtube.com/watch?v=" + download.videoId))
@@ -730,6 +852,7 @@ class DownloadService : Service() {
 
         // Step 2: Download and merge audio if video_only
         if (download.format == "video_only") {
+            val isWebmVideo = ext.contains("webm", ignoreCase = true)
             var audioSuccess = false
             var audioRetries = 0
             val maxAudioRetries = 3
@@ -744,7 +867,7 @@ class DownloadService : Service() {
                     return
                 }
                 try {
-                    repository.updateProgressAndMessage(download.id, 0.90f, "downloading_audio")
+                    repository.updateProgressAndMessage(download.id, 0.90f, "downloading_audio|0|$audioSize|${tmpFile.length()}|")
                     activeProgress[download.id] = ActiveProgress(
                         title = "Downloading audio...",
                         bytesDownloaded = (0.90f * (if (download.fileSizeBytes > 0) download.fileSizeBytes else tmpFile.length())).toLong(),
@@ -752,36 +875,47 @@ class DownloadService : Service() {
                     )
                     updateNotification()
 
-                    val freshInfo = extractor.extractVideo(download.videoUrl ?: ("https://www.youtube.com/watch?v=" + download.videoId))
-                    val isWebmVideo = ext.contains("webm", ignoreCase = true)
-                    val compatibleAudioStreams = freshInfo.streamSources
-                        .filter { it.format == "audio" }
-                        .filter {
-                            val mime = it.mimeType.lowercase()
-                            val codec = it.codec.lowercase()
-                            if (isWebmVideo) {
-                                mime.contains("webm") || mime.contains("ogg") || codec.contains("webm") || codec.contains("opus")
-                            } else {
-                                mime.contains("mp4") || mime.contains("m4a") || codec.contains("m4a") || codec.contains("aac")
+                    val audioUrlToUse = if (audioRetries == 0 && preResolvedAudioUrl != null) {
+                        preResolvedAudioUrl
+                    } else {
+                        val freshInfo = extractor.extractVideo(download.videoUrl ?: ("https://www.youtube.com/watch?v=" + download.videoId))
+                        val compatibleAudioStreams = freshInfo.streamSources
+                            .filter { it.format == "audio" }
+                            .filter {
+                                val mime = it.mimeType.lowercase()
+                                val codec = it.codec.lowercase()
+                                if (isWebmVideo) {
+                                    mime.contains("webm") || mime.contains("ogg") || codec.contains("webm") || codec.contains("opus")
+                                } else {
+                                    mime.contains("mp4") || mime.contains("m4a") || codec.contains("m4a") || codec.contains("aac")
+                                }
                             }
+                        val audioStreamsToUse = if (compatibleAudioStreams.isNotEmpty()) compatibleAudioStreams else {
+                            freshInfo.streamSources.filter { it.format == "audio" }
                         }
-                    val audioStreamsToUse = if (compatibleAudioStreams.isNotEmpty()) compatibleAudioStreams else {
-                        freshInfo.streamSources.filter { it.format == "audio" }
-                    }
-                    val audioStream = audioStreamsToUse
-                        .maxByOrNull { it.quality.replace("kbps", "").toIntOrNull() ?: 0 }
+                        val audioStream = audioStreamsToUse
+                            .maxByOrNull { it.quality.replace("kbps", "").toIntOrNull() ?: 0 }
 
-                    if (audioStream == null) {
-                        throw IOException("No audio stream found for merging")
+                        if (audioStream != null) {
+                            audioSize = audioStream.contentLength ?: 0L
+                            if (audioSize <= 0L) {
+                                withContext(Dispatchers.IO) {
+                                    audioSize = getStreamSize(audioStream.url)
+                                }
+                            }
+                            audioStream.url
+                        } else {
+                            throw IOException("No audio stream found for merging")
+                        }
                     }
 
                     val downloadAudioSuccess = downloadUrlToFile(
                         download = download,
-                        url = audioStream.url,
+                        url = audioUrlToUse,
                         tmpFile = audioFile,
                         startProgress = 0.90f,
                         endProgress = 0.95f,
-                        progressMessage = "downloading_audio",
+                        progressMessage = "downloading_audio|${tmpFile.length()}",
                         isAudioStream = true
                     ) {
                         val freshAudioInfo = extractor.extractVideo(download.videoUrl ?: ("https://www.youtube.com/watch?v=" + download.videoId))
@@ -814,20 +948,24 @@ class DownloadService : Service() {
                         return
                     }
 
-                    repository.updateProgressAndMessage(download.id, 0.97f, "merging")
+                    repository.updateProgressAndMessage(download.id, 0.95f, "merging|0")
                     activeProgress[download.id] = ActiveProgress(
                         title = "Merging video & audio...",
-                        bytesDownloaded = (0.97f * (if (download.fileSizeBytes > 0) download.fileSizeBytes else tmpFile.length())).toLong(),
+                        bytesDownloaded = (0.95f * (if (download.fileSizeBytes > 0) download.fileSizeBytes else tmpFile.length())).toLong(),
                         totalBytes = if (download.fileSizeBytes > 0) download.fileSizeBytes else tmpFile.length()
                     )
                     updateNotification()
 
-                    android.util.Log.d("DownloadService", "Attempting native MediaMuxer merge...")
                     var nativeMergeSuccess = false
-                    try {
-                        nativeMergeSuccess = mergeAudioVideoNative(tmpFile, audioFile, outputFile)
-                    } catch (t: Throwable) {
-                        android.util.Log.e("DownloadService", "Native MediaMuxer merge failed with exception", t)
+                    if (!ext.contains("webm", ignoreCase = true)) {
+                        android.util.Log.d("DownloadService", "Attempting native MediaMuxer merge...")
+                        try {
+                            nativeMergeSuccess = mergeAudioVideoNative(tmpFile, audioFile, outputFile)
+                        } catch (t: Throwable) {
+                            android.util.Log.e("DownloadService", "Native MediaMuxer merge failed with exception", t)
+                        }
+                    } else {
+                        android.util.Log.d("DownloadService", "Skipping native MediaMuxer merge for WebM container.")
                     }
 
                     if (nativeMergeSuccess) {
@@ -837,30 +975,43 @@ class DownloadService : Service() {
                         break
                     }
 
-                    android.util.Log.d("DownloadService", "Native merge failed/skipped. Falling back to FFmpegKit...")
-                    val audioCodec = if (ext.contains("webm", ignoreCase = true)) "opus" else "aac"
-                    val ffmpegCommand = "-y -i \"${tmpFile.absolutePath}\" -i \"${audioFile.absolutePath}\" -c:v copy -c:a $audioCodec \"${outputFile.absolutePath}\""
+                    android.util.Log.d("DownloadService", "Native merge failed/skipped. Trying fast FFmpeg stream copy...")
+                    val ffmpegCommandCopy = "-y -i \"${tmpFile.absolutePath}\" -i \"${audioFile.absolutePath}\" -c:v copy -c:a copy \"${outputFile.absolutePath}\""
                     
-                    var ffmpegSuccess = false
-                    try {
-                        val session = com.arthenica.ffmpegkit.FFmpegKit.execute(ffmpegCommand)
-                        if (com.arthenica.ffmpegkit.ReturnCode.isSuccess(session.returnCode)) {
-                            tmpFile.delete()
-                            audioFile.delete()
-                            ffmpegSuccess = true
-                        } else {
-                            val logs = session.allLogsAsString ?: "FFmpeg merge failed with no logs"
-                            android.util.Log.e("DownloadService", "FFmpeg merge failed: $logs")
-                        }
-                    } catch (t: Throwable) {
-                        android.util.Log.e("DownloadService", "FFmpegKit execution failed completely", t)
-                        throw IOException("FFmpegKit failed to load or run: ${t.message}", t)
+                    val durationSeconds = withContext(Dispatchers.IO) {
+                        videoDao.getVideoById(download.videoId)?.durationSeconds ?: 0L
+                    }
+
+                    var ffmpegSuccess = runFFmpegCommandWithProgress(
+                        command = ffmpegCommandCopy,
+                        downloadId = download.id,
+                        durationSeconds = durationSeconds,
+                        startProgress = 0.95f,
+                        endProgress = 1.00f
+                    )
+
+                    if (!ffmpegSuccess && !isPaused(download.id) && !isCancelled(download.id) && !isPutToQueue(download.id)) {
+                        android.util.Log.d("DownloadService", "FFmpeg copy merge failed. Falling back to transcoding...")
+                        val audioCodec = if (ext.contains("webm", ignoreCase = true)) "opus" else "aac"
+                        val ffmpegCommandTranscode = "-y -i \"${tmpFile.absolutePath}\" -i \"${audioFile.absolutePath}\" -c:v copy -c:a $audioCodec \"${outputFile.absolutePath}\""
+                        ffmpegSuccess = runFFmpegCommandWithProgress(
+                            command = ffmpegCommandTranscode,
+                            downloadId = download.id,
+                            durationSeconds = durationSeconds,
+                            startProgress = 0.95f,
+                            endProgress = 1.00f
+                        )
                     }
 
                     if (ffmpegSuccess) {
+                        tmpFile.delete()
+                        audioFile.delete()
                         audioSuccess = true
                         break
                     } else {
+                        if (isPaused(download.id) || isCancelled(download.id) || isPutToQueue(download.id)) {
+                            return
+                        }
                         throw IOException("Both native MediaMuxer and FFmpegKit merging failed")
                     }
                 } catch (e: CancellationException) {
