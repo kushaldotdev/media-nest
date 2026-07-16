@@ -47,10 +47,9 @@ import javax.inject.Inject
 
 fun sanitizeFileName(name: String): String {
     if (name.isBlank()) return "media"
-    val invalidChars = "[\\\\/:*?\"<>|\\r\\n\\t\\u0000\\s]".toRegex()
-    var sanitized = name.replace(invalidChars, "-")
-    sanitized = sanitized.replace("-+".toRegex(), "-")
-    sanitized = sanitized.replace("_+".toRegex(), "_")
+    val stripped = name.replace("[^\\p{L}\\p{N}\\s-_]".toRegex(), "")
+    val separatorRegex = "[\\s-_]+".toRegex()
+    var sanitized = stripped.replace(separatorRegex, "-")
     sanitized = sanitized.trim { it == '-' || it == '_' }
     if (sanitized.length > 100) {
         sanitized = sanitized.substring(0, 100).trim { it == '-' || it == '_' }
@@ -873,6 +872,7 @@ class DownloadService : Service() {
                         // 5. File Leaks: Delete tmpFile and audioFile in markFailed paths.
                         if (audioFile.exists()) audioFile.delete()
                         if (tmpFile.exists()) tmpFile.delete()
+                        if (outputFile.exists()) outputFile.delete()
                         markDownloadFailed(download.id, e.message ?: "Audio download/merge failed", audioRetries)
                         return
                     }
@@ -1016,6 +1016,15 @@ class DownloadService : Service() {
            if (audioFile.exists()) {
                audioFile.delete()
            }
+           
+           // Delete outputFile (descriptive name format) if it exists
+           val ext = if (download.url.contains("webm", ignoreCase = true) || download.quality.contains("webm", ignoreCase = true)) "webm" else "mp4"
+           val sanitizedTitle = sanitizeFileName(download.title)
+           val outputFile = File(outputDir, "${sanitizedTitle}_${download.videoId}_${download.quality}.$ext")
+           if (outputFile.exists()) {
+               outputFile.delete()
+           }
+           
            updateDownloadStatus(id, DownloadStatus.CANCELED, download.progress)
            updateNotification()
            processQueue()
@@ -1118,6 +1127,15 @@ class DownloadService : Service() {
                if (audioFile.exists()) {
                    audioFile.delete()
                }
+               
+               // Delete outputFile (descriptive name format) if it exists
+               val ext = if (download.url.contains("webm", ignoreCase = true) || download.quality.contains("webm", ignoreCase = true)) "webm" else "mp4"
+               val sanitizedTitle = sanitizeFileName(download.title)
+               val outputFile = File(outputDir, "${sanitizedTitle}_${download.videoId}_${download.quality}.$ext")
+               if (outputFile.exists()) {
+                   outputFile.delete()
+               }
+               
                updateDownloadStatus(download.id, DownloadStatus.CANCELED, download.progress)
            }
            processQueue()
