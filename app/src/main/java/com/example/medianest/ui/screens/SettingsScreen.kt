@@ -834,6 +834,159 @@ fun SettingsScreen(
                 }
             }
 
+            // Broken Media Cleaner Card
+            val orphanFiles by viewModel.orphanFiles.collectAsStateWithLifecycle()
+            val isScanningOrphans by viewModel.isScanningOrphans.collectAsStateWithLifecycle()
+            var hasScannedOrphans by remember { mutableStateOf(false) }
+            var showBrokenFilesDialog by remember { mutableStateOf(false) }
+
+            GlassCard(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("Broken Media Cleaner", style = MaterialTheme.typography.titleSmall)
+                    Spacer(Modifier.height(4.dp))
+                    Text("Scan and clean up files on disk that did not download successfully or are not linked to your database library.", style = MaterialTheme.typography.bodySmall)
+
+                    Spacer(Modifier.height(12.dp))
+
+                    Button(
+                        onClick = { 
+                            viewModel.scanOrphanFiles()
+                            hasScannedOrphans = true
+                        },
+                        enabled = !isScanningOrphans,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        if (isScanningOrphans) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
+                            Spacer(Modifier.width(8.dp))
+                            Text("Scanning...")
+                        } else {
+                            Text("Scan for Broken Files")
+                        }
+                    }
+
+                    if (hasScannedOrphans && !isScanningOrphans) {
+                        if (orphanFiles.isEmpty()) {
+                            Spacer(Modifier.height(8.dp))
+                            Text("No broken files found.", style = MaterialTheme.typography.bodyMedium, color = Color(0xFF4CAF50))
+                        } else {
+                            val totalSize = orphanFiles.sumOf { it.sizeBytes }
+                            Spacer(Modifier.height(12.dp))
+                            Column(
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    text = "Found ${orphanFiles.size} broken files (${viewModel.formatOrphanSize(totalSize)})",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                                Spacer(Modifier.height(8.dp))
+                                Button(
+                                    onClick = { showBrokenFilesDialog = true },
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("View & Clean")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (showBrokenFilesDialog) {
+                AlertDialog(
+                    onDismissRequest = { showBrokenFilesDialog = false },
+                    title = {
+                        val totalSize = orphanFiles.sumOf { it.sizeBytes }
+                        Column {
+                            Text("Broken Files Found", style = MaterialTheme.typography.titleMedium)
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                text = "Found ${orphanFiles.size} files (Total: ${viewModel.formatOrphanSize(totalSize)})",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    },
+                    text = {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            if (orphanFiles.isNotEmpty()) {
+                                Button(
+                                    onClick = { 
+                                        viewModel.deleteAllOrphans()
+                                        showBrokenFilesDialog = false
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                                    modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp)
+                                ) {
+                                    Text("Delete All Files")
+                                }
+                            }
+                            
+                            LazyColumn(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .heightIn(max = 300.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                items(orphanFiles) { orphan ->
+                                    Card(
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                        ),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(8.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.SpaceBetween
+                                        ) {
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text(
+                                                    text = orphan.name,
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    fontWeight = FontWeight.Medium,
+                                                    maxLines = 2,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                                Spacer(Modifier.height(2.dp))
+                                                Text(
+                                                    text = "${if (orphan.isAudio) "Audio" else "Video"} • ${viewModel.formatOrphanSize(orphan.sizeBytes)}",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                            IconButton(
+                                                onClick = { 
+                                                    viewModel.deleteOrphanFile(orphan)
+                                                    if (orphanFiles.size <= 1) {
+                                                        showBrokenFilesDialog = false
+                                                    }
+                                                }
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Delete,
+                                                    contentDescription = "Delete file",
+                                                    tint = MaterialTheme.colorScheme.error,
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { showBrokenFilesDialog = false }) {
+                            Text("Close")
+                        }
+                    }
+                )
+            }
+
             // Section: About & Updates
             Text("About", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
 

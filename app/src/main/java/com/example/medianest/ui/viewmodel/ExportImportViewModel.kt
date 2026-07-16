@@ -95,6 +95,13 @@ data class LocalBackupInfo(
     val absolutePath: String
 )
 
+data class OrphanFile(
+    val name: String,
+    val absolutePath: String,
+    val sizeBytes: Long,
+    val isAudio: Boolean
+)
+
 @HiltViewModel
 class ExportImportViewModel @Inject constructor(
     private val backupRepository: BackupRepository,
@@ -134,6 +141,12 @@ class ExportImportViewModel @Inject constructor(
 
     private val _localBackups = MutableStateFlow<List<LocalBackupInfo>>(emptyList())
     val localBackups: StateFlow<List<LocalBackupInfo>> = _localBackups
+
+    private val _orphanFiles = MutableStateFlow<List<OrphanFile>>(emptyList())
+    val orphanFiles: StateFlow<List<OrphanFile>> = _orphanFiles
+
+    private val _isScanningOrphans = MutableStateFlow(false)
+    val isScanningOrphans: StateFlow<Boolean> = _isScanningOrphans
 
     val autoBackupIntervalHours = downloadPreferences.autoBackupIntervalHours.stateIn(viewModelScope, SharingStarted.Eagerly, 0)
 
@@ -444,6 +457,106 @@ class ExportImportViewModel @Inject constructor(
                 _state.value = ExportImportState.Error("Repair failed: ${e.message}")
             }
         }
+    }
+
+    fun scanOrphanFiles() {
+        _isScanningOrphans.value = true
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val customFolder = downloadPreferences.downloadFolder.first()
+                val dirs = mutableListOf<File>()
+                if (customFolder.isNotEmpty()) {
+                    dirs.add(File(File(customFolder), "video"))
+                    dirs.add(File(File(customFolder), "audio"))
+                } else {
+                    dirs.add(File(appContext.filesDir, "MediaNest/video"))
+                    dirs.add(File(appContext.filesDir, "MediaNest/audio"))
+                }
+                
+                val mediaFiles = mutableListOf<File>()
+                dirs.distinct().forEach { dir ->
+                    if (dir.exists()) {
+                        dir.listFiles()?.forEach { file ->
+                            if (file.isFile && !file.name.endsWith(".tmp", ignoreCase = true)) {
+                                mediaFiles.add(file)
+                            }
+                        }
+                    }
+                }
+                
+                val registeredPaths = mutableSetOf<String>()
+                try {
+                    videoRepository.getAllVideos().first().forEach { video ->
+                        if (video.localFilePath.isNotEmpty()) {
+                            registeredPaths.add(File(video.localFilePath).absolutePath)
+                        }
+                    }
+                } catch (_: Exception) {}
+                
+                try {
+                    downloadRepository.getAllDownloadsOnce().forEach { download ->
+                        if (download.filePath.isNotEmpty()) {
+                            registeredPaths.add(File(download.filePath).absolutePath)
+                        }
+                    }
+                } catch (_: Exception) {}
+                
+                val orphans = mediaFiles.filter { file ->
+                    file.absolutePath !in registeredPaths
+                }.map { file ->
+                    val isAudio = file.parentFile?.name == "audio"
+                    OrphanFile(
+                        name = file.name,
+                        absolutePath = file.absolutePath,
+                        sizeBytes = file.length(),
+                        isAudio = isAudio
+                    )
+                }
+                
+                _orphanFiles.value = orphans
+            } catch (e: Exception) {
+                android.util.Log.e("ExportImportViewModel", "Failed to scan orphan files", e)
+            } finally {
+                _isScanningOrphans.value = false
+            }
+        }
+    }
+
+    fun deleteOrphanFile(orphan: OrphanFile) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val file = File(orphan.absolutePath)
+                if (file.exists()) {
+                    file.delete()
+                }
+                _orphanFiles.value = _orphanFiles.value.filter { it.absolutePath != orphan.absolutePath }
+            } catch (e: Exception) {
+                android.util.Log.e("ExportImportViewModel", "Failed to delete orphan file", e)
+            }
+        }
+    }
+
+    fun deleteAllOrphans() {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                _orphanFiles.value.forEach { orphan ->
+                    val file = File(orphan.absolutePath)
+                    if (file.exists()) {
+                        file.delete()
+                    }
+                }
+                _orphanFiles.value = emptyList()
+            } catch (e: Exception) {
+                android.util.Log.e("ExportImportViewModel", "Failed to delete all orphan files", e)
+            }
+        }
+    }
+
+    fun formatOrphanSize(bytes: Long): String {
+        if (bytes <= 0) return "0 B"
+        val units = arrayOf("B", "KB", "MB", "GB", "TB")
+        val digitGroups = (Math.log10(bytes.toDouble()) / Math.log10(1024.0)).toInt()
+        return String.format(java.util.Locale.US, "%.1f %s", bytes / Math.pow(1024.0, digitGroups.toDouble()), units[digitGroups])
     }
 
     fun resetState() {
