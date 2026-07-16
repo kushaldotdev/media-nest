@@ -516,7 +516,7 @@ class HomeViewModel @Inject constructor(
             val insertId = downloadRepository.insert(extractionEntity)
 
             try {
-                val result = audioExtractor.extractAudio(download.filePath, download.videoId, download.quality)
+                val result = audioExtractor.extractAudio(download.filePath, download.videoId, download.quality, download.title)
                 if (result.success) {
                     downloadRepository.markCompleted(insertId, java.io.File(result.outputPath).length(), result.outputPath)
                 } else {

@@ -446,7 +446,8 @@ class DownloadsViewModel @Inject constructor(
                 val result = audioExtractor.extractAudio(
                     download.filePath,
                     download.videoId,
-                    download.quality
+                    download.quality,
+                    download.title
                 )
 
                 if (result.success) {

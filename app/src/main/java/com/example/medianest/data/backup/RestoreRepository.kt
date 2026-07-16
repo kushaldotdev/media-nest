@@ -78,7 +78,7 @@ class RestoreRepository @Inject constructor(
                         entry.name.startsWith("media/") -> {
                             if (restoreMedia) {
                                 val name = entry.name.removePrefix("media/")
-                                val target = if (name.contains("_audio")) audioDir else videoDir
+                                val target = if (name.contains("_audio") || name.contains("kbps")) audioDir else videoDir
                                 val file = File(target, name)
                                 if (!file.canonicalPath.startsWith(target.canonicalPath + File.separator)) {
                                     throw SecurityException("Zip Slip detected: entry path is outside destination directory")
@@ -182,7 +182,7 @@ class RestoreRepository @Inject constructor(
 
     private fun resolveMediaPath(fileName: String, customFolder: String, format: String? = null): String {
         if (fileName.isEmpty()) return ""
-        val subfolder = if (fileName.contains("_audio") || format == "audio" || format == "audio_extracted") "audio" else "video"
+        val subfolder = if (fileName.contains("_audio") || fileName.contains("kbps") || format == "audio" || format == "audio_extracted") "audio" else "video"
         return if (customFolder.isNotEmpty()) {
             File(File(customFolder), "$subfolder/$fileName").absolutePath
         } else {

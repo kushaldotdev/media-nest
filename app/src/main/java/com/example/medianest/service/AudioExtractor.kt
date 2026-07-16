@@ -29,7 +29,8 @@ class AudioExtractor @Inject constructor(
     suspend fun extractAudio(
         inputFilePath: String,
         videoId: String,
-        quality: String
+        quality: String,
+        title: String
     ): ExtractionResult = withContext(Dispatchers.IO) {
         val customFolder = downloadPreferences.downloadFolder.first()
         val outputDir = if (customFolder.isNotEmpty()) {
@@ -39,8 +40,10 @@ class AudioExtractor @Inject constructor(
         }
         outputDir.mkdirs()
 
+        val sanitizedTitle = sanitizeFileName(title)
+
         // Try native demuxing first (generates .m4a container, extremely fast, 100% crash-free)
-        val m4aFileName = "${videoId}_${quality}_audio.m4a"
+        val m4aFileName = "${sanitizedTitle}_${videoId}_${quality}_audio.m4a"
         val m4aOutputFile = File(outputDir, m4aFileName)
         if (m4aOutputFile.exists()) m4aOutputFile.delete()
 
@@ -50,7 +53,7 @@ class AudioExtractor @Inject constructor(
         }
 
         // Fallback to FFmpegKit if native demuxing fails (produces .mp3, wrapped in try-catch to avoid native library link crashes)
-        val mp3FileName = "${videoId}_${quality}_audio.mp3"
+        val mp3FileName = "${sanitizedTitle}_${videoId}_${quality}_audio.mp3"
         val mp3OutputFile = File(outputDir, mp3FileName)
         if (mp3OutputFile.exists()) mp3OutputFile.delete()
 

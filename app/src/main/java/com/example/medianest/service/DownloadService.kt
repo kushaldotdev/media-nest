@@ -45,6 +45,19 @@ import java.nio.ByteBuffer
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 
+fun sanitizeFileName(name: String): String {
+    if (name.isBlank()) return "media"
+    val invalidChars = "[\\\\/:*?\"<>|\\r\\n\\t\\u0000\\s]".toRegex()
+    var sanitized = name.replace(invalidChars, "-")
+    sanitized = sanitized.replace("-+".toRegex(), "-")
+    sanitized = sanitized.replace("_+".toRegex(), "_")
+    sanitized = sanitized.trim { it == '-' || it == '_' }
+    if (sanitized.length > 100) {
+        sanitized = sanitized.substring(0, 100).trim { it == '-' || it == '_' }
+    }
+    return if (sanitized.isEmpty()) "media" else sanitized
+}
+
 @AndroidEntryPoint
 class DownloadService : Service() {
 
@@ -712,7 +725,8 @@ class DownloadService : Service() {
             return
         }
 
-        val fileName = "${download.videoId}_${download.quality}.$ext"
+        val sanitizedTitle = sanitizeFileName(download.title)
+        val fileName = "${sanitizedTitle}_${download.videoId}_${download.quality}.$ext"
         val outputFile = File(outputDir, fileName)
 
         // Step 2: Download and merge audio if video_only
