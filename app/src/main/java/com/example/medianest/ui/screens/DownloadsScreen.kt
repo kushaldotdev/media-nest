@@ -67,6 +67,14 @@ import com.example.medianest.ui.viewmodel.DownloadsViewModel
 
 import androidx.compose.runtime.LaunchedEffect
 
+private fun formatTransferTiming(parts: List<String>, timingOffset: Int = 5): String {
+    val elapsedMs = parts.getOrNull(timingOffset)?.toLongOrNull() ?: return ""
+    val remainingMs = parts.getOrNull(timingOffset + 1)?.toLongOrNull() ?: return ""
+    val elapsed = com.example.medianest.ui.utils.UiUtils.formatDuration(elapsedMs / 1000L)
+    val remaining = com.example.medianest.ui.utils.UiUtils.formatDuration(remainingMs / 1000L)
+    return " · $elapsed elapsed · $remaining remaining"
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DownloadsScreen(
@@ -269,6 +277,9 @@ fun DownloadsScreen(
                 items(downloads, key = { it.id }) { download ->
                     DownloadItem(
                         download = download,
+                        hasExtractedAudio = downloads.any {
+                            it.videoId == download.videoId && it.format == "audio_extracted"
+                        },
                         videosMap = videosMap,
                         onPlayDownload = onPlayDownload,
                         onVideoClick = onVideoClick,
@@ -423,6 +434,7 @@ fun DownloadsScreen(
 @Composable
 private fun DownloadItem(
     download: DownloadEntity,
+    hasExtractedAudio: Boolean,
     videosMap: Map<String, VideoEntity>,
     onPlayDownload: (DownloadEntity) -> Unit,
     onVideoClick: (String) -> Unit,
@@ -613,13 +625,9 @@ private fun DownloadItem(
                                 val totalSize = vTotal + aTotal
                                 val downloadedMb = vDownloaded / (1024f * 1024f)
                                 val totalMb = totalSize / (1024f * 1024f)
-                                val pct = if (totalSize > 0) ((vDownloaded * 100) / totalSize).toInt() else 0
+                                val pct = (download.progress * 100).toInt()
                                 
-                                if (speed.isNotEmpty()) {
-                                    "%.1fMB / %.1fMB (%d%%) • %s".format(downloadedMb, totalMb, pct, speed)
-                                } else {
-                                    "%.1fMB / %.1fMB (%d%%)".format(downloadedMb, totalMb, pct)
-                                }
+                                "%.1fMB / %.1fMB (%d%%)%s".format(downloadedMb, totalMb, pct, formatTransferTiming(parts))
                             } else if (msg.startsWith("downloading_audio")) {
                                 val parts = msg.split("|")
                                 if (parts.size >= 4) {
@@ -632,13 +640,9 @@ private fun DownloadItem(
                                     val totalSize = vTotal + aTotal
                                     val downloadedMb = totalDownloaded / (1024f * 1024f)
                                     val totalMb = totalSize / (1024f * 1024f)
-                                    val pct = if (totalSize > 0) ((totalDownloaded * 100) / totalSize).toInt() else 0
+                                    val pct = (download.progress * 100).toInt()
                                     
-                                    if (speed.isNotEmpty()) {
-                                        "Downloading audio: %.1fMB / %.1fMB (%d%%) • %s".format(downloadedMb, totalMb, pct, speed)
-                                    } else {
-                                        "Downloading audio: %.1fMB / %.1fMB (%d%%)".format(downloadedMb, totalMb, pct)
-                                    }
+                                "Downloading audio: %.1fMB / %.1fMB (%d%%)%s".format(downloadedMb, totalMb, pct, formatTransferTiming(parts))
                                 } else {
                                     val speedPart = msg.substringAfter("|", "")
                                     if (speedPart.isNotEmpty()) {
@@ -648,13 +652,25 @@ private fun DownloadItem(
                                     }
                                 }
                             } else if (msg.startsWith("merging")) {
-                                val pctPart = msg.substringAfter("|", "")
+                                val parts = msg.split("|")
+                                val pctPart = parts.getOrNull(1) ?: ""
                                 val pct = pctPart.toIntOrNull()
                                 if (pct != null && pct >= 0) {
-                                    "Merging video & audio ($pct%)..."
+                                    "Merging video & audio ($pct%)${formatTransferTiming(parts, 2)}"
                                 } else {
                                     "Merging video & audio..."
                                 }
+                            } else if (download.format == "audio_extracted" && msg.startsWith("extracting|")) {
+                                val parts = msg.split("|")
+                                val elapsedMs = parts.getOrNull(1)?.toLongOrNull() ?: 0L
+                                val remainingMs = parts.getOrNull(2)?.toLongOrNull() ?: 0L
+                                val elapsed = com.example.medianest.ui.utils.UiUtils.formatDuration(elapsedMs / 1000L)
+                                val remaining = com.example.medianest.ui.utils.UiUtils.formatDuration(remainingMs / 1000L)
+                                val pct = (download.progress * 100).toInt()
+                                "Extracting audio: $pct% · $elapsed elapsed · $remaining remaining"
+                            } else if (msg.startsWith("downloading|")) {
+                                val parts = msg.split("|")
+                                "${(download.progress * 100).toInt()}%${formatTransferTiming(parts, 2)}"
                             } else if (download.fileSizeBytes > 0L) {
                                 val downloadedMb = (download.progress * download.fileSizeBytes) / (1024f * 1024f)
                                 val totalMb = download.fileSizeBytes / (1024f * 1024f)
@@ -728,7 +744,7 @@ private fun DownloadItem(
                         )
 
                         if (msg.startsWith("merging")) {
-                            val pctPart = msg.substringAfter("|", "")
+                            val pctPart = msg.split("|").getOrNull(1) ?: ""
                             val pct = pctPart.toFloatOrNull() ?: 0f
                             val filledWidth = (pct / 100f) * width
                             drawRect(
@@ -736,59 +752,10 @@ private fun DownloadItem(
                                 size = androidx.compose.ui.geometry.Size(filledWidth, height)
                             )
                         } else if (download.format == "video_only" && (msg.startsWith("downloading_video") || msg.startsWith("downloading_audio"))) {
-                            val (vDownloaded, vTotal, aDownloaded, aTotal) = if (msg.startsWith("downloading_video")) {
-                                val parts = msg.split("|")
-                                val vd = parts.getOrNull(1)?.toLongOrNull() ?: 0L
-                                val vt = parts.getOrNull(2)?.toLongOrNull() ?: 0L
-                                val at = parts.getOrNull(3)?.toLongOrNull() ?: 0L
-                                val ad = 0L
-                                listOf(vd, vt, ad, at)
-                            } else {
-                                val parts = msg.split("|")
-                                if (parts.size >= 4) {
-                                    val ad = parts.getOrNull(1)?.toLongOrNull() ?: 0L
-                                    val at = parts.getOrNull(2)?.toLongOrNull() ?: 0L
-                                    val vt = parts.getOrNull(3)?.toLongOrNull() ?: 0L
-                                    val vd = vt
-                                    listOf(vd, vt, ad, at)
-                                } else {
-                                    listOf(0L, 0L, 0L, 0L)
-                                }
-                            }
-
-                            if (vTotal > 0L || aTotal > 0L) {
-                                val totalSize = (vTotal + aTotal).toFloat()
-                                val videoRatio = if (totalSize > 0) vTotal.toFloat() / totalSize else 0.90f
-                                val audioRatio = if (totalSize > 0) aTotal.toFloat() / totalSize else 0.10f
-
-                                val vFilledRatio = if (vTotal > 0) vDownloaded.toFloat() / vTotal else 0f
-                                val aFilledRatio = if (aTotal > 0) aDownloaded.toFloat() / aTotal else 0f
-
-                                val videoWidth = videoRatio * width
-                                val audioWidth = audioRatio * width
-
-                                val filledVideoWidth = vFilledRatio * videoWidth
-                                val filledAudioWidth = aFilledRatio * audioWidth
-
-                                // Draw video filled segment
-                                drawRect(
-                                    color = videoColor,
-                                    size = androidx.compose.ui.geometry.Size(filledVideoWidth, height)
-                                )
-
-                                // Draw audio filled segment (starts at videoWidth)
-                                drawRect(
-                                    color = audioColor,
-                                    topLeft = androidx.compose.ui.geometry.Offset(videoWidth, 0f),
-                                    size = androidx.compose.ui.geometry.Size(filledAudioWidth, height)
-                                )
-                            } else {
-                                // Fallback progress
-                                drawRect(
-                                    color = videoColor,
-                                    size = androidx.compose.ui.geometry.Size(download.progress * width, height)
-                                )
-                            }
+                            drawRect(
+                                color = if (msg.startsWith("downloading_audio")) audioColor else videoColor,
+                                size = androidx.compose.ui.geometry.Size(download.progress * width, height)
+                            )
                         } else {
                             // Pure audio or standard download format
                             val barColor = if (download.format == "audio" || download.format == "audio_extracted") audioColor else videoColor
@@ -982,7 +949,7 @@ private fun DownloadItem(
                                     Text(if (showPause) "Pause" else "Play", style = MaterialTheme.typography.labelMedium)
                                 }
                             }
-                            if (download.format != "audio" && download.format != "audio_extracted") {
+                            if (download.format != "audio" && download.format != "audio_extracted" && !hasExtractedAudio) {
                                 val isExtracting = uiState.extractingVideoId == download.videoId
                                 OutlinedButton(
                                     onClick = { viewModel.extractAudio(download) },

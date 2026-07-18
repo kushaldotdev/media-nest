@@ -75,7 +75,7 @@ interface DownloadDao {
     @Query("SELECT * FROM downloads WHERE videoId = :videoId AND status = 'COMPLETED'")
     suspend fun getCompletedDownloadsForVideo(videoId: String): List<DownloadEntity>
 
-    @Query("SELECT * FROM downloads WHERE videoId = :videoId AND format = 'audio_extracted' AND status IN ('QUEUED', 'DOWNLOADING') LIMIT 1")
+    @Query("SELECT * FROM downloads WHERE videoId = :videoId AND format = 'audio_extracted' LIMIT 1")
     suspend fun getAudioExtraction(videoId: String): DownloadEntity?
 
     @Query("SELECT * FROM downloads")

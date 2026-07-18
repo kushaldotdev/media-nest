@@ -6,6 +6,7 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.os.IBinder
+import android.os.SystemClock
 import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -26,6 +27,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -34,6 +36,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.delay
 import kotlin.coroutines.coroutineContext
 import okhttp3.OkHttpClient
@@ -165,6 +168,7 @@ class DownloadService : Service() {
         DownloadPathResolver.resolveOutputDir(download, filesDir)
     data class ActiveProgress(
         val title: String,
+        val progress: Float,
         val bytesDownloaded: Long,
         val totalBytes: Long
     )
@@ -174,10 +178,13 @@ class DownloadService : Service() {
     private val cancelFlags = ConcurrentHashMap<Long, Boolean>()
     private val putToQueueFlags = ConcurrentHashMap<Long, Boolean>()
     private val activeProgress = ConcurrentHashMap<Long, ActiveProgress>()
+    private val activeStartedAt = ConcurrentHashMap<Long, Long>()
     private val activeCalls = ConcurrentHashMap<Long, okhttp3.Call>()
     private val queueMutex = kotlinx.coroutines.sync.Mutex()
     private val intentMutex = kotlinx.coroutines.sync.Mutex()
     private val pausedDownloads = ConcurrentHashMap<Long, DownloadEntity>()
+    private val pendingExtractionIds = ConcurrentHashMap.newKeySet<Long>()
+    private val pendingRestartIds = ConcurrentHashMap.newKeySet<Long>()
     private var isFirstStart = true
     private var isForeground = false
 
@@ -220,6 +227,13 @@ class DownloadService : Service() {
         val action = intent?.action
         val id = intent?.getLongExtra(EXTRA_DOWNLOAD_ID, -1L) ?: -1L
         val deleteFiles = intent?.getBooleanExtra(EXTRA_DELETE_FILES, false) ?: false
+        if (id != -1L) {
+            // Keep service alive while commands wait for intentMutex.
+            when (action) {
+                ACTION_EXTRACT_AUDIO -> pendingExtractionIds.add(id)
+                ACTION_RESTART -> pendingRestartIds.add(id)
+            }
+        }
 
         serviceScope.launch {
             intentMutex.withLock {
@@ -267,11 +281,11 @@ class DownloadService : Service() {
             queueMutex.withLock {
                 val maxConcurrent = preferences.maxConcurrentDownloads.first()
                 val queue = repository.getDownloadsByStatus(DownloadStatus.QUEUED).first()
-                    .filter { it.format != "audio_extracted" && !activeJobs.containsKey(it.id) }
+                    .filter { !activeJobs.containsKey(it.id) && !pendingRestartIds.contains(it.id) }
                 val paused = pausedDownloads.values.toList()
 
                 val downloading = repository.getDownloadsByStatus(DownloadStatus.DOWNLOADING).first()
-                    .filter { it.format != "audio_extracted" && !activeJobs.containsKey(it.id) }
+                    .filter { it.format != "audio_extracted" && !activeJobs.containsKey(it.id) && !pendingRestartIds.contains(it.id) }
 
                 android.util.Log.d("DownloadService", "processQueue: maxConcurrent=$maxConcurrent, queueSize=${queue.size}, activeJobsSize=${activeJobs.size}, activeJobsKeys=${activeJobs.keys}, downloadingSize=${downloading.size}, pausedSize=${paused.size}")
 
@@ -294,7 +308,7 @@ class DownloadService : Service() {
                 val slots = (maxConcurrent - activeJobs.size).coerceAtLeast(0)
                 android.util.Log.d("DownloadService", "Available slots: $slots")
 
-                if (queue.isEmpty() && activeJobs.isEmpty() && paused.isEmpty() && downloading.isEmpty()) {
+                if (queue.isEmpty() && activeJobs.isEmpty() && paused.isEmpty() && downloading.isEmpty() && pendingExtractionIds.isEmpty() && pendingRestartIds.isEmpty()) {
                     android.util.Log.d("DownloadService", "All queues and jobs empty. Stopping service.")
                     try {
                         NotificationManagerCompat.from(this@DownloadService).cancel(NOTIFICATION_ID)
@@ -306,9 +320,13 @@ class DownloadService : Service() {
                 }
                 
                 if (slots > 0 && queue.isNotEmpty()) {
-                    queue.take(slots).forEach { 
-                        android.util.Log.d("DownloadService", "Enqueuing queued download: ${it.id} (title=${it.title})")
-                        enqueueDownload(it) 
+                    queue.take(slots).forEach {
+                        if (it.format == "audio_extracted") {
+                            startAudioExtraction(it.id)
+                        } else {
+                            android.util.Log.d("DownloadService", "Enqueuing queued download: ${it.id} (title=${it.title})")
+                            enqueueDownload(it)
+                        }
                     }
                 }
                 updateNotification()
@@ -335,19 +353,19 @@ class DownloadService : Service() {
         }
         cancelFlags.remove(download.id)
         putToQueueFlags.remove(download.id)
+        activeStartedAt[download.id] = SystemClock.elapsedRealtime()
         activeProgress[download.id] = ActiveProgress(
             title = download.title.ifEmpty { download.quality },
+            progress = download.progress,
             bytesDownloaded = (download.progress * download.fileSizeBytes).toLong(),
             totalBytes = download.fileSizeBytes
         )
-        val job = serviceScope.launch {
+        val job = serviceScope.launch(start = CoroutineStart.LAZY) {
             try {
                 downloadFile(download)
             } finally {
                 withContext(NonCancellable) {
-                    val progress = activeProgress[download.id]?.let {
-                        if (it.totalBytes > 0) it.bytesDownloaded.toFloat() / it.totalBytes else 0f
-                    } ?: download.progress
+                    val progress = activeProgress[download.id]?.progress ?: download.progress
 
                     if (isPaused(download.id)) {
                         updateDownloadStatus(download.id, DownloadStatus.PAUSED, progress)
@@ -360,12 +378,14 @@ class DownloadService : Service() {
                     activeJobs.remove(download.id)
                     activeCalls.remove(download.id)
                     activeProgress.remove(download.id)
+                    activeStartedAt.remove(download.id)
                     updateNotification()
                     processQueue()
                 }
             }
         }
         activeJobs[download.id] = job
+        job.start()
     }
 
     private suspend fun downloadUrlToFile(
@@ -378,6 +398,23 @@ class DownloadService : Service() {
         isAudioStream: Boolean = false,
         onUrlExpired: suspend () -> String?
     ): Boolean {
+        val transferStartedAt = activeStartedAt[download.id] ?: SystemClock.elapsedRealtime()
+        fun transferProgress(offset: Long, totalSize: Long): Float {
+            if (totalSize <= 0L) return startProgress
+            val parts = progressMessage?.split("|").orEmpty()
+            val progress = when {
+                progressMessage?.startsWith("downloading_video") == true -> {
+                    val audioTotal = parts.getOrNull(1)?.toLongOrNull()?.coerceAtLeast(0L) ?: 0L
+                    offset.toDouble() / (totalSize + audioTotal).coerceAtLeast(1L)
+                }
+                progressMessage?.startsWith("downloading_audio") == true -> {
+                    val videoTotal = parts.getOrNull(1)?.toLongOrNull()?.coerceAtLeast(0L) ?: 0L
+                    (videoTotal + offset).toDouble() / (videoTotal + totalSize).coerceAtLeast(1L)
+                }
+                else -> startProgress + (offset.toDouble() / totalSize) * (endProgress - startProgress)
+            }
+            return progress.toFloat().coerceIn(0f, 1f)
+        }
         var currentUrl = url
         var retries = 0
         val maxRetries = 3
@@ -395,7 +432,7 @@ class DownloadService : Service() {
                 // Progress tracking state (persists across chunks)
                 var lastProgressUpdate = 0L
                 var lastProgressTime = System.currentTimeMillis()
-                var lastProgressSent = startProgress + (if (totalSize > 0) (offset.toFloat() / totalSize) else 0f) * (endProgress - startProgress)
+                var lastProgressSent = transferProgress(offset, totalSize)
                 var speedLastTime = System.currentTimeMillis()
                 var speedLastBytes = offset
                 var currentSpeedString: String? = null
@@ -403,8 +440,7 @@ class DownloadService : Service() {
                 // Chunked download loop — each iteration requests a bounded byte range
                 while (true) {
                     if (isPaused(download.id)) {
-                        val pct = if (totalSize > 0) offset.toFloat() / totalSize else 0f
-                        val savedProgress = startProgress + pct * (endProgress - startProgress)
+                        val savedProgress = transferProgress(offset, totalSize)
                         updateDownloadStatus(download.id, DownloadStatus.PAUSED, savedProgress)
                         activeJobs.remove(download.id)
                         return false
@@ -415,8 +451,7 @@ class DownloadService : Service() {
                         return false
                     }
                     if (isPutToQueue(download.id)) {
-                        val pct = if (totalSize > 0) offset.toFloat() / totalSize else 0f
-                        val savedProgress = startProgress + pct * (endProgress - startProgress)
+                        val savedProgress = transferProgress(offset, totalSize)
                         updateDownloadStatus(download.id, DownloadStatus.QUEUED, savedProgress)
                         activeJobs.remove(download.id)
                         return false
@@ -538,8 +573,7 @@ class DownloadService : Service() {
                             while (true) {
                                 if (isPaused(download.id)) {
                                     offset = tmpFile.length()
-                                    val pct = if (totalSize > 0) offset.toFloat() / totalSize else 0f
-                                    val savedProgress = startProgress + pct * (endProgress - startProgress)
+                                    val savedProgress = transferProgress(offset, totalSize)
                                     updateDownloadStatus(download.id, DownloadStatus.PAUSED, savedProgress)
                                     activeJobs.remove(download.id)
                                     return false
@@ -551,8 +585,7 @@ class DownloadService : Service() {
                                 }
                                 if (isPutToQueue(download.id)) {
                                     offset = tmpFile.length()
-                                    val pct = if (totalSize > 0) offset.toFloat() / totalSize else 0f
-                                    val savedProgress = startProgress + pct * (endProgress - startProgress)
+                                    val savedProgress = transferProgress(offset, totalSize)
                                     updateDownloadStatus(download.id, DownloadStatus.QUEUED, savedProgress)
                                     activeJobs.remove(download.id)
                                     return false
@@ -573,8 +606,7 @@ class DownloadService : Service() {
                                 }
                                 offset += read
 
-                                val currentPct = if (totalSize > 0) offset.toFloat() / totalSize else 0f
-                                val currentProgress = startProgress + currentPct * (endProgress - startProgress)
+                                val currentProgress = transferProgress(offset, totalSize)
 
                                 val currentTime = System.currentTimeMillis()
                                 val timeElapsed = currentTime - lastProgressTime >= 250
@@ -601,30 +633,55 @@ class DownloadService : Service() {
                                     (offset - lastProgressUpdate > 1024 * 1024) && timeElapsed
                                 }
 
-                                if (shouldUpdate) {
-                                    if (!isPaused(download.id) && !isCancelled(download.id) && !isPutToQueue(download.id)) {
-                                        val payload = if (progressMessage != null) {
-                                            if (progressMessage.startsWith("downloading_video")) {
-                                                val parts = progressMessage.split("|")
-                                                val aSize = parts.getOrNull(1)?.toLongOrNull() ?: 0L
-                                                "downloading_video|$offset|$totalSize|$aSize|${currentSpeedString ?: ""}"
-                                            } else if (progressMessage.startsWith("downloading_audio")) {
-                                                val parts = progressMessage.split("|")
-                                                val vSize = parts.getOrNull(1)?.toLongOrNull() ?: 0L
-                                                "downloading_audio|$offset|$totalSize|$vSize|${currentSpeedString ?: ""}"
-                                            } else {
-                                                if (currentSpeedString != null) "$progressMessage|$currentSpeedString" else progressMessage
-                                            }
-                                        } else {
-                                            currentSpeedString
-                                        }
+                                 if (shouldUpdate) {
+                                     if (!isPaused(download.id) && !isCancelled(download.id) && !isPutToQueue(download.id)) {
+                                         val elapsedMs = SystemClock.elapsedRealtime() - transferStartedAt
+                                         val remainingMs = if (currentProgress > 0f) {
+                                             (elapsedMs * (1f - currentProgress) / currentProgress).toLong()
+                                         } else {
+                                             0L
+                                         }
+                                         val payload = if (progressMessage != null) {
+                                             if (progressMessage.startsWith("downloading_video")) {
+                                                 val parts = progressMessage.split("|")
+                                                 val aSize = parts.getOrNull(1)?.toLongOrNull() ?: 0L
+                                                 "downloading_video|$offset|$totalSize|$aSize|${currentSpeedString ?: ""}|$elapsedMs|$remainingMs"
+                                             } else if (progressMessage.startsWith("downloading_audio")) {
+                                                 val parts = progressMessage.split("|")
+                                                 val vSize = parts.getOrNull(1)?.toLongOrNull() ?: 0L
+                                                 "downloading_audio|$offset|$totalSize|$vSize|${currentSpeedString ?: ""}|$elapsedMs|$remainingMs"
+                                             } else {
+                                                 "downloading|${currentSpeedString ?: ""}|$elapsedMs|$remainingMs"
+                                             }
+                                         } else {
+                                             "downloading|${currentSpeedString ?: ""}|$elapsedMs|$remainingMs"
+                                         }
                                         repository.updateProgressAndMessage(download.id, currentProgress, payload)
                                     }
-                                    activeProgress[download.id] = ActiveProgress(
-                                        title = if (progressMessage != null) "Downloading audio..." else (download.title.ifEmpty { download.quality }),
-                                        bytesDownloaded = (currentProgress * (if (totalSize > 0) totalSize else offset)).toLong(),
-                                        totalBytes = if (totalSize > 0) totalSize else offset
-                                    )
+                                     val (displayedBytes, displayedTotal) = when {
+                                         progressMessage?.startsWith("downloading_video") == true -> {
+                                             val audioBytes = progressMessage.split("|").getOrNull(1)?.toLongOrNull() ?: 0L
+                                             offset to (totalSize.coerceAtLeast(0L) + audioBytes)
+                                         }
+                                         progressMessage?.startsWith("downloading_audio") == true -> {
+                                             val videoBytes = progressMessage.split("|").getOrNull(1)?.toLongOrNull() ?: 0L
+                                             (videoBytes + offset) to (videoBytes + totalSize.coerceAtLeast(0L))
+                                         }
+                                         else -> {
+                                             val size = if (totalSize > 0) totalSize else offset
+                                             (currentProgress * size).toLong() to size
+                                         }
+                                     }
+                                     activeProgress[download.id] = ActiveProgress(
+                                         title = when {
+                                             progressMessage?.startsWith("downloading_video") == true -> "Downloading video..."
+                                             progressMessage?.startsWith("downloading_audio") == true -> "Downloading audio..."
+                                             else -> download.title.ifEmpty { download.quality }
+                                         },
+                                         progress = currentProgress,
+                                         bytesDownloaded = displayedBytes,
+                                         totalBytes = displayedTotal
+                                     )
                                     updateNotification()
                                     lastProgressSent = currentProgress
                                     lastProgressUpdate = offset
@@ -726,18 +783,26 @@ class DownloadService : Service() {
         endProgress: Float
     ): Boolean {
         return DownloadPathResolver.ffmpegMutex.withLock {
+        val mergeStartedAt = SystemClock.elapsedRealtime()
         if (durationSeconds > 0) com.arthenica.ffmpegkit.FFmpegKitConfig.enableStatisticsCallback { stats ->
             val timeInMs = stats.time
             val ffmpegProgress = (timeInMs / 1000f) / durationSeconds
             val boundedProgress = ffmpegProgress.coerceIn(0.0, 1.0).toFloat()
             val overallProgress = startProgress + boundedProgress * (endProgress - startProgress)
-            val pct = (boundedProgress * 100).toInt()
+            val pct = (overallProgress * 100).toInt()
+            val elapsedMs = SystemClock.elapsedRealtime() - mergeStartedAt
+            val remainingMs = if (boundedProgress > 0f) {
+                (elapsedMs * (1f - boundedProgress) / boundedProgress).toLong()
+            } else {
+                0L
+            }
             
             serviceScope.launch {
                 if (!isPaused(downloadId) && !isCancelled(downloadId) && !isPutToQueue(downloadId)) {
-                    repository.updateProgressAndMessage(downloadId, overallProgress, "merging|$pct")
+                    repository.updateProgressAndMessage(downloadId, overallProgress, "merging|$pct|$elapsedMs|$remainingMs")
                     activeProgress[downloadId]?.let { progress ->
                         activeProgress[downloadId] = progress.copy(
+                            progress = overallProgress,
                             bytesDownloaded = (overallProgress * progress.totalBytes).toLong()
                         )
                     }
@@ -872,7 +937,7 @@ class DownloadService : Service() {
                 url = downloadUrl,
                 tmpFile = tmpFile,
                 startProgress = 0.0f,
-                endProgress = if (download.format == "video_only") 0.90f else 1.0f,
+                endProgress = 1.0f,
                 progressMessage = if (download.format == "video_only") "downloading_video|$audioSize" else null,
                 isAudioStream = false
             ) {
@@ -915,14 +980,6 @@ class DownloadService : Service() {
                     return
                 }
                 try {
-                    repository.updateProgressAndMessage(download.id, 0.90f, "downloading_audio|0|$audioSize|${tmpFile.length()}|")
-                    activeProgress[download.id] = ActiveProgress(
-                        title = "Downloading audio...",
-                        bytesDownloaded = (0.90f * (if (download.fileSizeBytes > 0) download.fileSizeBytes else tmpFile.length())).toLong(),
-                        totalBytes = if (download.fileSizeBytes > 0) download.fileSizeBytes else tmpFile.length()
-                    )
-                    updateNotification()
-
                     val audioUrlToUse = if (audioRetries == 0 && preResolvedAudioUrl != null) {
                         preResolvedAudioUrl
                     } else {
@@ -957,12 +1014,26 @@ class DownloadService : Service() {
                         }
                     }
 
+                    val transferStart = if (audioSize > 0L) {
+                        tmpFile.length().toFloat() / (tmpFile.length() + audioSize)
+                    } else {
+                        0f
+                    }
+                    repository.updateProgressAndMessage(download.id, transferStart, "downloading_audio|0|$audioSize|${tmpFile.length()}|")
+                    activeProgress[download.id] = ActiveProgress(
+                        title = "Downloading audio...",
+                        progress = transferStart,
+                        bytesDownloaded = tmpFile.length(),
+                        totalBytes = tmpFile.length() + audioSize
+                    )
+                    updateNotification()
+
                     val downloadAudioSuccess = downloadUrlToFile(
                         download = download,
                         url = audioUrlToUse,
                         tmpFile = audioFile,
-                        startProgress = 0.90f,
-                        endProgress = 0.95f,
+                        startProgress = transferStart,
+                        endProgress = 1.0f,
                         progressMessage = "downloading_audio|${tmpFile.length()}",
                         isAudioStream = true
                     ) {
@@ -996,11 +1067,13 @@ class DownloadService : Service() {
                         return
                     }
 
-                    repository.updateProgressAndMessage(download.id, 0.95f, "merging|0")
+                    activeStartedAt[download.id] = SystemClock.elapsedRealtime()
+                    repository.updateProgressAndMessage(download.id, 0f, "merging|0")
                     activeProgress[download.id] = ActiveProgress(
                         title = "Merging video & audio...",
-                        bytesDownloaded = (0.95f * (if (download.fileSizeBytes > 0) download.fileSizeBytes else tmpFile.length())).toLong(),
-                        totalBytes = if (download.fileSizeBytes > 0) download.fileSizeBytes else tmpFile.length()
+                        progress = 0f,
+                        bytesDownloaded = 0L,
+                        totalBytes = tmpFile.length() + audioFile.length()
                     )
                     updateNotification()
 
@@ -1015,7 +1088,7 @@ class DownloadService : Service() {
                         command = ffmpegCommandCopy,
                         downloadId = download.id,
                         durationSeconds = durationSeconds,
-                        startProgress = 0.95f,
+                        startProgress = 0f,
                         endProgress = 1.00f
                     )
 
@@ -1027,7 +1100,7 @@ class DownloadService : Service() {
                             command = ffmpegCommandTranscode,
                             downloadId = download.id,
                             durationSeconds = durationSeconds,
-                            startProgress = 0.95f,
+                            startProgress = 0f,
                             endProgress = 1.00f
                         )
                     }
@@ -1122,13 +1195,7 @@ class DownloadService : Service() {
       private fun isPutToQueue(id: Long): Boolean = putToQueueFlags[id] == true
 
       private fun currentProgress(id: Long): Float? =
-          activeProgress[id]?.let {
-              if (it.totalBytes > 0) {
-                  (it.bytesDownloaded.toFloat() / it.totalBytes).coerceIn(0f, 1f)
-              } else {
-                  null
-              }
-          }
+          activeProgress[id]?.progress
   
       private suspend fun pauseDownload(id: Long) {
           pauseFlags[id] = true
@@ -1146,8 +1213,13 @@ class DownloadService : Service() {
           activeCalls[id]?.cancel()
           job?.cancel()
           
-          val download = repository.getDownloadById(id) ?: return
+           val download = repository.getDownloadById(id) ?: return
           val effectiveProgress = progressAtPause ?: download.progress
+          if (download.format == "audio_extracted") {
+              updateDownloadStatus(id, DownloadStatus.PAUSED, effectiveProgress)
+              updateNotification()
+              return
+          }
           if (!activeProgress.containsKey(id)) {
               showPausedNotification(
                   downloadId = id,
@@ -1184,19 +1256,28 @@ class DownloadService : Service() {
               if (download.status == DownloadStatus.PAUSED) {
                   updateDownloadStatus(id, DownloadStatus.QUEUED, download.progress)
               }
-              processQueue()
+              if (download.format == "audio_extracted") {
+                  startAudioExtraction(id)
+              } else {
+                  processQueue()
+              }
           }
       }
  
         private suspend fun cancelDownload(id: Long) {
            cancelFlags[id] = true
            pauseFlags.remove(id)
+           val download = repository.getDownloadById(id) ?: return
+           if (download.format == "audio_extracted") {
+               // Source media remains available, so discard canceled extraction state and output.
+               deleteDownload(id, deleteFiles = true)
+               return
+           }
            val job = activeJobs[id]
             if (job != null) {
                 activeCalls[id]?.cancel()
                 job.cancel()
             }
-            val download = repository.getDownloadById(id) ?: return
             if (download.filePath.isNotEmpty()) {
                 File(download.filePath).delete()
             }
@@ -1209,30 +1290,38 @@ class DownloadService : Service() {
        }
 
        private suspend fun restartDownload(id: Long) {
-            cancelFlags.remove(id) // Ensure it's not marked as cancelled
-            val existingJob = activeJobs[id]
-            if (existingJob != null) {
-                activeCalls[id]?.cancel()
-                existingJob.cancel()
-                existingJob.join() // 3. Restart Race: join() any existing job before deleting files
-            }
-            val download = repository.getDownloadById(id) ?: return
+            pendingRestartIds.add(id)
             try {
+                cancelFlags.remove(id)
+                pauseFlags.remove(id)
+                putToQueueFlags.remove(id)
+                activeCalls[id]?.cancel()
+                activeJobs[id]?.cancelAndJoin()
+                activeJobs.remove(id)
+                activeCalls.remove(id)
+                activeProgress.remove(id)
+                activeStartedAt.remove(id)
+
+                val download = repository.getDownloadById(id) ?: return
                 val outputDir = getOutputDir(download)
                 DownloadPathResolver.deleteOwnedFiles(download, outputDir, listOf("mp4", "webm", "m4a", "ogg", "mp3"))
+                repository.update(
+                    download.copy(
+                        status = DownloadStatus.QUEUED,
+                        progress = 0f,
+                        errorMessage = null,
+                        retryCount = 0,
+                        fileSizeBytes = 0L
+                    )
+                )
+                pausedDownloads.remove(id)
             } catch (e: Exception) {
-                android.util.Log.e("DownloadService", "Failed to delete tmp file on restart", e)
+                android.util.Log.e("DownloadService", "Failed to restart download $id", e)
+                markDownloadFailed(id, e.message ?: "Restart failed", 0)
+            } finally {
+                pendingRestartIds.remove(id)
+                processQueue()
             }
-            val reset = download.copy(
-                status = DownloadStatus.QUEUED,
-                progress = 0f,
-                errorMessage = null,
-                retryCount = 0,
-                fileSizeBytes = 0L // Reset to allow fetching a fresh total size if needed
-            )
-            repository.update(reset)
-            pausedDownloads.remove(id)
-            resumeDownload(id)
         }
 
         private suspend fun deleteDownload(id: Long, deleteFiles: Boolean) {
@@ -1261,6 +1350,7 @@ class DownloadService : Service() {
             cancelFlags.remove(id)
             activeCalls.remove(id)
             activeProgress.remove(id)
+            activeStartedAt.remove(id)
 
             val video = videoDao.getVideoById(download.videoId)
             if (video != null) {
@@ -1282,45 +1372,85 @@ class DownloadService : Service() {
         }
 
         private suspend fun startAudioExtraction(id: Long) {
-            val extraction = repository.getDownloadById(id) ?: return
-            if (extraction.format != "audio_extracted" || extraction.status != DownloadStatus.DOWNLOADING) return
-            if (activeJobs.containsKey(id)) return
+            try {
+                val extraction = repository.getDownloadById(id) ?: return
+                if (extraction.format != "audio_extracted" || extraction.status != DownloadStatus.QUEUED) return
+                if (activeJobs.containsKey(id)) return
 
-            val source = repository.getLocalDownloadsForVideo(extraction.videoId)
-                .firstOrNull {
-                    it.format != "audio_extracted" &&
-                        it.filePath.isNotEmpty() &&
-                        File(it.filePath).exists()
+                val source = repository.getLocalDownloadsForVideo(extraction.videoId)
+                    .firstOrNull {
+                        it.format != "audio_extracted" &&
+                            it.filePath.isNotEmpty() &&
+                            File(it.filePath).exists()
+                    }
+                if (source == null) {
+                    markDownloadFailed(id, "Source media file is missing", 0)
+                    return
                 }
-            if (source == null) {
-                markDownloadFailed(id, "Source media file is missing", 0)
-                return
-            }
 
-            val job = serviceScope.launch {
-                try {
-                    val result = audioExtractor.extractAudio(extraction, source.filePath) { progress ->
-                        repository.updateProgressAndMessage(id, progress, null)
+                val sourceSize = source.fileSizeBytes.takeIf { it > 0L } ?: File(source.filePath).length()
+                val extractionStartedAt = SystemClock.elapsedRealtime()
+                activeStartedAt[id] = extractionStartedAt
+                 activeProgress[id] = ActiveProgress(
+                     title = "Extracting audio...",
+                     progress = extraction.progress,
+                     bytesDownloaded = (extraction.progress * sourceSize).toLong(),
+                     totalBytes = sourceSize
+                 )
+                updateDownloadStatus(id, DownloadStatus.DOWNLOADING, extraction.progress)
+                updateNotification()
+                // Register lazy job before it can complete, so restart cannot retain a stale job entry.
+                val job = serviceScope.launch(start = CoroutineStart.LAZY) {
+                    try {
+                        val result = audioExtractor.extractAudio(extraction, source.filePath) { progress ->
+                            val elapsedMs = SystemClock.elapsedRealtime() - extractionStartedAt
+                            val remainingMs = if (progress > 0f) {
+                                (elapsedMs * (1f - progress) / progress).toLong()
+                            } else {
+                                0L
+                            }
+                             activeProgress[id] = ActiveProgress(
+                                 title = "Extracting audio...",
+                                 progress = progress,
+                                 bytesDownloaded = (progress * sourceSize).toLong(),
+                                 totalBytes = sourceSize
+                             )
+                            repository.updateProgressAndMessage(
+                                id,
+                                progress,
+                                "extracting|$elapsedMs|$remainingMs"
+                            )
+                            updateNotification()
+                        }
+                        if (result.success) {
+                            markDownloadCompleted(id, File(result.outputPath).length(), result.outputPath)
+                        } else {
+                            markDownloadFailed(id, result.errorMessage ?: "Extraction failed", 0)
+                        }
+                    } catch (e: CancellationException) {
+                        val progress = currentProgress(id) ?: extraction.progress
+                        when {
+                            isPaused(id) -> updateDownloadStatus(id, DownloadStatus.PAUSED, progress)
+                            isPutToQueue(id) -> updateDownloadStatus(id, DownloadStatus.QUEUED, progress)
+                            else -> updateDownloadStatus(id, DownloadStatus.CANCELED, progress)
+                        }
+                        throw e
+                    } catch (e: Throwable) {
+                        markDownloadFailed(id, e.message ?: "Extraction failed", 0)
+                    } finally {
+                        activeJobs.remove(id)
+                        activeProgress.remove(id)
+                        activeStartedAt.remove(id)
+                        activeCalls.remove(id)
+                        updateNotification()
+                        processQueue()
                     }
-                    if (result.success) {
-                        markDownloadCompleted(id, File(result.outputPath).length(), result.outputPath)
-                    } else {
-                        markDownloadFailed(id, result.errorMessage ?: "Extraction failed", 0)
-                    }
-                } catch (e: CancellationException) {
-                    updateDownloadStatus(id, DownloadStatus.CANCELED, extraction.progress)
-                    throw e
-                } catch (e: Throwable) {
-                    markDownloadFailed(id, e.message ?: "Extraction failed", 0)
-                } finally {
-                    activeJobs.remove(id)
-                    activeProgress.remove(id)
-                    activeCalls.remove(id)
-                    updateNotification()
-                    processQueue()
                 }
+                activeJobs[id] = job
+                job.start()
+            } finally {
+                pendingExtractionIds.remove(id)
             }
-            activeJobs[id] = job
         }
 
        private suspend fun pauseAllDownloads() {
@@ -1412,7 +1542,20 @@ class DownloadService : Service() {
              .build()
      }
 
-     private suspend fun updateNotification() {
+      private fun formatTransferDuration(durationMs: Long): String {
+          val seconds = (durationMs / 1000L).coerceAtLeast(0L)
+          val minutes = seconds / 60L
+          return if (minutes > 0L) "${minutes}m ${seconds % 60L}s" else "${seconds}s"
+      }
+
+      private fun transferTiming(startedAt: Long?, progress: Int): String {
+          if (startedAt == null) return ""
+          val elapsedMs = SystemClock.elapsedRealtime() - startedAt
+          val remainingMs = if (progress > 0) elapsedMs * (100L - progress) / progress else 0L
+          return " · ${formatTransferDuration(elapsedMs)} elapsed · ${formatTransferDuration(remainingMs)} remaining"
+      }
+
+      private suspend fun updateNotification() {
          // 8. Zombie Notification: Check serviceScope.isActive in updateNotification()
          if (!serviceScope.isActive) return
 
@@ -1555,9 +1698,10 @@ class DownloadService : Service() {
          val notification = if (reallyActive.size == 1) {
              val downloadId = reallyActive.keys.first()
              val active = reallyActive.values.first()
-             val pct = if (active.totalBytes > 0) ((active.bytesDownloaded * 100) / active.totalBytes).toInt() else 0
-             val downloadedMb = "%.1f".format(active.bytesDownloaded / (1024f * 1024f))
-             val totalMb = "%.1f".format(active.totalBytes / (1024f * 1024f))
+               val pct = (active.progress.coerceIn(0f, 1f) * 100).toInt()
+              val downloadedMb = "%.1f".format(active.bytesDownloaded / (1024f * 1024f))
+              val totalMb = "%.1f".format(active.totalBytes / (1024f * 1024f))
+              val timing = transferTiming(activeStartedAt[downloadId], pct)
              
              val pauseIntent = Intent(this, DownloadService::class.java).apply {
                  action = ACTION_PAUSE
@@ -1589,7 +1733,7 @@ class DownloadService : Service() {
 
              NotificationCompat.Builder(this, CHANNEL_ID)
                  .setContentTitle(active.title)
-                 .setContentText("$pct% \u2014 ${downloadedMb}/${totalMb} MB")
+                  .setContentText("$pct% \u2014 ${downloadedMb}/${totalMb} MB$timing")
                  .setSmallIcon(android.R.drawable.stat_sys_download)
                  .setOngoing(true)
                  .setProgress(100, pct, active.totalBytes <= 0)
@@ -1618,9 +1762,10 @@ class DownloadService : Service() {
                  totalBytes += it.totalBytes
                  downloadedBytes += it.bytesDownloaded
              }
-             val pct = if (totalBytes > 0) ((downloadedBytes * 100) / totalBytes).toInt() else 0
-             val downloadedMb = "%.1f".format(downloadedBytes / (1024f * 1024f))
-             val totalMb = "%.1f".format(totalBytes / (1024f * 1024f))
+               val pct = (reallyActive.values.map { it.progress }.average() * 100).toInt()
+              val downloadedMb = "%.1f".format(downloadedBytes / (1024f * 1024f))
+              val totalMb = "%.1f".format(totalBytes / (1024f * 1024f))
+              val timing = transferTiming(reallyActive.keys.mapNotNull { activeStartedAt[it] }.minOrNull(), pct)
              
              val pauseAllIntent = Intent(this, DownloadService::class.java).apply {
                  action = ACTION_PAUSE_ALL
@@ -1640,7 +1785,7 @@ class DownloadService : Service() {
 
              NotificationCompat.Builder(this, CHANNEL_ID)
                  .setContentTitle("Downloading ${reallyActive.size} files")
-                 .setContentText("$pct% \u2014 ${downloadedMb}/${totalMb} MB")
+                  .setContentText("$pct% \u2014 ${downloadedMb}/${totalMb} MB$timing")
                  .setSmallIcon(android.R.drawable.stat_sys_download)
                  .setOngoing(true)
                  .setProgress(100, pct, indeterminate || totalBytes <= 0)

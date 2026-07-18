@@ -258,6 +258,10 @@ class DownloadsViewModel @Inject constructor(
     }
 
     fun cancelDownload(downloadId: Long) {
+        viewModelScope.launch {
+            // Keep canceled rows visible even if service command is delayed or rejected.
+            downloadRepository.updateStatusOnly(downloadId, DownloadStatus.CANCELED)
+        }
         DownloadService.cancel(context, downloadId)
     }
 
@@ -325,7 +329,7 @@ class DownloadsViewModel @Inject constructor(
                 quality = "${download.quality}_audio",
                 title = download.title,
                 thumbnailUrl = download.thumbnailUrl,
-                status = DownloadStatus.DOWNLOADING,
+                status = DownloadStatus.QUEUED,
                 progress = 0f,
                 downloadUuid = java.util.UUID.randomUUID().toString(),
                 outputRoot = outputRoot
@@ -335,8 +339,6 @@ class DownloadsViewModel @Inject constructor(
                 _extractingVideoId.value = ""
                 return@launch
             }
-            android.widget.Toast.makeText(context, "Audio extraction started", android.widget.Toast.LENGTH_SHORT).show()
-
             DownloadService.extractAudio(context, insertId)
             if (_extractingVideoId.value == download.videoId) _extractingVideoId.value = ""
         }

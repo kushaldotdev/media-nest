@@ -493,14 +493,13 @@ class HomeViewModel @Inject constructor(
                 quality = "${download.quality}_audio",
                 title = download.title,
                 thumbnailUrl = download.thumbnailUrl,
-                status = DownloadStatus.DOWNLOADING,
+                status = DownloadStatus.QUEUED,
                 progress = 0f,
                 downloadUuid = java.util.UUID.randomUUID().toString(),
                 outputRoot = downloadFolder
             )
             val insertId = downloadRepository.insert(extractionEntity)
             if (insertId <= 0L) return@launch
-            android.widget.Toast.makeText(context, "Audio extraction started", android.widget.Toast.LENGTH_SHORT).show()
             com.example.medianest.service.DownloadService.extractAudio(context, insertId)
         }
     }

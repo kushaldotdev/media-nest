@@ -438,7 +438,8 @@ class SyncManager @Inject constructor(
             "videos" -> videoDao.deleteById(jsonString(obj["rowId"]))
             "downloads" -> {
                 val download = downloadDao.getDownloadByUuid(jsonString(obj["rowId"])) ?: return
-                downloadDao.delete(download)
+                // Delete payload has no timestamp. Preserve canceled rows for Restart/Delete.
+                if (download.status != DownloadStatus.CANCELED) downloadDao.delete(download)
             }
             "folders" -> {
                 val id = obj["rowId"]?.let { it.jsonPrimitive.longOrNull } ?: return

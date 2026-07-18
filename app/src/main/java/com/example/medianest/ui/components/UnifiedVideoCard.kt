@@ -718,7 +718,8 @@ fun QuickDownloadMenu(
                         leadingIcon = { Icon(Icons.Default.Delete, "Delete") },
                         onClick = { onDeleteDownload(entity); onDismiss() }
                     )
-                    if (entity.format == "video" && !downloadedEntities.any { it.format == "audio_extracted" }) {
+                    if ((entity.format == "video" || entity.format == "video_only") &&
+                        !downloadedEntities.any { it.format == "audio_extracted" }) {
                         DropdownMenuItem(
                             text = { Text("Extract Audio from ${entity.quality}") },
                             leadingIcon = { Icon(Icons.Default.AudioFile, "Extract") },

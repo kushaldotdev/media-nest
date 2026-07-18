@@ -42,7 +42,7 @@ class AudioExtractor @Inject constructor(
             val m4aOutputFile = DownloadPathResolver.extractTempFile(entity, outputDir, "m4a")
             if (m4aOutputFile.exists()) m4aOutputFile.delete()
 
-            val nativeSuccess = extractAudioNatively(inputFilePath, m4aOutputFile)
+            val nativeSuccess = extractAudioNatively(inputFilePath, m4aOutputFile, onProgress)
             if (nativeSuccess && m4aOutputFile.exists() && m4aOutputFile.length() > 0) {
                 return@withContext ExtractionResult(m4aOutputFile.absolutePath, true)
             }
@@ -130,7 +130,11 @@ class AudioExtractor @Inject constructor(
         }
     }
 
-    private suspend fun extractAudioNatively(inputFilePath: String, outputFile: File): Boolean {
+    private suspend fun extractAudioNatively(
+        inputFilePath: String,
+        outputFile: File,
+        onProgress: (suspend (Float) -> Unit)?
+    ): Boolean {
         var extractor: MediaExtractor? = null
         var muxer: MediaMuxer? = null
         try {
@@ -153,6 +157,11 @@ class AudioExtractor @Inject constructor(
             if (format.getString(MediaFormat.KEY_MIME) != "audio/mp4a-latm") return false
 
             extractor.selectTrack(audioTrackIndex)
+            val durationUs = if (format.containsKey(MediaFormat.KEY_DURATION)) {
+                format.getLong(MediaFormat.KEY_DURATION)
+            } else {
+                0L
+            }
 
             muxer = MediaMuxer(outputFile.absolutePath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
             val writeTrackIndex = muxer.addTrack(format)
@@ -165,6 +174,7 @@ class AudioExtractor @Inject constructor(
             }
             val buffer = ByteBuffer.allocate(maxBufferSize)
             val bufferInfo = MediaCodec.BufferInfo()
+            var lastReportedPercent = -1
 
             while (true) {
                 coroutineContext.ensureActive()
@@ -176,6 +186,15 @@ class AudioExtractor @Inject constructor(
                 bufferInfo.presentationTimeUs = extractor.sampleTime
                 bufferInfo.flags = extractor.sampleFlags
                 muxer.writeSampleData(writeTrackIndex, buffer, bufferInfo)
+                if (onProgress != null && durationUs > 0) {
+                    val percent = ((bufferInfo.presentationTimeUs * 100L) / durationUs)
+                        .coerceIn(0L, 99L)
+                        .toInt()
+                    if (percent != lastReportedPercent) {
+                        lastReportedPercent = percent
+                        onProgress(percent / 100f)
+                    }
+                }
                 extractor.advance()
             }
 
