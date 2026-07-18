@@ -24,10 +24,12 @@ enum class DownloadStatus {
             onDelete = ForeignKey.CASCADE
         )
     ],
-    indices = [Index("videoId"), Index("videoId", "format", "quality", unique = true), Index("status")]
+    indices = [Index("videoId"), Index("videoId", "format", "quality", unique = true), Index("status"), Index("downloadUuid", unique = true)]
 )
 data class DownloadEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val downloadUuid: String = java.util.UUID.randomUUID().toString(),
+    val outputRoot: String = "",
     val videoId: String,
     val url: String,
     val videoUrl: String? = null,

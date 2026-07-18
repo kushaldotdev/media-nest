@@ -252,6 +252,18 @@ class ExportImportViewModel @Inject constructor(
                     return@launch
                 }
 
+                val activeDownload = downloadRepository.getAllDownloadsOnce().firstOrNull {
+                    it.status == DownloadStatus.QUEUED ||
+                        it.status == DownloadStatus.DOWNLOADING ||
+                        it.status == DownloadStatus.PAUSED
+                }
+                if (activeDownload != null) {
+                    _migrationState.value = MigrationState.Error(
+                        "Pause, cancel, or finish all downloads before changing the download folder."
+                    )
+                    return@launch
+                }
+
                 // Query all completed downloads
                 val allDownloads = downloadRepository.getAllDownloadsOnce()
                 val downloadsToMove = allDownloads.filter { download ->
@@ -297,7 +309,9 @@ class ExportImportViewModel @Inject constructor(
                             // Update DB inside transaction
                             database.withTransaction {
                                 // 1. Update DownloadEntity
-                                downloadRepository.update(download.copy(filePath = newFile.absolutePath))
+                                downloadRepository.update(
+                                    download.copy(filePath = newFile.absolutePath, outputRoot = newPath)
+                                )
                                 
                                 // 2. Update VideoEntity if localFilePath matches
                                 val video = videoRepository.getVideoById(download.videoId)
@@ -316,12 +330,10 @@ class ExportImportViewModel @Inject constructor(
                     }
                 }
 
-                // Always save the new folder preference, even if cancelled halfway, so the moved files remain correct.
-                downloadPreferences.setDownloadFolder(newPath)
-
                 if (isMigrationCanceled) {
                     _migrationState.value = MigrationState.Success(movedCount)
                 } else {
+                    downloadPreferences.setDownloadFolder(newPath)
                     _migrationState.value = MigrationState.Success(total)
                 }
             } catch (e: Exception) {

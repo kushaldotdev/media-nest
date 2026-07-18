@@ -452,6 +452,7 @@ class HomeViewModel @Inject constructor(
                 repository.insertVideo(videoInfo.toVideoEntity())
             }
 
+            val downloadFolder = downloadPreferences.downloadFolder.first()
             val entity = DownloadEntity(
                 videoId = videoInfo.videoId,
                 url = stream.url,
@@ -460,7 +461,9 @@ class HomeViewModel @Inject constructor(
                 quality = dbQuality,
                 status = DownloadStatus.QUEUED,
                 title = videoInfo.title,
-                thumbnailUrl = videoInfo.thumbnailUrl
+                thumbnailUrl = videoInfo.thumbnailUrl,
+                downloadUuid = java.util.UUID.randomUUID().toString(),
+                outputRoot = downloadFolder
             )
             downloadRepository.insert(entity)
             try {
@@ -473,36 +476,16 @@ class HomeViewModel @Inject constructor(
     }
 
     fun deleteDownload(download: DownloadEntity) {
-        viewModelScope.launch {
-            if (download.status == DownloadStatus.DOWNLOADING || download.status == DownloadStatus.QUEUED) {
-                com.example.medianest.service.DownloadService.cancel(context, download.id)
-            } else {
-                if (download.filePath.isNotEmpty()) {
-                    try {
-                        val file = java.io.File(download.filePath)
-                        if (file.exists()) file.delete()
-                    } catch (e: Exception) {}
-                }
-                downloadRepository.delete(download)
-                
-                val remaining = downloadRepository.getLocalDownloadsForVideo(download.videoId)
-                if (remaining.isEmpty()) {
-                    val video = repository.getVideoById(download.videoId)
-                    if (video != null) {
-                        repository.updateVideo(video.copy(localFilePath = ""))
-                    }
-                }
-            }
-        }
+        com.example.medianest.service.DownloadService.delete(context, download.id, deleteFiles = true)
     }
 
     fun extractAudio(download: DownloadEntity) {
         if (download.filePath.isEmpty() || download.status != DownloadStatus.COMPLETED) return
-        android.widget.Toast.makeText(context, "Audio extraction started", android.widget.Toast.LENGTH_SHORT).show()
-        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO).launch {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             val existing = downloadRepository.getAudioExtraction(download.videoId)
             if (existing != null) return@launch
 
+            val downloadFolder = downloadPreferences.downloadFolder.first()
             val extractionEntity = DownloadEntity(
                 videoId = download.videoId,
                 url = "",
@@ -511,20 +494,14 @@ class HomeViewModel @Inject constructor(
                 title = download.title,
                 thumbnailUrl = download.thumbnailUrl,
                 status = DownloadStatus.DOWNLOADING,
-                progress = 0f
+                progress = 0f,
+                downloadUuid = java.util.UUID.randomUUID().toString(),
+                outputRoot = downloadFolder
             )
             val insertId = downloadRepository.insert(extractionEntity)
-
-            try {
-                val result = audioExtractor.extractAudio(download.filePath, download.videoId, download.quality, download.title)
-                if (result.success) {
-                    downloadRepository.markCompleted(insertId, java.io.File(result.outputPath).length(), result.outputPath)
-                } else {
-                    downloadRepository.markFailed(insertId, result.errorMessage ?: "Extraction failed", 0)
-                }
-            } catch (e: Throwable) {
-                downloadRepository.markFailed(insertId, e.message ?: "Extraction failed", 0)
-            }
+            if (insertId <= 0L) return@launch
+            android.widget.Toast.makeText(context, "Audio extraction started", android.widget.Toast.LENGTH_SHORT).show()
+            com.example.medianest.service.DownloadService.extractAudio(context, insertId)
         }
     }
 
@@ -760,6 +737,7 @@ class HomeViewModel @Inject constructor(
                 val existing = downloadRepository.getDownload(item.videoId, item.format, dbQuality)
                 if (existing != null) continue
 
+                val downloadFolder = downloadPreferences.downloadFolder.first()
                 val entity = DownloadEntity(
                     videoId = item.videoId,
                     url = item.url,
@@ -768,7 +746,9 @@ class HomeViewModel @Inject constructor(
                     quality = dbQuality,
                     status = DownloadStatus.QUEUED,
                     title = item.title,
-                    thumbnailUrl = item.thumbnailUrl
+                    thumbnailUrl = item.thumbnailUrl,
+                    downloadUuid = java.util.UUID.randomUUID().toString(),
+                    outputRoot = downloadFolder
                 )
                 downloadRepository.insert(entity)
                 enqueuedCount++

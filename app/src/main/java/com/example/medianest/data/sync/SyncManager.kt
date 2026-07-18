@@ -181,19 +181,19 @@ class SyncManager @Inject constructor(
             )))
         }
         downloadDao.getDownloadsSince(since).forEach { d ->
-            changes.add(SyncPushItem("downloads", d.id.toString(), "upsert", mapOf(
-                "id" to JsonPrimitive(d.id), "videoId" to JsonPrimitive(d.videoId),
+            changes.add(SyncPushItem("downloads", d.downloadUuid, "upsert", mapOf(
+                "downloadUuid" to JsonPrimitive(d.downloadUuid), "videoId" to JsonPrimitive(d.videoId),
                 "url" to JsonPrimitive(d.url), "videoUrl" to JsonPrimitive(d.videoUrl ?: ""), "format" to JsonPrimitive(d.format),
                 "quality" to JsonPrimitive(d.quality), "title" to JsonPrimitive(d.title),
                 "thumbnailUrl" to JsonPrimitive(d.thumbnailUrl ?: ""),
                 "filePath" to JsonPrimitive(""),
-                "fileSizeBytes" to JsonPrimitive(d.fileSizeBytes),
+                "fileSizeBytes" to JsonPrimitive(0L),
                 "downloadedAt" to JsonPrimitive(d.downloadedAt),
                 "lastPlayedAt" to JsonPrimitive(d.lastPlayedAt ?: 0L),
-                "status" to JsonPrimitive(d.status.name),
-                "progress" to JsonPrimitive(d.progress),
-                "errorMessage" to JsonPrimitive(d.errorMessage ?: ""),
-                "retryCount" to JsonPrimitive(d.retryCount),
+                "status" to JsonPrimitive(DownloadStatus.QUEUED.name),
+                "progress" to JsonPrimitive(0f),
+                "errorMessage" to JsonPrimitive(""),
+                "retryCount" to JsonPrimitive(0),
                 "updatedAt" to JsonPrimitive(d.updatedAt),
                 "createdAt" to JsonPrimitive(d.downloadedAt),
                 "syncVersion" to JsonPrimitive(d.syncVersion)
@@ -385,30 +385,33 @@ class SyncManager @Inject constructor(
                 ))
             }
             "downloads" -> {
-                val downloadId = jsonLong(obj["id"], 0L)
                 val videoId = jsonString(obj["videoId"])
                 if (videoId.isBlank()) return
-                val existing = downloadDao.getDownloadById(downloadId)
-                    ?: downloadDao.getDownload(videoId, jsonString(obj["format"]), jsonString(obj["quality"]))
+                val remoteUuid = jsonString(obj["downloadUuid"])
+                if (runCatching { java.util.UUID.fromString(remoteUuid) }.isFailure) return
+                val existing = downloadDao.getDownloadByUuid(remoteUuid)
                 val entity = DownloadEntity(
-                    id = existing?.id ?: downloadId,
+                    id = existing?.id ?: 0,
                     videoId = videoId,
-                    url = jsonString(obj["url"]),
-                    videoUrl = jsonString(obj["videoUrl"]).ifBlank { null },
+                    url = existing?.url ?: jsonString(obj["url"]),
+                    videoUrl = existing?.videoUrl ?: jsonString(obj["videoUrl"]).ifBlank { null },
                     format = jsonString(obj["format"]),
                     quality = jsonString(obj["quality"]),
                     title = jsonString(obj["title"]),
                     thumbnailUrl = jsonString(obj["thumbnailUrl"]).ifBlank { null },
                     filePath = existing?.filePath ?: "", // Clear/ignore absolute path on pull (preserve if exists locally)
-                    fileSizeBytes = jsonLong(obj["fileSizeBytes"]),
+                    fileSizeBytes = existing?.fileSizeBytes ?: 0L,
                     downloadedAt = jsonLong(obj["downloadedAt"], System.currentTimeMillis()),
                     lastPlayedAt = jsonLong(obj["lastPlayedAt"]).let { if (it == 0L) null else it },
-                    status = try { DownloadStatus.valueOf(jsonString(obj["status"], "QUEUED")) } catch (_: Exception) { DownloadStatus.QUEUED },
-                    progress = (obj["progress"] as? JsonPrimitive)?.let { it.content.toFloatOrNull() } ?: 0f,
-                    errorMessage = jsonString(obj["errorMessage"]).ifBlank { null },
-                    retryCount = jsonInt(obj["retryCount"]),
+                    // Transfer state, URLs, paths, progress, and errors belong to this device.
+                    status = existing?.status ?: DownloadStatus.QUEUED,
+                    progress = existing?.progress ?: 0f,
+                    errorMessage = existing?.errorMessage,
+                    retryCount = existing?.retryCount ?: 0,
                     updatedAt = jsonLong(obj["updatedAt"], System.currentTimeMillis()),
-                    syncVersion = jsonLong(obj["syncVersion"])
+                    syncVersion = jsonLong(obj["syncVersion"]),
+                    downloadUuid = remoteUuid,
+                    outputRoot = existing?.outputRoot ?: ""
                 )
                 if (existing == null) {
                     downloadDao.insert(entity)
@@ -433,6 +436,10 @@ class SyncManager @Inject constructor(
         val obj = payload as? JsonObject ?: return
         when (table) {
             "videos" -> videoDao.deleteById(jsonString(obj["rowId"]))
+            "downloads" -> {
+                val download = downloadDao.getDownloadByUuid(jsonString(obj["rowId"])) ?: return
+                downloadDao.delete(download)
+            }
             "folders" -> {
                 val id = obj["rowId"]?.let { it.jsonPrimitive.longOrNull } ?: return
                 folderDao.deleteById(id)

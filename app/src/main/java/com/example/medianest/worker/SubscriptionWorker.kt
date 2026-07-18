@@ -9,12 +9,14 @@ import androidx.work.WorkerParameters
 import com.example.medianest.data.local.entity.DownloadEntity
 import com.example.medianest.data.local.entity.DownloadStatus
 import com.example.medianest.data.local.dao.VideoDao
+import com.example.medianest.data.preferences.DownloadPreferences
 import com.example.medianest.data.repository.DownloadRepository
 import com.example.medianest.data.repository.SubscriptionRepository
 import com.example.medianest.extraction.YouTubeExtractor
 import com.example.medianest.service.DownloadService
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
+import kotlinx.coroutines.flow.first
 
 @HiltWorker
 class SubscriptionWorker @AssistedInject constructor(
@@ -22,12 +24,14 @@ class SubscriptionWorker @AssistedInject constructor(
     @Assisted private val workerParams: WorkerParameters,
     private val subscriptionRepository: SubscriptionRepository,
     private val downloadRepository: DownloadRepository,
+    private val downloadPreferences: DownloadPreferences,
     private val youTubeExtractor: YouTubeExtractor,
     private val videoDao: VideoDao
 ) : CoroutineWorker(appContext, workerParams) {
 
     override suspend fun doWork(): Result {
         val subscriptions = subscriptionRepository.getAllSubscriptionsOnce()
+        var shouldRetry = false
 
         for (sub in subscriptions) {
             try {
@@ -54,7 +58,9 @@ class SubscriptionWorker @AssistedInject constructor(
                                         quality = best.quality,
                                         status = DownloadStatus.QUEUED,
                                         title = video.title,
-                                        thumbnailUrl = video.thumbnailUrl
+                                        thumbnailUrl = video.thumbnailUrl,
+                                        downloadUuid = java.util.UUID.randomUUID().toString(),
+                                        outputRoot = downloadPreferences.downloadFolder.first()
                                     )
                                     downloadRepository.insert(entity)
                                     try {
@@ -63,7 +69,7 @@ class SubscriptionWorker @AssistedInject constructor(
                                         )
                                     } catch (e: Exception) {
                                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && e is android.app.ForegroundServiceStartNotAllowedException) {
-                                            // Handle gracefully
+                                            shouldRetry = true
                                         }
                                     }
                                 }
@@ -77,7 +83,7 @@ class SubscriptionWorker @AssistedInject constructor(
                 // Skip subscription if check fails
             }
         }
-        return Result.success()
+        return if (shouldRetry) Result.retry() else Result.success()
     }
 
     private fun parseQuality(quality: String): Int {

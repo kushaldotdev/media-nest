@@ -206,6 +206,15 @@ object DatabaseModule {
         }
     }
 
+    private val MIGRATION_15_16 = object : Migration(15, 16) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE downloads ADD COLUMN downloadUuid TEXT NOT NULL DEFAULT ''")
+            db.execSQL("ALTER TABLE downloads ADD COLUMN outputRoot TEXT NOT NULL DEFAULT ''")
+            db.execSQL("UPDATE downloads SET downloadUuid = lower(hex(randomblob(16))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))),2) || '-' || substr('89ab', abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))),2) || '-' || lower(hex(randomblob(6))) WHERE downloadUuid = ''")
+            db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_downloads_downloadUuid ON downloads(downloadUuid)")
+        }
+    }
+
     private val MIGRATION_4_5 = object : Migration(4, 5) {
         override fun migrate(db: SupportSQLiteDatabase) {
             db.execSQL("ALTER TABLE videos ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0")
@@ -252,6 +261,7 @@ object DatabaseModule {
             .addMigrations(MIGRATION_12_13)
             .addMigrations(MIGRATION_13_14)
             .addMigrations(MIGRATION_14_15)
+            .addMigrations(MIGRATION_15_16)
             .fallbackToDestructiveMigration(dropAllTables = true)
             .build()
     }

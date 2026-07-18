@@ -17,6 +17,7 @@ import com.example.medianest.data.local.entity.VideoEntity
 import com.example.medianest.data.preferences.DownloadPreferences
 import com.example.medianest.data.repository.DownloadRepository
 import com.example.medianest.extraction.YouTubeExtractor
+import com.example.medianest.service.DownloadPathResolver
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -68,11 +69,14 @@ class DownloadService : Service() {
         const val ACTION_PAUSE = "com.example.medianest.PAUSE_DOWNLOAD"
         const val ACTION_RESUME = "com.example.medianest.RESUME_DOWNLOAD"
         const val ACTION_CANCEL = "com.example.medianest.CANCEL_DOWNLOAD"
+        const val ACTION_DELETE = "com.example.medianest.DELETE_DOWNLOAD"
+        const val ACTION_EXTRACT_AUDIO = "com.example.medianest.EXTRACT_AUDIO"
         const val ACTION_RESTART = "com.example.medianest.RESTART_DOWNLOAD"
         const val ACTION_PAUSE_ALL = "com.example.medianest.PAUSE_ALL_DOWNLOADS"
         const val ACTION_RESUME_ALL = "com.example.medianest.RESUME_ALL_DOWNLOADS"
         const val ACTION_CANCEL_ALL = "com.example.medianest.CANCEL_ALL_DOWNLOADS"
         const val EXTRA_DOWNLOAD_ID = "download_id"
+        const val EXTRA_DELETE_FILES = "delete_files"
 
         fun pause(context: Context, downloadId: Long) {
             val intent = Intent(context, DownloadService::class.java).apply {
@@ -109,6 +113,43 @@ class DownloadService : Service() {
                 android.util.Log.e("DownloadService", "Failed to start cancel command", e)
             }
         }
+
+        fun restart(context: Context, downloadId: Long) {
+            val intent = Intent(context, DownloadService::class.java).apply {
+                action = ACTION_RESTART
+                putExtra(EXTRA_DOWNLOAD_ID, downloadId)
+            }
+            try {
+                context.startForegroundService(intent)
+            } catch (e: Exception) {
+                android.util.Log.e("DownloadService", "Failed to start restart command", e)
+            }
+        }
+
+        fun delete(context: Context, downloadId: Long, deleteFiles: Boolean) {
+            val intent = Intent(context, DownloadService::class.java).apply {
+                action = ACTION_DELETE
+                putExtra(EXTRA_DOWNLOAD_ID, downloadId)
+                putExtra(EXTRA_DELETE_FILES, deleteFiles)
+            }
+            try {
+                context.startForegroundService(intent)
+            } catch (e: Exception) {
+                android.util.Log.e("DownloadService", "Failed to start delete command", e)
+            }
+        }
+
+        fun extractAudio(context: Context, extractionId: Long) {
+            val intent = Intent(context, DownloadService::class.java).apply {
+                action = ACTION_EXTRACT_AUDIO
+                putExtra(EXTRA_DOWNLOAD_ID, extractionId)
+            }
+            try {
+                context.startForegroundService(intent)
+            } catch (e: Exception) {
+                android.util.Log.e("DownloadService", "Failed to start extraction command", e)
+            }
+        }
     }
 
     @Inject lateinit var repository: DownloadRepository
@@ -116,18 +157,12 @@ class DownloadService : Service() {
     @Inject lateinit var extractor: YouTubeExtractor
     @Inject lateinit var okHttpClient: OkHttpClient
     @Inject lateinit var videoDao: VideoDao
+    @Inject lateinit var audioExtractor: AudioExtractor
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    private suspend fun getOutputDir(format: String): File {
-        val dir = if (format == "audio" || format == "audio_extracted") "audio" else "video"
-        val customFolder = preferences.downloadFolder.first()
-        return if (customFolder.isNotEmpty()) {
-            File(File(customFolder), dir)
-        } else {
-            File(filesDir, "MediaNest/$dir")
-        }
-    }
+    private fun getOutputDir(download: DownloadEntity): File =
+        DownloadPathResolver.resolveOutputDir(download, filesDir)
     data class ActiveProgress(
         val title: String,
         val bytesDownloaded: Long,
@@ -150,18 +185,16 @@ class DownloadService : Service() {
         super.onCreate()
         createNotificationChannel()
         
-        // Initial load of paused downloads to avoid querying DB on notification ticks
         serviceScope.launch {
             try {
+                repository.resetStaleDownloads()
+                repository.cancelStaleExtractions()
                 repository.getDownloadsByStatus(DownloadStatus.PAUSED).first().forEach {
                     pausedDownloads[it.id] = it
                 }
             } catch (e: Exception) {
                 android.util.Log.e("DownloadService", "Failed to load initial paused downloads", e)
             }
-        }
-
-        serviceScope.launch {
             preferences.maxConcurrentDownloads.collect { max ->
                 withContext(Dispatchers.Main) {
                     processQueue()
@@ -186,6 +219,7 @@ class DownloadService : Service() {
         }
         val action = intent?.action
         val id = intent?.getLongExtra(EXTRA_DOWNLOAD_ID, -1L) ?: -1L
+        val deleteFiles = intent?.getBooleanExtra(EXTRA_DELETE_FILES, false) ?: false
 
         serviceScope.launch {
             intentMutex.withLock {
@@ -193,6 +227,8 @@ class DownloadService : Service() {
                     ACTION_PAUSE -> if (id != -1L) pauseDownload(id)
                     ACTION_RESUME -> if (id != -1L) resumeDownload(id)
                     ACTION_CANCEL -> if (id != -1L) cancelDownload(id)
+                    ACTION_DELETE -> if (id != -1L) deleteDownload(id, deleteFiles)
+                    ACTION_EXTRACT_AUDIO -> if (id != -1L) startAudioExtraction(id)
                     ACTION_RESTART -> if (id != -1L) restartDownload(id)
                     ACTION_PAUSE_ALL -> pauseAllDownloads()
                     ACTION_RESUME_ALL -> resumeAllDownloads()
@@ -389,6 +425,8 @@ class DownloadService : Service() {
                     // Done: all bytes received
                     if (totalSize > 0 && offset >= totalSize) break
 
+                    val requestOffset = offset
+
                     val chunkSize = if (offset == 0L) FIRST_CHUNK_SIZE else NORMAL_CHUNK_SIZE
                     val rangeEnd = if (totalSize > 0) {
                         minOf(offset + chunkSize - 1, totalSize - 1)
@@ -412,11 +450,10 @@ class DownloadService : Service() {
                     if (!response.isSuccessful) {
                         response.body?.close()
                         if (response.code == 416) {
-                            // 10. HTTP 416 Unknown EOF: Treat 416 as success if totalSize <= 0 and offset > 0
-                            if (totalSize <= 0 && offset > 0) {
-                                return true
-                            }
-                            if (totalSize > 0 && offset >= totalSize) {
+                            val serverTotal = response.header("Content-Range")
+                                ?.substringAfter("*/", "")
+                                ?.toLongOrNull()
+                            if (serverTotal != null && serverTotal == offset) {
                                 break
                             }
                             tmpFile.delete()
@@ -437,8 +474,8 @@ class DownloadService : Service() {
                             throw IOException("HTTP ${response.code}")
                         } else {
                             if (tmpFile.exists()) tmpFile.delete()
-                            val outputDir = tmpFile.parentFile
-                            val audioFile = File(outputDir, "${download.videoId}_${download.quality}_audio.tmp")
+                            val outputDir = tmpFile.parentFile ?: return false
+                            val audioFile = DownloadPathResolver.tempAudioFile(download, outputDir)
                             if (audioFile.exists()) audioFile.delete()
 
                             markDownloadFailed(download.id, "HTTP ${response.code}", retries)
@@ -451,8 +488,22 @@ class DownloadService : Service() {
                     // Parse Content-Range to learn total file size: "bytes 0-999999/123456789"
                     if (isRange) {
                         val contentRange = response.header("Content-Range")
-                        val parsedTotal = contentRange?.substringAfter("/", "")?.toLongOrNull()
-                        if (parsedTotal != null && parsedTotal > 0 && totalSize != parsedTotal) {
+                        val rangeMatch = contentRange?.let {
+                            Regex("bytes (\\d+)-(\\d+)/(\\d+)").matchEntire(it)
+                        }
+                        val rangeStart = rangeMatch?.groupValues?.get(1)?.toLongOrNull()
+                        val rangeEnd = rangeMatch?.groupValues?.get(2)?.toLongOrNull()
+                        val parsedTotal = rangeMatch?.groupValues?.get(3)?.toLongOrNull()
+                        if (rangeStart != offset || rangeEnd == null || rangeEnd < rangeStart || parsedTotal == null || parsedTotal <= rangeEnd) {
+                            response.body?.close()
+                            throw IOException("Invalid Content-Range: $contentRange")
+                        }
+                        if (totalSize != parsedTotal) {
+                            if (totalSize > 0 && totalSize != parsedTotal) {
+                                response.body?.close()
+                                tmpFile.delete()
+                                throw IOException("Remote file size changed during resume")
+                            }
                             totalSize = parsedTotal
                             if (!isAudioStream) {
                                 repository.updateFileSize(download.id, totalSize)
@@ -584,7 +635,11 @@ class DownloadService : Service() {
                     }
 
                     // Update offset from file in case stream closed early
-                    offset = tmpFile.length()
+                    val updatedOffset = tmpFile.length()
+                    if (updatedOffset <= requestOffset) {
+                        throw IOException("Download response made no forward progress")
+                    }
+                    offset = updatedOffset
 
                     // If server didn't support range (full response), we're done
                     if (!isRange) break
@@ -592,11 +647,7 @@ class DownloadService : Service() {
 
                 // Check if we completed successfully
                 val finalSize = tmpFile.length()
-                if (totalSize > 0 && finalSize >= totalSize) {
-                    return true
-                }
-                // For unknown total size, if we exited the chunk loop normally, we're done
-                if (totalSize <= 0 && finalSize > 0 && retries <= maxRetries) {
+                if (totalSize > 0 && finalSize == totalSize) {
                     return true
                 }
                 // Otherwise, retry (URL expired, 416, etc.) — continue outer while loop
@@ -615,8 +666,8 @@ class DownloadService : Service() {
 
                 if (isDiskFull) {
                     if (tmpFile.exists()) tmpFile.delete()
-                    val outputDir = tmpFile.parentFile
-                    val audioFile = File(outputDir, "${download.videoId}_${download.quality}_audio.tmp")
+                    val outputDir = tmpFile.parentFile ?: return false
+                    val audioFile = DownloadPathResolver.tempAudioFile(download, outputDir)
                     if (audioFile.exists()) audioFile.delete()
 
                     markDownloadFailed(download.id, "Disk Full: ${e.message ?: "No space left on device"}", retries)
@@ -633,8 +684,8 @@ class DownloadService : Service() {
                     throw e
                 } else {
                     if (tmpFile.exists()) tmpFile.delete()
-                    val outputDir = tmpFile.parentFile
-                    val audioFile = File(outputDir, "${download.videoId}_${download.quality}_audio.tmp")
+                    val outputDir = tmpFile.parentFile ?: return false
+                    val audioFile = DownloadPathResolver.tempAudioFile(download, outputDir)
                     if (audioFile.exists()) audioFile.delete()
 
                     markDownloadFailed(download.id, e.message ?: "Download failed", retries)
@@ -658,6 +709,15 @@ class DownloadService : Service() {
         }
     }
 
+    private fun getFileExtension(download: DownloadEntity): String {
+        val isWebm = download.url.contains("webm", ignoreCase = true) ||
+                     download.quality.contains("webm", ignoreCase = true) ||
+                     download.quality.contains("vp9", ignoreCase = true) ||
+                     download.quality.contains("vp09", ignoreCase = true) ||
+                     download.quality.contains("opus", ignoreCase = true)
+        return if (isWebm) "webm" else "mp4"
+    }
+
     private suspend fun runFFmpegCommandWithProgress(
         command: String,
         downloadId: Long,
@@ -665,14 +725,8 @@ class DownloadService : Service() {
         startProgress: Float,
         endProgress: Float
     ): Boolean {
-        if (durationSeconds <= 0) {
-            val session = withContext(Dispatchers.IO) {
-                com.arthenica.ffmpegkit.FFmpegKit.execute(command)
-            }
-            return com.arthenica.ffmpegkit.ReturnCode.isSuccess(session.returnCode)
-        }
-
-        com.arthenica.ffmpegkit.FFmpegKitConfig.enableStatisticsCallback { stats ->
+        return DownloadPathResolver.ffmpegMutex.withLock {
+        if (durationSeconds > 0) com.arthenica.ffmpegkit.FFmpegKitConfig.enableStatisticsCallback { stats ->
             val timeInMs = stats.time
             val ffmpegProgress = (timeInMs / 1000f) / durationSeconds
             val boundedProgress = ffmpegProgress.coerceIn(0.0, 1.0).toFloat()
@@ -692,29 +746,27 @@ class DownloadService : Service() {
             }
         }
 
+        val completedSession = CompletableDeferred<com.arthenica.ffmpegkit.FFmpegSession>()
+        val session = com.arthenica.ffmpegkit.FFmpegKit.executeAsync(command) { completedSession.complete(it) }
         val monitorJob = serviceScope.launch {
-            while (isActive) {
+            while (isActive && !completedSession.isCompleted) {
                 if (isPaused(downloadId) || isCancelled(downloadId) || isPutToQueue(downloadId)) {
-                    val activeSessions = com.arthenica.ffmpegkit.FFmpegKitConfig.getSessions()
-                    for (s in activeSessions) {
-                        if (s.state == com.arthenica.ffmpegkit.SessionState.RUNNING) {
-                            com.arthenica.ffmpegkit.FFmpegKit.cancel(s.sessionId)
-                        }
-                    }
+                    com.arthenica.ffmpegkit.FFmpegKit.cancel(session.sessionId)
                     break
                 }
-                delay(200)
+                delay(100)
             }
         }
-
-        return try {
-            val session = withContext(Dispatchers.IO) {
-                com.arthenica.ffmpegkit.FFmpegKit.execute(command)
-            }
-            com.arthenica.ffmpegkit.ReturnCode.isSuccess(session.returnCode)
+        try {
+            val completed = completedSession.await()
+            com.arthenica.ffmpegkit.ReturnCode.isSuccess(completed.returnCode)
         } finally {
+            if (!completedSession.isCompleted) {
+                com.arthenica.ffmpegkit.FFmpegKit.cancel(session.sessionId)
+            }
             monitorJob.cancel()
             com.arthenica.ffmpegkit.FFmpegKitConfig.enableStatisticsCallback(null)
+        }
         }
     }
 
@@ -731,13 +783,13 @@ class DownloadService : Service() {
             return
         }
         
-        val outputDir = getOutputDir(download.format)
+        val outputDir = getOutputDir(download)
         outputDir.mkdirs()
 
-        val tmpFile = File(outputDir, "${download.videoId}_${download.quality}.tmp")
-        val audioFile = File(outputDir, "${download.videoId}_${download.quality}_audio.tmp")
+        val tmpFile = DownloadPathResolver.tempVideoFile(download, outputDir)
+        val audioFile = DownloadPathResolver.tempAudioFile(download, outputDir)
         
-        var ext = if (download.url.contains("webm", ignoreCase = true) || download.quality.contains("webm", ignoreCase = true)) "webm" else "mp4"
+        val ext = getFileExtension(download)
         var videoDownloadCompleted = false
 
         var audioSize = 0L
@@ -799,11 +851,10 @@ class DownloadService : Service() {
             try {
                 val watchUrl = download.videoUrl ?: ("https://www.youtube.com/watch?v=" + download.videoId)
                 val freshInfo = extractor.extractVideo(watchUrl)
-                // Exact match first, then fallback to same format with any quality
                 val matchingStream = freshInfo.streamSources.find {
-                    it.format == download.format && it.quality == download.quality
-                } ?: freshInfo.streamSources.find {
-                    it.format == download.format
+                    it.format == download.format &&
+                        (it.quality == download.quality ||
+                            "${it.quality} (${it.codec})" == download.quality)
                 }
                 if (matchingStream != null) {
                     downloadUrl = matchingStream.url
@@ -826,11 +877,10 @@ class DownloadService : Service() {
                 isAudioStream = false
             ) {
                 val freshInfo = extractor.extractVideo(download.videoUrl ?: ("https://www.youtube.com/watch?v=" + download.videoId))
-                // Exact match first, then fallback to same format with any quality
                 val matchingStream = freshInfo.streamSources.find {
-                    it.format == download.format && it.quality == download.quality
-                } ?: freshInfo.streamSources.find {
-                    it.format == download.format
+                    it.format == download.format &&
+                        (it.quality == download.quality ||
+                            "${it.quality} (${it.codec})" == download.quality)
                 }
                 matchingStream?.url
             }
@@ -846,9 +896,7 @@ class DownloadService : Service() {
             return
         }
 
-        val sanitizedTitle = sanitizeFileName(download.title)
-        val fileName = "${sanitizedTitle}_${download.videoId}_${download.quality}.$ext"
-        val outputFile = File(outputDir, fileName)
+        val outputFile = DownloadPathResolver.outputFile(download, outputDir, ext)
 
         // Step 2: Download and merge audio if video_only
         if (download.format == "video_only") {
@@ -956,26 +1004,7 @@ class DownloadService : Service() {
                     )
                     updateNotification()
 
-                    var nativeMergeSuccess = false
-                    if (!ext.contains("webm", ignoreCase = true)) {
-                        android.util.Log.d("DownloadService", "Attempting native MediaMuxer merge...")
-                        try {
-                            nativeMergeSuccess = mergeAudioVideoNative(tmpFile, audioFile, outputFile)
-                        } catch (t: Throwable) {
-                            android.util.Log.e("DownloadService", "Native MediaMuxer merge failed with exception", t)
-                        }
-                    } else {
-                        android.util.Log.d("DownloadService", "Skipping native MediaMuxer merge for WebM container.")
-                    }
-
-                    if (nativeMergeSuccess) {
-                        tmpFile.delete()
-                        audioFile.delete()
-                        audioSuccess = true
-                        break
-                    }
-
-                    android.util.Log.d("DownloadService", "Native merge failed/skipped. Trying fast FFmpeg stream copy...")
+                    android.util.Log.d("DownloadService", "Bypassing native MediaMuxer merge. Trying fast FFmpeg stream copy...")
                     val ffmpegCommandCopy = "-y -i \"${tmpFile.absolutePath}\" -i \"${audioFile.absolutePath}\" -c:v copy -c:a copy \"${outputFile.absolutePath}\""
                     
                     val durationSeconds = withContext(Dispatchers.IO) {
@@ -1003,7 +1032,7 @@ class DownloadService : Service() {
                         )
                     }
 
-                    if (ffmpegSuccess) {
+                    if (ffmpegSuccess && !isPaused(download.id) && !isCancelled(download.id) && !isPutToQueue(download.id)) {
                         tmpFile.delete()
                         audioFile.delete()
                         audioSuccess = true
@@ -1050,6 +1079,21 @@ class DownloadService : Service() {
         activeProgress.remove(download.id)
         updateNotification()
 
+        // RECOMPUTE localFilePath policy: prefer video/video_only over audio_extracted
+        val completedDownloads = repository.getLocalDownloadsForVideo(download.videoId)
+        val bestVideoPath = completedDownloads
+            .filter { it.filePath.isNotEmpty() && File(it.filePath).exists() }
+            .sortedBy {
+                when (it.format) {
+                    "video" -> 0
+                    "video_only" -> 1
+                    "audio_extracted" -> 2
+                    else -> 3
+                }
+            }
+            .firstOrNull()?.filePath ?: ""
+
+        // Update or create VideoEntity
         val existing = videoDao.getVideoById(download.videoId)
         if (existing == null) {
             videoDao.insert(
@@ -1057,16 +1101,15 @@ class DownloadService : Service() {
                     id = download.videoId,
                     title = download.title.ifEmpty { download.quality },
                     channelName = "",
-                    // 1. Type Mismatch: pass durationSeconds = 0L (not 0)
                     durationSeconds = 0L,
                     thumbnailUrl = download.thumbnailUrl,
-                    localFilePath = outputFile.absolutePath,
+                    localFilePath = bestVideoPath,
                     downloadedAt = System.currentTimeMillis()
                 )
             )
         } else {
             videoDao.update(existing.copy(
-                localFilePath = outputFile.absolutePath,
+                localFilePath = bestVideoPath,
                 downloadedAt = System.currentTimeMillis()
             ))
         }
@@ -1145,38 +1188,22 @@ class DownloadService : Service() {
           }
       }
  
-       private suspend fun cancelDownload(id: Long) {
+        private suspend fun cancelDownload(id: Long) {
            cancelFlags[id] = true
            pauseFlags.remove(id)
            val job = activeJobs[id]
-           if (job != null) {
-               activeCalls[id]?.cancel()
-               job.cancel()
-               job.join()
-           }
-           val download = repository.getDownloadById(id) ?: return
-           if (download.filePath.isNotEmpty()) {
-               File(download.filePath).delete()
-           }
-           val outputDir = getOutputDir(download.format)
-           val tmpFile = File(outputDir, "${download.videoId}_${download.quality}.tmp")
-           if (tmpFile.exists()) {
-               tmpFile.delete()
-           }
-           val audioFile = File(outputDir, "${download.videoId}_${download.quality}_audio.tmp")
-           if (audioFile.exists()) {
-               audioFile.delete()
-           }
-           
-           // Delete outputFile (descriptive name format) if it exists
-           val ext = if (download.url.contains("webm", ignoreCase = true) || download.quality.contains("webm", ignoreCase = true)) "webm" else "mp4"
-           val sanitizedTitle = sanitizeFileName(download.title)
-           val outputFile = File(outputDir, "${sanitizedTitle}_${download.videoId}_${download.quality}.$ext")
-           if (outputFile.exists()) {
-               outputFile.delete()
-           }
-           
-           updateDownloadStatus(id, DownloadStatus.CANCELED, download.progress)
+            if (job != null) {
+                activeCalls[id]?.cancel()
+                job.cancel()
+            }
+            val download = repository.getDownloadById(id) ?: return
+            if (download.filePath.isNotEmpty()) {
+                File(download.filePath).delete()
+            }
+             val outputDir = getOutputDir(download)
+             DownloadPathResolver.deleteOwnedFiles(download, outputDir, listOf("mp4", "webm", "m4a", "ogg", "mp3"))
+
+            updateDownloadStatus(id, DownloadStatus.CANCELED, download.progress)
            updateNotification()
            processQueue()
        }
@@ -1191,15 +1218,8 @@ class DownloadService : Service() {
             }
             val download = repository.getDownloadById(id) ?: return
             try {
-                val outputDir = getOutputDir(download.format)
-                val tmpFile = File(outputDir, "${download.videoId}_${download.quality}.tmp")
-                if (tmpFile.exists()) {
-                    tmpFile.delete()
-                }
-                val audioFile = File(outputDir, "${download.videoId}_${download.quality}_audio.tmp")
-                if (audioFile.exists()) {
-                    audioFile.delete()
-                }
+                val outputDir = getOutputDir(download)
+                DownloadPathResolver.deleteOwnedFiles(download, outputDir, listOf("mp4", "webm", "m4a", "ogg", "mp3"))
             } catch (e: Exception) {
                 android.util.Log.e("DownloadService", "Failed to delete tmp file on restart", e)
             }
@@ -1213,6 +1233,94 @@ class DownloadService : Service() {
             repository.update(reset)
             pausedDownloads.remove(id)
             resumeDownload(id)
+        }
+
+        private suspend fun deleteDownload(id: Long, deleteFiles: Boolean) {
+            cancelFlags[id] = true
+            pauseFlags.remove(id)
+            activeCalls[id]?.cancel()
+            activeJobs[id]?.cancel()
+            activeJobs[id]?.join()
+
+            val download = repository.getDownloadById(id) ?: return
+            val outputDir = getOutputDir(download)
+            if (deleteFiles) {
+                if (download.filePath.isNotEmpty()) File(download.filePath).delete()
+                DownloadPathResolver.deleteOwnedFiles(
+                    download,
+                    outputDir,
+                    listOf("mp4", "webm", "m4a", "ogg", "mp3")
+                )
+            } else {
+                DownloadPathResolver.tempVideoFile(download, outputDir).delete()
+                DownloadPathResolver.tempAudioFile(download, outputDir).delete()
+            }
+
+            repository.delete(download)
+            pausedDownloads.remove(id)
+            cancelFlags.remove(id)
+            activeCalls.remove(id)
+            activeProgress.remove(id)
+
+            val video = videoDao.getVideoById(download.videoId)
+            if (video != null) {
+                val bestPath = repository.getLocalDownloadsForVideo(download.videoId)
+                    .filter { it.filePath.isNotEmpty() && File(it.filePath).exists() }
+                    .sortedBy {
+                        when (it.format) {
+                            "video" -> 0
+                            "video_only" -> 1
+                            "audio_extracted" -> 2
+                            else -> 3
+                        }
+                    }
+                    .firstOrNull()?.filePath ?: ""
+                videoDao.update(video.copy(localFilePath = bestPath))
+            }
+            updateNotification()
+            processQueue()
+        }
+
+        private suspend fun startAudioExtraction(id: Long) {
+            val extraction = repository.getDownloadById(id) ?: return
+            if (extraction.format != "audio_extracted" || extraction.status != DownloadStatus.DOWNLOADING) return
+            if (activeJobs.containsKey(id)) return
+
+            val source = repository.getLocalDownloadsForVideo(extraction.videoId)
+                .firstOrNull {
+                    it.format != "audio_extracted" &&
+                        it.filePath.isNotEmpty() &&
+                        File(it.filePath).exists()
+                }
+            if (source == null) {
+                markDownloadFailed(id, "Source media file is missing", 0)
+                return
+            }
+
+            val job = serviceScope.launch {
+                try {
+                    val result = audioExtractor.extractAudio(extraction, source.filePath) { progress ->
+                        repository.updateProgressAndMessage(id, progress, null)
+                    }
+                    if (result.success) {
+                        markDownloadCompleted(id, File(result.outputPath).length(), result.outputPath)
+                    } else {
+                        markDownloadFailed(id, result.errorMessage ?: "Extraction failed", 0)
+                    }
+                } catch (e: CancellationException) {
+                    updateDownloadStatus(id, DownloadStatus.CANCELED, extraction.progress)
+                    throw e
+                } catch (e: Throwable) {
+                    markDownloadFailed(id, e.message ?: "Extraction failed", 0)
+                } finally {
+                    activeJobs.remove(id)
+                    activeProgress.remove(id)
+                    activeCalls.remove(id)
+                    updateNotification()
+                    processQueue()
+                }
+            }
+            activeJobs[id] = job
         }
 
        private suspend fun pauseAllDownloads() {
@@ -1269,25 +1377,10 @@ class DownloadService : Service() {
                if (download.filePath.isNotEmpty()) {
                    File(download.filePath).delete()
                }
-               val outputDir = getOutputDir(download.format)
-               val tmpFile = File(outputDir, "${download.videoId}_${download.quality}.tmp")
-               if (tmpFile.exists()) {
-                   tmpFile.delete()
-               }
-               val audioFile = File(outputDir, "${download.videoId}_${download.quality}_audio.tmp")
-               if (audioFile.exists()) {
-                   audioFile.delete()
-               }
-               
-               // Delete outputFile (descriptive name format) if it exists
-               val ext = if (download.url.contains("webm", ignoreCase = true) || download.quality.contains("webm", ignoreCase = true)) "webm" else "mp4"
-               val sanitizedTitle = sanitizeFileName(download.title)
-               val outputFile = File(outputDir, "${sanitizedTitle}_${download.videoId}_${download.quality}.$ext")
-               if (outputFile.exists()) {
-                   outputFile.delete()
-               }
-               
-               updateDownloadStatus(download.id, DownloadStatus.CANCELED, download.progress)
+                 val outputDir = getOutputDir(download)
+                 DownloadPathResolver.deleteOwnedFiles(download, outputDir, listOf("mp4", "webm", "m4a", "ogg", "mp3"))
+
+                updateDownloadStatus(download.id, DownloadStatus.CANCELED, download.progress)
            }
            processQueue()
        }

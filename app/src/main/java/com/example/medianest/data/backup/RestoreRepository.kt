@@ -232,7 +232,9 @@ class RestoreRepository @Inject constructor(
             status = finalStatus,
             progress = progress, errorMessage = finalErrorMessage, retryCount = retryCount,
             videoUrl = videoUrl, updatedAt = if (updatedAt > 0) updatedAt else System.currentTimeMillis(),
-            syncVersion = syncVersion
+            syncVersion = syncVersion,
+            downloadUuid = java.util.UUID.randomUUID().toString(),
+            outputRoot = customFolder
         )
     }
 

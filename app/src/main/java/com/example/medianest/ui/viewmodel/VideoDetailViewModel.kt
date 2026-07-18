@@ -16,6 +16,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import com.example.medianest.data.local.dao.VideoDao
 import com.example.medianest.data.mapper.toVideoEntity
 import com.example.medianest.data.repository.SubscriptionRepository
+import com.example.medianest.data.preferences.DownloadPreferences
 import com.example.medianest.data.sync.SyncManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,6 +24,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import com.example.medianest.extraction.YouTubeExtractor
@@ -37,6 +39,7 @@ class VideoDetailViewModel @Inject constructor(
     private val videoRepository: com.example.medianest.data.repository.VideoRepository,
     private val subscriptionRepository: SubscriptionRepository,
     private val historyDao: com.example.medianest.data.local.dao.HistoryDao,
+    private val downloadPreferences: DownloadPreferences,
     private val syncManager: SyncManager,
     private val youTubeExtractor: YouTubeExtractor
 ) : ViewModel() {
@@ -329,6 +332,7 @@ class VideoDetailViewModel @Inject constructor(
                 videoRepository.insertVideo(videoInfo.toVideoEntity())
             }
 
+            val downloadFolder = downloadPreferences.downloadFolder.first()
             val entity = DownloadEntity(
                 videoId = videoInfo.videoId,
                 url = stream.url,
@@ -337,7 +341,9 @@ class VideoDetailViewModel @Inject constructor(
                 quality = dbQuality,
                 status = DownloadStatus.QUEUED,
                 title = videoInfo.title,
-                thumbnailUrl = videoInfo.thumbnailUrl
+                thumbnailUrl = videoInfo.thumbnailUrl,
+                downloadUuid = java.util.UUID.randomUUID().toString(),
+                outputRoot = downloadFolder
             )
             downloadRepository.insert(entity)
             try {

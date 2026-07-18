@@ -24,6 +24,7 @@ import com.example.medianest.data.sync.SyncManager
 import com.example.medianest.service.AudioExtractor
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.combine
+import com.example.medianest.service.DownloadPathResolver
 import com.example.medianest.service.DownloadService
 import com.example.medianest.service.PlaybackService
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -257,90 +258,16 @@ class DownloadsViewModel @Inject constructor(
     }
 
     fun cancelDownload(downloadId: Long) {
-        viewModelScope.launch {
-            downloadRepository.updateStatusOnly(downloadId, DownloadStatus.CANCELED)
-        }
         DownloadService.cancel(context, downloadId)
     }
 
-    private suspend fun getOutputDir(format: String): File {
-        val dir = if (format == "audio" || format == "audio_extracted") "audio" else "video"
-        val customFolder = downloadPreferences.downloadFolder.first()
-        return if (customFolder.isNotEmpty()) {
-            File(File(customFolder), dir)
-        } else {
-            File(context.filesDir, "MediaNest/$dir")
-        }
-    }
-
     fun deleteDownload(download: DownloadEntity, deleteFile: Boolean) {
-        viewModelScope.launch {
-            if (download.status == DownloadStatus.DOWNLOADING || download.status == DownloadStatus.QUEUED) {
-                DownloadService.cancel(context, download.id)
-            }
-            
-            if (deleteFile) {
-                if (download.filePath.isNotEmpty()) {
-                    try {
-                        val file = File(download.filePath)
-                        if (file.exists()) {
-                            file.delete()
-                        }
-                    } catch (e: Exception) {
-                        android.util.Log.e("DownloadsViewModel", "Failed to delete completed file", e)
-                    }
-                }
-                try {
-                    val outputDir = getOutputDir(download.format)
-                    val tmpFile = File(outputDir, "${download.videoId}_${download.quality}.tmp")
-                    if (tmpFile.exists()) {
-                        tmpFile.delete()
-                    }
-                    val audioFile = File(outputDir, "${download.videoId}_${download.quality}_audio.tmp")
-                    if (audioFile.exists()) {
-                        audioFile.delete()
-                    }
-                } catch (e: Exception) {
-                    android.util.Log.e("DownloadsViewModel", "Failed to delete tmp file", e)
-                }
-            }
-            
-            if (download.status == DownloadStatus.DOWNLOADING || download.status == DownloadStatus.QUEUED) {
-                kotlinx.coroutines.delay(500)
-            }
-            
-            downloadRepository.delete(download)
-            
-            val remaining = downloadRepository.getLocalDownloadsForVideo(download.videoId)
-            if (remaining.isEmpty()) {
-                val video = videoRepository.getVideoById(download.videoId)
-                if (video != null) {
-                    videoRepository.updateVideo(video.copy(localFilePath = ""))
-                }
-            }
-        }
+        DownloadService.delete(context, download.id, deleteFile)
     }
 
     fun retryDownload(download: DownloadEntity) {
         viewModelScope.launch {
-            try {
-                val outputDir = getOutputDir(download.format)
-                val tmpFile = File(outputDir, "${download.videoId}_${download.quality}.tmp")
-                if (tmpFile.exists()) {
-                    tmpFile.delete()
-                }
-            } catch (e: Exception) {
-                android.util.Log.e("DownloadsViewModel", "Failed to delete tmp file on restart", e)
-            }
-
-            val reset = download.copy(
-                status = DownloadStatus.QUEUED,
-                progress = 0f,
-                errorMessage = null,
-                retryCount = 0
-            )
-            downloadRepository.update(reset)
-            DownloadService.resume(context, download.id)
+            DownloadService.restart(context, download.id)
         }
     }
 
@@ -374,47 +301,9 @@ class DownloadsViewModel @Inject constructor(
 
     fun deleteAllDownloads(deleteFiles: Boolean) {
         viewModelScope.launch {
-            val intent = Intent(context, DownloadService::class.java).apply {
-                action = DownloadService.ACTION_CANCEL_ALL
-            }
-            try {
-                ContextCompat.startForegroundService(context, intent)
-            } catch (e: Exception) {
-                android.util.Log.e("DownloadsViewModel", "Failed to cancel all on delete all", e)
-            }
-
             val all = downloadRepository.getAllDownloadsOnce()
             all.forEach { download ->
-                if (deleteFiles) {
-                    if (download.filePath.isNotEmpty()) {
-                        try {
-                            val file = File(download.filePath)
-                            if (file.exists()) {
-                                file.delete()
-                            }
-                        } catch (e: Exception) {
-                            android.util.Log.e("DownloadsViewModel", "Failed to delete file on delete all", e)
-                        }
-                    }
-                    try {
-                        val outputDir = getOutputDir(download.format)
-                        val tmpFile = File(outputDir, "${download.videoId}_${download.quality}.tmp")
-                        if (tmpFile.exists()) {
-                            tmpFile.delete()
-                        }
-                    } catch (e: Exception) {
-                        android.util.Log.e("DownloadsViewModel", "Failed to delete tmp file on delete all", e)
-                    }
-                }
-                downloadRepository.delete(download)
-                
-                val remaining = downloadRepository.getLocalDownloadsForVideo(download.videoId)
-                if (remaining.isEmpty()) {
-                    val video = videoRepository.getVideoById(download.videoId)
-                    if (video != null) {
-                        videoRepository.insertVideo(video.copy(localFilePath = ""))
-                    }
-                }
+                DownloadService.delete(context, download.id, deleteFiles)
             }
         }
     }
@@ -422,14 +311,13 @@ class DownloadsViewModel @Inject constructor(
     fun extractAudio(download: DownloadEntity) {
         if (download.filePath.isEmpty() || download.status != DownloadStatus.COMPLETED) return
         if (_extractingVideoId.value == download.videoId) return
-        android.widget.Toast.makeText(context, "Audio extraction started", android.widget.Toast.LENGTH_SHORT).show()
-
-        kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO).launch {
+        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
             val existing = downloadRepository.getAudioExtraction(download.videoId)
             if (existing != null) return@launch
 
             _extractingVideoId.value = download.videoId
 
+            val outputRoot = downloadPreferences.downloadFolder.first()
             val extractionEntity = DownloadEntity(
                 videoId = download.videoId,
                 url = "",
@@ -438,36 +326,19 @@ class DownloadsViewModel @Inject constructor(
                 title = download.title,
                 thumbnailUrl = download.thumbnailUrl,
                 status = DownloadStatus.DOWNLOADING,
-                progress = 0f
+                progress = 0f,
+                downloadUuid = java.util.UUID.randomUUID().toString(),
+                outputRoot = outputRoot
             )
             val insertId = downloadRepository.insert(extractionEntity)
-
-            try {
-                val result = audioExtractor.extractAudio(
-                    download.filePath,
-                    download.videoId,
-                    download.quality,
-                    download.title
-                )
-
-                if (result.success) {
-                    downloadRepository.markCompleted(insertId, File(result.outputPath).length(), result.outputPath)
-                } else {
-                    downloadRepository.markFailed(
-                        insertId,
-                        result.errorMessage ?: "Extraction failed",
-                        0
-                    )
-                }
-            } catch (e: Throwable) {
-                downloadRepository.markFailed(
-                    insertId,
-                    e.message ?: "Extraction failed: ${e.javaClass.simpleName}",
-                    0
-                )
-            } finally {
+            if (insertId <= 0L) {
                 _extractingVideoId.value = ""
+                return@launch
             }
+            android.widget.Toast.makeText(context, "Audio extraction started", android.widget.Toast.LENGTH_SHORT).show()
+
+            DownloadService.extractAudio(context, insertId)
+            if (_extractingVideoId.value == download.videoId) _extractingVideoId.value = ""
         }
     }
 

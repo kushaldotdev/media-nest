@@ -306,7 +306,7 @@ fun DownloadsScreen(
                 if (isActive) {
                     TextButton(
                         onClick = {
-                            viewModel.deleteDownload(download, deleteFile = true)
+                            viewModel.cancelDownload(download.id)
                             showDeleteDialogFor = null
                         }
                     ) {
