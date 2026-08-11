@@ -54,6 +54,9 @@ class MainActivity : ComponentActivity() {
         } else if (intent?.action == "com.example.medianest.ACTION_NAVIGATE_DOWNLOADS") {
             PendingRestartConfirmation.navigateToDownloads.tryEmit(Unit)
             intent.action = null
+        } else if (intent?.action == "com.example.medianest.ACTION_NAVIGATE_UPDATES") {
+            PendingRestartConfirmation.navigateToUpdates.tryEmit(Unit)
+            intent.action = null
         }
     }
 }

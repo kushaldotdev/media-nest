@@ -16,6 +16,7 @@ import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import com.example.medianest.MainActivity
 import com.example.medianest.R
+import com.example.medianest.data.preferences.UpdatePreferences
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.Dispatchers
@@ -28,7 +29,8 @@ import java.io.File
 class UpdateDownloadWorker @AssistedInject constructor(
     @Assisted private val context: Context,
     @Assisted private val params: WorkerParameters,
-    private val okHttpClient: OkHttpClient
+    private val okHttpClient: OkHttpClient,
+    private val updatePreferences: UpdatePreferences
 ) : CoroutineWorker(context, params) {
 
     companion object {
@@ -54,13 +56,15 @@ class UpdateDownloadWorker @AssistedInject constructor(
             android.util.Log.e("UpdateDownloadWorker", "Failed to setForeground: ${e.message}")
         }
 
+        updatePreferences.setState(UpdatePreferences.STATE_DOWNLOADING, progress = 0f)
+
         try {
             val request = Request.Builder().url(downloadUrl).build()
             okHttpClient.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) throw Exception("Download failed: HTTP ${response.code}")
                 val body = response.body ?: throw Exception("Response body is empty")
                 val totalBytes = body.contentLength()
-                val file = File(context.cacheDir, "update.apk")
+                val file = File(context.filesDir, "update.apk")
                 if (file.exists()) file.delete()
 
                 body.byteStream().use { input ->
@@ -69,6 +73,7 @@ class UpdateDownloadWorker @AssistedInject constructor(
                         var bytesRead: Int
                         var totalBytesRead = 0L
                         var lastProgressUpdate = 0L
+                        var lastMarkerProgress = -1f
                         while (input.read(buffer).also { bytesRead = it } != -1) {
                             output.write(buffer, 0, bytesRead)
                             totalBytesRead += bytesRead
@@ -85,6 +90,12 @@ class UpdateDownloadWorker @AssistedInject constructor(
                                     }
                                     lastProgressUpdate = now
                                 }
+                                // Persist progress marker throttled to >=5% steps so a fresh
+                                // process/ViewModel can rehydrate the progress bar.
+                                if (progressFloat - lastMarkerProgress >= 0.05f) {
+                                    updatePreferences.setProgress(progressFloat)
+                                    lastMarkerProgress = progressFloat
+                                }
                             }
                         }
                     }
@@ -92,15 +103,19 @@ class UpdateDownloadWorker @AssistedInject constructor(
 
                 // Final progress
                 setProgress(workDataOf(KEY_PROGRESS to 1f))
+                updatePreferences.setProgress(1f)
 
                 // Show completion notification with install intent
                 showCompletionNotification(file)
+
+                updatePreferences.setState(UpdatePreferences.STATE_READY)
 
                 Result.success()
             }
         } catch (e: Exception) {
             val errorMsg = e.message ?: "Unknown error"
             showErrorNotification(errorMsg)
+            updatePreferences.setState(UpdatePreferences.STATE_FAILED, error = errorMsg)
             Result.failure(workDataOf(KEY_ERROR to errorMsg))
         }
     }

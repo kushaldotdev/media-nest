@@ -6,6 +6,7 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import com.example.medianest.data.preferences.DownloadPreferences
+import com.example.medianest.data.preferences.UpdatePreferences
 import com.example.medianest.extraction.DownloaderProvider
 import com.example.medianest.worker.WorkScheduler
 import dagger.hilt.android.HiltAndroidApp
@@ -28,6 +29,7 @@ class MediaNestApp : Application(), Configuration.Provider, ImageLoaderFactory {
     @Inject lateinit var hiltWorkerFactory: HiltWorkerFactory
     @Inject lateinit var okHttpClient: OkHttpClient
     @Inject lateinit var videoDao: VideoDao
+    @Inject lateinit var updatePreferences: UpdatePreferences
 
     override val workManagerConfiguration: Configuration
         get() = Configuration.Builder()
@@ -83,6 +85,14 @@ class MediaNestApp : Application(), Configuration.Provider, ImageLoaderFactory {
         NotificationManagerCompat.from(this).createNotificationChannel(updateChannel)
 
         WorkScheduler.scheduleSubscriptionCheck(this)
+
+        // Schedule auto update-check on app startup if enabled
+        MainScope().launch {
+            val interval = updatePreferences.autoCheckIntervalHours.first()
+            if (interval > 0) {
+                WorkScheduler.scheduleUpdateCheck(this@MediaNestApp, interval.toLong())
+            }
+        }
 
         // Schedule auto-backup on app startup if enabled
         val downloadPreferences = DownloadPreferences(this)

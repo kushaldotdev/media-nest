@@ -121,6 +121,20 @@ fun MainScreen() {
                     }
                 }
             }
+            launch {
+                PendingRestartConfirmation.navigateToUpdates.collect {
+                    val currentRoute = navController.currentBackStackEntry?.destination?.route
+                    if (currentRoute != BottomNavItem.Settings.route) {
+                        navController.navigate(BottomNavItem.Settings.route) {
+                            popUpTo(navController.graph.findStartDestination().id) {
+                                saveState = false
+                            }
+                            launchSingleTop = true
+                            restoreState = false
+                        }
+                    }
+                }
+            }
         }
 
         val showBottomBar = navBackStackEntry?.destination?.route?.let { route ->

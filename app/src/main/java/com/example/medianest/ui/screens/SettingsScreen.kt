@@ -44,7 +44,7 @@ import com.example.medianest.ui.viewmodel.MigrationState
 import com.example.medianest.ui.viewmodel.ImportInspectionState
 import androidx.compose.ui.text.font.FontWeight
 import com.example.medianest.ui.components.GlassCard
-import com.example.medianest.ui.viewmodel.UpdateState
+import com.example.medianest.updates.UpdateState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
@@ -1029,6 +1029,52 @@ fun SettingsScreen(
                     Text("Current Installed Version: v$currentAppVersion", style = MaterialTheme.typography.bodySmall)
                     Spacer(Modifier.height(12.dp))
 
+                    val autoCheckInterval by viewModel.autoCheckIntervalHours.collectAsStateWithLifecycle()
+                    val autoCheckOptions = listOf(0, 24, 168)
+                    var autoCheckExpanded by remember { mutableStateOf(false) }
+
+                    ExposedDropdownMenuBox(
+                        expanded = autoCheckExpanded,
+                        onExpandedChange = { autoCheckExpanded = it }
+                    ) {
+                        OutlinedTextField(
+                            value = when (autoCheckInterval) {
+                                0 -> "Off (Manual only)"
+                                168 -> "Every 7 days"
+                                else -> "Every 24 hours (daily)"
+                            },
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Auto-check for updates") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = autoCheckExpanded) },
+                            modifier = Modifier.fillMaxWidth().menuAnchor(
+                                ExposedDropdownMenuAnchorType.PrimaryNotEditable,
+                                enabled = true
+                            ),
+                            singleLine = true
+                        )
+                        ExposedDropdownMenu(
+                            expanded = autoCheckExpanded,
+                            onDismissRequest = { autoCheckExpanded = false }
+                        ) {
+                            autoCheckOptions.forEach { option ->
+                                val text = when (option) {
+                                    0 -> "Off (Manual only)"
+                                    168 -> "Every 7 days"
+                                    else -> "Every 24 hours (daily)"
+                                }
+                                DropdownMenuItem(
+                                    text = { Text(text) },
+                                    onClick = {
+                                        viewModel.setAutoCheckIntervalHours(option)
+                                        autoCheckExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(12.dp))
+
                     val isDebug = com.example.medianest.BuildConfig.DEBUG
                     when (val s = updateState) {
                         is UpdateState.Idle -> {
@@ -1114,10 +1160,33 @@ fun SettingsScreen(
                                     progress = { s.progress },
                                     modifier = Modifier.fillMaxWidth()
                                 )
+                                Spacer(Modifier.height(8.dp))
+                                TextButton(
+                                    onClick = { viewModel.cancelUpdateDownload() },
+                                    modifier = Modifier.align(Alignment.End)
+                                ) {
+                                    Text("Cancel Download")
+                                }
                             }
                         }
                         is UpdateState.ReadyToInstall -> {
-                            Text("Launching installer...", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                Text("Update downloaded and ready to install.", style = MaterialTheme.typography.bodyMedium)
+                                Spacer(Modifier.height(8.dp))
+                                Button(
+                                    onClick = { viewModel.installUpdate() },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text("Install Update")
+                                }
+                                Spacer(Modifier.height(4.dp))
+                                TextButton(
+                                    onClick = { viewModel.resetUpdateState() },
+                                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                                ) {
+                                    Text("Dismiss")
+                                }
+                            }
                         }
                         is UpdateState.Error -> {
                             Column(modifier = Modifier.fillMaxWidth()) {
@@ -1134,6 +1203,16 @@ fun SettingsScreen(
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
                                     Text("Try Again")
+                                }
+                                val hasPendingDownload by viewModel.hasPendingDownload.collectAsStateWithLifecycle()
+                                if (hasPendingDownload) {
+                                    Spacer(Modifier.height(4.dp))
+                                    TextButton(
+                                        onClick = { viewModel.retryUpdateDownload() },
+                                        modifier = Modifier.align(Alignment.CenterHorizontally)
+                                    ) {
+                                        Text("Retry Download")
+                                    }
                                 }
                             }
                         }

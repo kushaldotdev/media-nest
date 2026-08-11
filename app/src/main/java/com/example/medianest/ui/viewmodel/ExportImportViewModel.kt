@@ -12,8 +12,10 @@ import com.example.medianest.data.sync.SyncManager
 import com.example.medianest.data.sync.SyncRepository
 import com.example.medianest.data.sync.SyncState
 import com.example.medianest.data.preferences.DownloadPreferences
+import com.example.medianest.data.preferences.UpdatePreferences
+import com.example.medianest.updates.UpdateManager
+import com.example.medianest.updates.UpdateState
 import com.example.medianest.worker.WorkScheduler
-import com.example.medianest.worker.UpdateDownloadWorker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,12 +32,7 @@ import java.io.OutputStream
 import javax.inject.Inject
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.Serializable
 import android.content.Intent
-import androidx.core.content.FileProvider
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -44,6 +41,7 @@ import com.example.medianest.data.local.AppDatabase
 import com.example.medianest.data.local.entity.DownloadStatus
 import com.example.medianest.data.repository.DownloadRepository
 import com.example.medianest.data.repository.VideoRepository
+import kotlinx.serialization.Serializable
 
 sealed class ExportImportState {
     data object Idle : ExportImportState()
@@ -63,29 +61,6 @@ sealed class MigrationState {
     data class Success(val movedCount: Int) : MigrationState()
     data class Error(val message: String) : MigrationState()
 }
-
-sealed class UpdateState {
-    object Idle : UpdateState()
-    object Checking : UpdateState()
-    data class UpdateAvailable(val latestVersion: String, val changelog: String, val downloadUrl: String) : UpdateState()
-    object NoUpdateAvailable : UpdateState()
-    data class Downloading(val progress: Float) : UpdateState()
-    data class Error(val message: String) : UpdateState()
-    object ReadyToInstall : UpdateState()
-}
-
-@Serializable
-data class GitHubRelease(
-    val tag_name: String,
-    val body: String? = null,
-    val assets: List<GitHubAsset> = emptyList()
-)
-
-@Serializable
-data class GitHubAsset(
-    val name: String,
-    val browser_download_url: String
-)
 
 @Serializable
 data class LocalBackupInfo(
@@ -111,7 +86,8 @@ class ExportImportViewModel @Inject constructor(
     private val downloadPreferences: DownloadPreferences,
     private val syncRepository: SyncRepository,
     private val syncManager: SyncManager,
-    private val okHttpClient: OkHttpClient,
+    private val updateManager: UpdateManager,
+    private val updatePreferences: UpdatePreferences,
     private val downloadRepository: DownloadRepository,
     private val videoRepository: VideoRepository,
     private val database: AppDatabase,
@@ -124,10 +100,14 @@ class ExportImportViewModel @Inject constructor(
     private val _importInspection = MutableStateFlow<ImportInspectionState>(ImportInspectionState.Idle)
     val importInspection: StateFlow<ImportInspectionState> = _importInspection
 
-    private val _updateState = MutableStateFlow<UpdateState>(UpdateState.Idle)
-    val updateState: StateFlow<UpdateState> = _updateState
+    val updateState: StateFlow<UpdateState> = updateManager.updateState
 
-    private val json = Json { ignoreUnknownKeys = true }
+    val autoCheckIntervalHours = updatePreferences.autoCheckIntervalHours
+        .stateIn(viewModelScope, SharingStarted.Eagerly, UpdatePreferences.DEFAULT_AUTO_CHECK_INTERVAL_HOURS)
+
+    val hasPendingDownload: StateFlow<Boolean> = updatePreferences.downloadUrl
+        .map { it.isNotBlank() }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     val syncState: StateFlow<SyncState> = syncManager.state
     val syncLog = syncManager.log
@@ -194,35 +174,6 @@ class ExportImportViewModel @Inject constructor(
             downloadFolder.collect {
                 loadLocalBackups()
             }
-        }
-        viewModelScope.launch {
-            WorkManager.getInstance(appContext)
-                .getWorkInfosForUniqueWorkFlow("update_download")
-                .collect { workInfos ->
-                    val info = workInfos.firstOrNull() ?: return@collect
-                    when (info.state) {
-                        WorkInfo.State.RUNNING, WorkInfo.State.ENQUEUED -> {
-                            val progress = info.progress.getFloat(UpdateDownloadWorker.KEY_PROGRESS, 0f)
-                            _updateState.value = UpdateState.Downloading(progress)
-                        }
-                        WorkInfo.State.SUCCEEDED -> {
-                            if (_updateState.value is UpdateState.Downloading) {
-                                _updateState.value = UpdateState.ReadyToInstall
-                                val file = File(appContext.cacheDir, "update.apk")
-                                if (file.exists()) {
-                                    installApk(file)
-                                }
-                            }
-                        }
-                        WorkInfo.State.FAILED -> {
-                            if (_updateState.value is UpdateState.Downloading) {
-                                val error = info.outputData.getString(UpdateDownloadWorker.KEY_ERROR) ?: "Download failed"
-                                _updateState.value = UpdateState.Error(error)
-                            }
-                        }
-                        else -> {}
-                    }
-                }
         }
     }
 
@@ -575,83 +526,35 @@ class ExportImportViewModel @Inject constructor(
         _state.value = ExportImportState.Idle
     }
 
-    fun checkForUpdates() {
-        _updateState.value = UpdateState.Checking
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                val currentVersion = try {
-                    appContext.packageManager.getPackageInfo(appContext.packageName, 0).versionName ?: "1.0"
-                } catch (_: Exception) {
-                    "1.0"
-                }
+    fun checkForUpdates() = viewModelScope.launch {
+        updateManager.checkForUpdates()
+    }
 
-                val request = Request.Builder()
-                    .url("https://api.github.com/repos/kushaldotdev/media-nest/releases/latest")
-                    .header("User-Agent", "MediaNest-App")
-                    .build()
+    fun downloadAndInstallUpdate(downloadUrl: String) = viewModelScope.launch {
+        updateManager.downloadAndInstallUpdate(downloadUrl)
+    }
 
-                okHttpClient.newCall(request).execute().use { response ->
-                    if (!response.isSuccessful) throw Exception("Server returned ${response.code}")
-                    val bodyString = response.body?.string() ?: throw Exception("Empty response body")
-                    val release = json.decodeFromString<GitHubRelease>(bodyString)
-                    val latest = release.tag_name.removePrefix("v").trim()
-                    val hasUpdate = isNewerVersion(currentVersion, latest)
+    fun installUpdate() = viewModelScope.launch {
+        updateManager.installApk()
+    }
 
-                    if (hasUpdate) {
-                        val apkAsset = release.assets.find { it.name.endsWith(".apk") }
-                        if (apkAsset != null) {
-                            _updateState.value = UpdateState.UpdateAvailable(
-                                latestVersion = latest,
-                                changelog = release.body ?: "No release notes provided.",
-                                downloadUrl = apkAsset.browser_download_url
-                            )
-                        } else {
-                            _updateState.value = UpdateState.Error("Update available ($latest) but no APK asset found.")
-                        }
-                    } else {
-                        _updateState.value = UpdateState.NoUpdateAvailable
-                    }
-                }
-            } catch (e: Exception) {
-                _updateState.value = UpdateState.Error("Check failed: ${e.message}")
-            }
+    fun retryUpdateDownload() = viewModelScope.launch {
+        updateManager.retryDownload()
+    }
+
+    fun cancelUpdateDownload() = viewModelScope.launch {
+        updateManager.cancel()
+    }
+
+    fun resetUpdateState() = viewModelScope.launch {
+        updateManager.reset()
+    }
+
+    fun setAutoCheckIntervalHours(hours: Int) {
+        viewModelScope.launch {
+            updatePreferences.setAutoCheckIntervalHours(hours)
+            WorkScheduler.updateUpdateCheckInterval(appContext, hours.toLong())
         }
-    }
-
-    fun downloadAndInstallUpdate(downloadUrl: String) {
-        _updateState.value = UpdateState.Downloading(0f)
-        WorkScheduler.enqueueUpdateDownload(appContext, downloadUrl)
-    }
-
-    private fun installApk(file: File) {
-        try {
-            val context = appContext
-            val apkUri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-            val intent = Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(apkUri, "application/vnd.android.package-archive")
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
-            }
-            context.startActivity(intent)
-        } catch (e: Exception) {
-            _updateState.value = UpdateState.Error("Failed to launch package installer: ${e.message}")
-        }
-    }
-
-    fun resetUpdateState() {
-        _updateState.value = UpdateState.Idle
-    }
-
-    private fun isNewerVersion(current: String, latest: String): Boolean {
-        val currParts = current.split(".").mapNotNull { it.toIntOrNull() }
-        val lateParts = latest.split(".").mapNotNull { it.toIntOrNull() }
-        val maxLen = maxOf(currParts.size, lateParts.size)
-        for (i in 0 until maxLen) {
-            val currVal = currParts.getOrElse(i) { 0 }
-            val lateVal = lateParts.getOrElse(i) { 0 }
-            if (lateVal > currVal) return true
-            if (currVal > lateVal) return false
-        }
-        return false
     }
 
     fun loadLocalBackups() {

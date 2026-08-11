@@ -13,6 +13,8 @@ import java.util.concurrent.TimeUnit
 
 object WorkScheduler {
     const val BULK_DOWNLOAD_PREP_WORK_NAME = "bulk_download_prep"
+    const val UPDATE_DOWNLOAD_WORK_NAME = "update_download"
+    const val UPDATE_CHECK_WORK_NAME = "update_check"
 
     fun scheduleSubscriptionCheck(context: Context) {
         val request = PeriodicWorkRequestBuilder<SubscriptionWorker>(
@@ -119,12 +121,56 @@ object WorkScheduler {
                     .setRequiredNetworkType(NetworkType.CONNECTED)
                     .build()
             )
+            .setBackoffCriteria(
+                androidx.work.BackoffPolicy.LINEAR,
+                30, TimeUnit.SECONDS
+            )
             .build()
 
         WorkManager.getInstance(context).enqueueUniqueWork(
-            "update_download",
+            UPDATE_DOWNLOAD_WORK_NAME,
             ExistingWorkPolicy.REPLACE,
             request
         )
+    }
+
+    fun cancelUpdateDownload(context: Context) {
+        WorkManager.getInstance(context).cancelUniqueWork(UPDATE_DOWNLOAD_WORK_NAME)
+    }
+
+    fun scheduleUpdateCheck(
+        context: Context,
+        intervalHours: Long,
+        policy: ExistingPeriodicWorkPolicy = ExistingPeriodicWorkPolicy.KEEP
+    ) {
+        if (intervalHours <= 0) {
+            cancelUpdateCheck(context)
+            return
+        }
+        val request = PeriodicWorkRequestBuilder<UpdateCheckWorker>(
+            intervalHours, TimeUnit.HOURS
+        ).setConstraints(
+            Constraints.Builder()
+                .setRequiredNetworkType(NetworkType.CONNECTED)
+                .build()
+        ).build()
+
+        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+            UPDATE_CHECK_WORK_NAME,
+            policy,
+            request
+        )
+    }
+
+    fun cancelUpdateCheck(context: Context) {
+        WorkManager.getInstance(context).cancelUniqueWork(UPDATE_CHECK_WORK_NAME)
+    }
+
+    fun updateUpdateCheckInterval(context: Context, intervalHours: Long) {
+        if (intervalHours <= 0) {
+            cancelUpdateCheck(context)
+        } else {
+            scheduleUpdateCheck(context, intervalHours, ExistingPeriodicWorkPolicy.REPLACE)
+        }
     }
 }
