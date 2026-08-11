@@ -67,12 +67,33 @@ import com.example.medianest.ui.viewmodel.DownloadsViewModel
 
 import androidx.compose.runtime.LaunchedEffect
 
+private fun compactDuration(ms: Long): String {
+    val totalSecs = (ms / 1000L).coerceAtLeast(0L)
+    if (totalSecs <= 0L) return "0s"
+    return when {
+        totalSecs < 60 -> "${totalSecs}s"
+        totalSecs < 3600 -> {
+            "%dm%02ds".format(totalSecs / 60, totalSecs % 60)
+        }
+        else -> "%dh%02dm".format(totalSecs / 3600, (totalSecs % 3600) / 60)
+    }
+}
+
 private fun formatTransferTiming(parts: List<String>, timingOffset: Int = 5): String {
     val elapsedMs = parts.getOrNull(timingOffset)?.toLongOrNull() ?: return ""
     val remainingMs = parts.getOrNull(timingOffset + 1)?.toLongOrNull() ?: return ""
-    val elapsed = com.example.medianest.ui.utils.UiUtils.formatDuration(elapsedMs / 1000L)
-    val remaining = com.example.medianest.ui.utils.UiUtils.formatDuration(remainingMs / 1000L)
-    return " · $elapsed elapsed · $remaining remaining"
+    return " · ${compactDuration(elapsedMs)} · ${compactDuration(remainingMs)} left"
+}
+
+private fun speedSuffix(speed: String): String {
+    if (speed.isBlank()) return ""
+    val rawBytes = speed.toLongOrNull()
+    return if (rawBytes != null && rawBytes > 0L) {
+        val mbps = rawBytes / (1024f * 1024f)
+        " · " + if (mbps >= 1f) "%.1f MB/s".format(mbps) else "%.0f KB/s".format(rawBytes / 1024f)
+    } else {
+        " · $speed"
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -627,7 +648,7 @@ private fun DownloadItem(
                                 val totalMb = totalSize / (1024f * 1024f)
                                 val pct = (download.progress * 100).toInt()
                                 
-                                "%.1fMB / %.1fMB (%d%%)%s".format(downloadedMb, totalMb, pct, formatTransferTiming(parts))
+                                "%.1fMB / %.1fMB (%d%%)%s%s".format(downloadedMb, totalMb, pct, formatTransferTiming(parts), speedSuffix(speed))
                             } else if (msg.startsWith("downloading_audio")) {
                                 val parts = msg.split("|")
                                 if (parts.size >= 4) {
@@ -642,7 +663,7 @@ private fun DownloadItem(
                                     val totalMb = totalSize / (1024f * 1024f)
                                     val pct = (download.progress * 100).toInt()
                                     
-                                "Downloading audio: %.1fMB / %.1fMB (%d%%)%s".format(downloadedMb, totalMb, pct, formatTransferTiming(parts))
+                                "Downloading audio: %.1fMB / %.1fMB (%d%%)%s%s".format(downloadedMb, totalMb, pct, formatTransferTiming(parts), speedSuffix(speed))
                                 } else {
                                     val speedPart = msg.substringAfter("|", "")
                                     if (speedPart.isNotEmpty()) {
@@ -656,7 +677,7 @@ private fun DownloadItem(
                                 val pctPart = parts.getOrNull(1) ?: ""
                                 val pct = pctPart.toIntOrNull()
                                 if (pct != null && pct >= 0) {
-                                    "Merging video & audio ($pct%)${formatTransferTiming(parts, 2)}"
+                                    "Merging video & audio ($pct%)${formatTransferTiming(parts, 2)}${speedSuffix(parts.getOrNull(4) ?: "")}"
                                 } else {
                                     "Merging video & audio..."
                                 }
@@ -664,10 +685,8 @@ private fun DownloadItem(
                                 val parts = msg.split("|")
                                 val elapsedMs = parts.getOrNull(1)?.toLongOrNull() ?: 0L
                                 val remainingMs = parts.getOrNull(2)?.toLongOrNull() ?: 0L
-                                val elapsed = com.example.medianest.ui.utils.UiUtils.formatDuration(elapsedMs / 1000L)
-                                val remaining = com.example.medianest.ui.utils.UiUtils.formatDuration(remainingMs / 1000L)
                                 val pct = (download.progress * 100).toInt()
-                                "Extracting audio: $pct% · $elapsed elapsed · $remaining remaining"
+                                "Extracting audio: $pct% · ${compactDuration(elapsedMs)} · ${compactDuration(remainingMs)} left"
                             } else if (msg.startsWith("downloading|")) {
                                 val parts = msg.split("|")
                                 "${(download.progress * 100).toInt()}%${formatTransferTiming(parts, 2)}"
@@ -700,7 +719,10 @@ private fun DownloadItem(
                     }
                     Text(
                         text = statusText,
+                        modifier = Modifier.fillMaxWidth(),
                         style = MaterialTheme.typography.bodySmall,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
                         color = when (download.status) {
                             DownloadStatus.FAILED -> MaterialTheme.colorScheme.error
                             DownloadStatus.CANCELED -> MaterialTheme.colorScheme.outline

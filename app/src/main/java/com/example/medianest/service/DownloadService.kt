@@ -5,6 +5,8 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.os.IBinder
 import android.os.SystemClock
 import androidx.core.app.NotificationChannelCompat
@@ -170,7 +172,9 @@ class DownloadService : Service() {
         val title: String,
         val progress: Float,
         val bytesDownloaded: Long,
-        val totalBytes: Long
+        val totalBytes: Long,
+        val speedBytesPerSec: Long = 0L,
+        val thumbnailUrl: String? = null
     )
 
     private val activeJobs = ConcurrentHashMap<Long, Job>()
@@ -180,6 +184,7 @@ class DownloadService : Service() {
     private val activeProgress = ConcurrentHashMap<Long, ActiveProgress>()
     private val activeStartedAt = ConcurrentHashMap<Long, Long>()
     private val activeCalls = ConcurrentHashMap<Long, okhttp3.Call>()
+    private val thumbnailCache = ConcurrentHashMap<String, Bitmap>()
     private val queueMutex = kotlinx.coroutines.sync.Mutex()
     private val intentMutex = kotlinx.coroutines.sync.Mutex()
     private val pausedDownloads = ConcurrentHashMap<Long, DownloadEntity>()
@@ -358,7 +363,8 @@ class DownloadService : Service() {
             title = download.title.ifEmpty { download.quality },
             progress = download.progress,
             bytesDownloaded = (download.progress * download.fileSizeBytes).toLong(),
-            totalBytes = download.fileSizeBytes
+            totalBytes = download.fileSizeBytes,
+            thumbnailUrl = download.thumbnailUrl
         )
         val job = serviceScope.launch(start = CoroutineStart.LAZY) {
             try {
@@ -436,6 +442,7 @@ class DownloadService : Service() {
                 var speedLastTime = System.currentTimeMillis()
                 var speedLastBytes = offset
                 var currentSpeedString: String? = null
+                var currentSpeedBytesPerSec: Long = 0L
 
                 // Chunked download loop — each iteration requests a bounded byte range
                 while (true) {
@@ -617,6 +624,7 @@ class DownloadService : Service() {
                                     val timeDiff = currentTime - speedLastTime
                                     if (timeDiff > 0) {
                                         val bytesPerSec = (bytesDiff * 1000f) / timeDiff
+                                        currentSpeedBytesPerSec = bytesPerSec.toLong()
                                         currentSpeedString = if (bytesPerSec >= 1024 * 1024) {
                                             "%.1f MB/s".format(bytesPerSec / (1024f * 1024f))
                                         } else {
@@ -680,7 +688,9 @@ class DownloadService : Service() {
                                          },
                                          progress = currentProgress,
                                          bytesDownloaded = displayedBytes,
-                                         totalBytes = displayedTotal
+                                         totalBytes = displayedTotal,
+                                         speedBytesPerSec = currentSpeedBytesPerSec,
+                                         thumbnailUrl = download.thumbnailUrl
                                      )
                                     updateNotification()
                                     lastProgressSent = currentProgress
@@ -796,14 +806,21 @@ class DownloadService : Service() {
             } else {
                 0L
             }
+            val mergeTotalBytes = activeProgress[downloadId]?.totalBytes ?: 0L
+            val mergeSpeedBytesPerSec = if (elapsedMs > 500 && mergeTotalBytes > 0L) {
+                ((mergeTotalBytes * boundedProgress * 1000f) / elapsedMs).toLong()
+            } else {
+                0L
+            }
             
             serviceScope.launch {
                 if (!isPaused(downloadId) && !isCancelled(downloadId) && !isPutToQueue(downloadId)) {
-                    repository.updateProgressAndMessage(downloadId, overallProgress, "merging|$pct|$elapsedMs|$remainingMs")
+                    repository.updateProgressAndMessage(downloadId, overallProgress, "merging|$pct|$elapsedMs|$remainingMs|$mergeSpeedBytesPerSec")
                     activeProgress[downloadId]?.let { progress ->
                         activeProgress[downloadId] = progress.copy(
                             progress = overallProgress,
-                            bytesDownloaded = (overallProgress * progress.totalBytes).toLong()
+                            bytesDownloaded = (overallProgress * progress.totalBytes).toLong(),
+                            speedBytesPerSec = mergeSpeedBytesPerSec
                         )
                     }
                     updateNotification()
@@ -836,6 +853,13 @@ class DownloadService : Service() {
     }
 
     private suspend fun downloadFile(download: DownloadEntity) {
+        // Pre-warm thumbnail cache asynchronously so the notification hot-path gets a cache hit
+        if (!download.thumbnailUrl.isNullOrBlank()) {
+            serviceScope.launch {
+                loadThumbnail(download.thumbnailUrl)
+                updateNotification()
+            }
+        }
         if (isPaused(download.id)) {
             updateDownloadStatus(download.id, DownloadStatus.PAUSED, download.progress)
             updateNotification()
@@ -1024,7 +1048,8 @@ class DownloadService : Service() {
                         title = "Downloading audio...",
                         progress = transferStart,
                         bytesDownloaded = tmpFile.length(),
-                        totalBytes = tmpFile.length() + audioSize
+                        totalBytes = tmpFile.length() + audioSize,
+                        thumbnailUrl = download.thumbnailUrl
                     )
                     updateNotification()
 
@@ -1073,7 +1098,8 @@ class DownloadService : Service() {
                         title = "Merging video & audio...",
                         progress = 0f,
                         bytesDownloaded = 0L,
-                        totalBytes = tmpFile.length() + audioFile.length()
+                        totalBytes = tmpFile.length() + audioFile.length(),
+                        thumbnailUrl = download.thumbnailUrl
                     )
                     updateNotification()
 
@@ -1206,7 +1232,8 @@ class DownloadService : Service() {
                   downloadId = id,
                   title = progress.title,
                   progress = progressAtPause ?: 0f,
-                  totalBytes = progress.totalBytes
+                  totalBytes = progress.totalBytes,
+                  thumbnailUrl = progress.thumbnailUrl
               )
           }
           val job = activeJobs[id]
@@ -1225,7 +1252,8 @@ class DownloadService : Service() {
                   downloadId = id,
                   title = download.title.ifEmpty { download.quality },
                   progress = effectiveProgress,
-                  totalBytes = download.fileSizeBytes
+                  totalBytes = download.fileSizeBytes,
+                  thumbnailUrl = download.thumbnailUrl
               )
           }
           updateDownloadStatus(id, DownloadStatus.PAUSED, effectiveProgress)
@@ -1395,7 +1423,8 @@ class DownloadService : Service() {
                      title = "Extracting audio...",
                      progress = extraction.progress,
                      bytesDownloaded = (extraction.progress * sourceSize).toLong(),
-                     totalBytes = sourceSize
+                     totalBytes = sourceSize,
+                     thumbnailUrl = source.thumbnailUrl
                  )
                 updateDownloadStatus(id, DownloadStatus.DOWNLOADING, extraction.progress)
                 updateNotification()
@@ -1413,7 +1442,8 @@ class DownloadService : Service() {
                                  title = "Extracting audio...",
                                  progress = progress,
                                  bytesDownloaded = (progress * sourceSize).toLong(),
-                                 totalBytes = sourceSize
+                                 totalBytes = sourceSize,
+                                 thumbnailUrl = source.thumbnailUrl
                              )
                             repository.updateProgressAndMessage(
                                 id,
@@ -1548,11 +1578,52 @@ class DownloadService : Service() {
           return if (minutes > 0L) "${minutes}m ${seconds % 60L}s" else "${seconds}s"
       }
 
+      private fun compactDuration(ms: Long): String {
+          val seconds = (ms / 1000L).coerceAtLeast(0L)
+          if (seconds <= 0L) return "0s"
+          if (seconds < 60L) return "${seconds}s"
+          val minutes = seconds / 60L
+          if (minutes < 60L) return "%dm%02ds".format(minutes, seconds % 60L)
+          val hours = minutes / 60L
+          return "%dh%02dm".format(hours, minutes % 60L)
+      }
+
+      private fun formatSpeed(bytesPerSec: Long): String {
+          if (bytesPerSec <= 0L) return ""
+          return if (bytesPerSec >= 1024 * 1024) {
+              "%.1f MB/s".format(bytesPerSec / (1024f * 1024f))
+          } else {
+              "%.0f KB/s".format(bytesPerSec / 1024f)
+          }
+      }
+
+      private suspend fun loadThumbnail(thumbnailUrl: String?): Bitmap? {
+          if (thumbnailUrl.isNullOrBlank()) return null
+          // Cache hit: return synchronously - never blocks the caller
+          thumbnailCache[thumbnailUrl]?.let { return it }
+          return withContext(Dispatchers.IO) {
+              try {
+                  val request = Request.Builder().url(thumbnailUrl).build()
+                  val response = okHttpClient.newCall(request).execute()
+                  response.use {
+                      if (!it.isSuccessful || it.body == null) return@withContext null
+                      it.body!!.byteStream().use { stream ->
+                          val bitmap = BitmapFactory.decodeStream(stream)
+                          if (bitmap != null) thumbnailCache[thumbnailUrl] = bitmap
+                          bitmap
+                      }
+                  }
+              } catch (e: Exception) {
+                  null
+              }
+          }
+      }
+
       private fun transferTiming(startedAt: Long?, progress: Int): String {
           if (startedAt == null) return ""
           val elapsedMs = SystemClock.elapsedRealtime() - startedAt
           val remainingMs = if (progress > 0) elapsedMs * (100L - progress) / progress else 0L
-          return " · ${formatTransferDuration(elapsedMs)} elapsed · ${formatTransferDuration(remainingMs)} remaining"
+          return " - ${compactDuration(elapsedMs)} - ${compactDuration(remainingMs)} left"
       }
 
       private suspend fun updateNotification() {
@@ -1632,7 +1703,7 @@ class DownloadService : Service() {
                      restartIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                  )
 
-                 NotificationCompat.Builder(this, CHANNEL_ID)
+                 val builder = NotificationCompat.Builder(this, CHANNEL_ID)
                      .setContentTitle(download.title.ifEmpty { download.quality })
                      .setContentText(contentText)
                      .setSmallIcon(android.R.drawable.stat_sys_download)
@@ -1641,6 +1712,12 @@ class DownloadService : Service() {
                      .addAction(android.R.drawable.ic_media_play, "Resume", pendingResume)
                      .addAction(android.R.drawable.ic_menu_revert, "Restart", pendingRestart)
                      .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Cancel", pendingCancel)
+
+                 loadThumbnail(download.thumbnailUrl)?.let { bitmap ->
+                     builder.setLargeIcon(bitmap)
+                     builder.setStyle(NotificationCompat.BigPictureStyle().bigPicture(bitmap).setBigContentTitle(download.title.ifEmpty { download.quality }))
+                 }
+                 builder
                      .setContentIntent(
                          PendingIntent.getActivity(
                              this, 0,
@@ -1731,15 +1808,25 @@ class DownloadService : Service() {
                  restartIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
              )
 
-             NotificationCompat.Builder(this, CHANNEL_ID)
+             val speedText = formatSpeed(active.speedBytesPerSec)
+             val contentTextSingle = "$pct% \u2014 ${downloadedMb}/${totalMb} MB$timing" +
+                 (if (speedText.isNotEmpty()) " \u00b7 $speedText" else "")
+
+             val builder = NotificationCompat.Builder(this, CHANNEL_ID)
                  .setContentTitle(active.title)
-                  .setContentText("$pct% \u2014 ${downloadedMb}/${totalMb} MB$timing")
+                 .setContentText(contentTextSingle)
                  .setSmallIcon(android.R.drawable.stat_sys_download)
                  .setOngoing(true)
                  .setProgress(100, pct, active.totalBytes <= 0)
                  .addAction(android.R.drawable.ic_media_pause, "Pause", pendingPause)
                  .addAction(android.R.drawable.ic_menu_revert, "Restart", pendingRestart)
                  .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Cancel", pendingCancel)
+
+             loadThumbnail(active.thumbnailUrl)?.let { bitmap ->
+                 builder.setLargeIcon(bitmap)
+                 builder.setStyle(NotificationCompat.BigPictureStyle().bigPicture(bitmap).setBigContentTitle(active.title))
+             }
+             builder
                  .setContentIntent(
                      PendingIntent.getActivity(
                          this, 0,
@@ -1762,10 +1849,14 @@ class DownloadService : Service() {
                  totalBytes += it.totalBytes
                  downloadedBytes += it.bytesDownloaded
              }
-               val pct = (reallyActive.values.map { it.progress }.average() * 100).toInt()
-              val downloadedMb = "%.1f".format(downloadedBytes / (1024f * 1024f))
-              val totalMb = "%.1f".format(totalBytes / (1024f * 1024f))
-              val timing = transferTiming(reallyActive.keys.mapNotNull { activeStartedAt[it] }.minOrNull(), pct)
+              val pct = (reallyActive.values.map { it.progress }.average() * 100).toInt()
+             val downloadedMb = "%.1f".format(downloadedBytes / (1024f * 1024f))
+             val totalMb = "%.1f".format(totalBytes / (1024f * 1024f))
+             val timing = transferTiming(reallyActive.keys.mapNotNull { activeStartedAt[it] }.minOrNull(), pct)
+             val totalSpeed = reallyActive.values.sumOf { it.speedBytesPerSec }
+             val speedText = formatSpeed(totalSpeed)
+             val contentTextMulti = "$pct% \u2014 ${downloadedMb}/${totalMb} MB$timing" +
+                 (if (speedText.isNotEmpty()) " \u00b7 $speedText total" else "")
              
              val pauseAllIntent = Intent(this, DownloadService::class.java).apply {
                  action = ACTION_PAUSE_ALL
@@ -1785,7 +1876,7 @@ class DownloadService : Service() {
 
              NotificationCompat.Builder(this, CHANNEL_ID)
                  .setContentTitle("Downloading ${reallyActive.size} files")
-                  .setContentText("$pct% \u2014 ${downloadedMb}/${totalMb} MB$timing")
+                  .setContentText(contentTextMulti)
                  .setSmallIcon(android.R.drawable.stat_sys_download)
                  .setOngoing(true)
                  .setProgress(100, pct, indeterminate || totalBytes <= 0)
@@ -1820,7 +1911,8 @@ class DownloadService : Service() {
          downloadId: Long,
          title: String,
          progress: Float,
-         totalBytes: Long
+         totalBytes: Long,
+         thumbnailUrl: String? = null
      ) {
          // 8. Zombie Notification: Check serviceScope.isActive in showPausedNotification()
          if (!serviceScope.isActive) return
@@ -1869,7 +1961,7 @@ class DownloadService : Service() {
              PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
          )
 
-         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+         val builder = NotificationCompat.Builder(this, CHANNEL_ID)
              .setContentTitle(title)
              .setContentText(contentText)
              .setSmallIcon(android.R.drawable.stat_sys_download)
@@ -1878,6 +1970,15 @@ class DownloadService : Service() {
              .addAction(android.R.drawable.ic_media_play, "Resume", pendingResume)
              .addAction(android.R.drawable.ic_menu_revert, "Restart", pendingRestart)
              .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Cancel", pendingCancel)
+
+         // Non-suspend cache read: showPausedNotification is not a suspend fun,
+         // so we cannot call suspend loadThumbnail() here. The cache is pre-warmed
+         // when the download starts and populated by the suspend updateNotification() path.
+         thumbnailCache[thumbnailUrl]?.let { bitmap ->
+             builder.setLargeIcon(bitmap)
+             builder.setStyle(NotificationCompat.BigPictureStyle().bigPicture(bitmap).setBigContentTitle(title))
+         }
+         val notification = builder
              .setContentIntent(
                  PendingIntent.getActivity(
                      this, 0,
