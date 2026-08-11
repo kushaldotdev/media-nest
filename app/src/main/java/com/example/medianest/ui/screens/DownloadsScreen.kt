@@ -79,21 +79,48 @@ private fun compactDuration(ms: Long): String {
     }
 }
 
-private fun formatTransferTiming(parts: List<String>, timingOffset: Int = 5): String {
-    val elapsedMs = parts.getOrNull(timingOffset)?.toLongOrNull() ?: return ""
-    val remainingMs = parts.getOrNull(timingOffset + 1)?.toLongOrNull() ?: return ""
-    return " · ${compactDuration(elapsedMs)} · ${compactDuration(remainingMs)} left"
+private fun buildMetaLine(msg: String, format: String): String {
+    if (msg.isBlank()) return ""
+    val parts = msg.split("|")
+    val items = mutableListOf<String>()
+    when {
+        msg.startsWith("downloading_video") || msg.startsWith("downloading_audio") -> {
+            appendSpeed(items, parts, 4)
+            appendTiming(items, parts, 5)
+        }
+        msg.startsWith("merging") -> {
+            appendSpeed(items, parts, 4)
+            appendTiming(items, parts, 2)
+        }
+        msg.startsWith("downloading|") -> {
+            appendSpeed(items, parts, 1)
+            appendTiming(items, parts, 2)
+        }
+        format == "audio_extracted" && msg.startsWith("extracting|") -> {
+            appendTiming(items, parts, 1)
+        }
+    }
+    return items.joinToString(" · ")
 }
 
-private fun speedSuffix(speed: String): String {
-    if (speed.isBlank()) return ""
+private fun appendSpeed(items: MutableList<String>, parts: List<String>, index: Int) {
+    val speed = parts.getOrNull(index)?.trim().orEmpty()
+    if (speed.isEmpty()) return
     val rawBytes = speed.toLongOrNull()
-    return if (rawBytes != null && rawBytes > 0L) {
+    val formatted = if (rawBytes != null && rawBytes > 0L) {
         val mbps = rawBytes / (1024f * 1024f)
-        " · " + if (mbps >= 1f) "%.1f MB/s".format(mbps) else "%.0f KB/s".format(rawBytes / 1024f)
+        if (mbps >= 1f) "%.1f MB/s".format(mbps) else "%.0f KB/s".format(rawBytes / 1024f)
     } else {
-        " · $speed"
+        speed
     }
+    items.add(formatted)
+}
+
+private fun appendTiming(items: MutableList<String>, parts: List<String>, offset: Int) {
+    val elapsedMs = parts.getOrNull(offset)?.toLongOrNull() ?: return
+    val remainingMs = parts.getOrNull(offset + 1)?.toLongOrNull() ?: return
+    if (elapsedMs >= 0L) items.add(compactDuration(elapsedMs))
+    if (remainingMs > 0L) items.add("${compactDuration(remainingMs)} left")
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -636,26 +663,25 @@ private fun DownloadItem(
                         DownloadStatus.QUEUED -> "Queued"
                         DownloadStatus.DOWNLOADING -> {
                             val msg = download.errorMessage ?: ""
+                            val meta = buildMetaLine(msg, download.format)
                             if (msg.startsWith("downloading_video")) {
                                 val parts = msg.split("|")
                                 val vDownloaded = parts.getOrNull(1)?.toLongOrNull() ?: 0L
                                 val vTotal = parts.getOrNull(2)?.toLongOrNull() ?: 0L
                                 val aTotal = parts.getOrNull(3)?.toLongOrNull() ?: 0L
-                                val speed = parts.getOrNull(4) ?: ""
                                 
                                 val totalSize = vTotal + aTotal
                                 val downloadedMb = vDownloaded / (1024f * 1024f)
                                 val totalMb = totalSize / (1024f * 1024f)
                                 val pct = (download.progress * 100).toInt()
                                 
-                                "%.1fMB / %.1fMB (%d%%)%s%s".format(downloadedMb, totalMb, pct, formatTransferTiming(parts), speedSuffix(speed))
+                                listOf("%.1fMB / %.1fMB (%d%%)".format(downloadedMb, totalMb, pct), meta).joinToString("\n")
                             } else if (msg.startsWith("downloading_audio")) {
                                 val parts = msg.split("|")
                                 if (parts.size >= 4) {
                                     val aDownloaded = parts.getOrNull(1)?.toLongOrNull() ?: 0L
                                     val aTotal = parts.getOrNull(2)?.toLongOrNull() ?: 0L
                                     val vTotal = parts.getOrNull(3)?.toLongOrNull() ?: 0L
-                                    val speed = parts.getOrNull(4) ?: ""
                                     
                                     val totalDownloaded = vTotal + aDownloaded
                                     val totalSize = vTotal + aTotal
@@ -663,7 +689,7 @@ private fun DownloadItem(
                                     val totalMb = totalSize / (1024f * 1024f)
                                     val pct = (download.progress * 100).toInt()
                                     
-                                "Downloading audio: %.1fMB / %.1fMB (%d%%)%s%s".format(downloadedMb, totalMb, pct, formatTransferTiming(parts), speedSuffix(speed))
+                                listOf("Downloading audio: %.1fMB / %.1fMB (%d%%)".format(downloadedMb, totalMb, pct), meta).joinToString("\n")
                                 } else {
                                     val speedPart = msg.substringAfter("|", "")
                                     if (speedPart.isNotEmpty()) {
@@ -677,19 +703,16 @@ private fun DownloadItem(
                                 val pctPart = parts.getOrNull(1) ?: ""
                                 val pct = pctPart.toIntOrNull()
                                 if (pct != null && pct >= 0) {
-                                    "Merging video & audio ($pct%)${formatTransferTiming(parts, 2)}${speedSuffix(parts.getOrNull(4) ?: "")}"
+                                    listOf("Merging video & audio ($pct%)", meta).joinToString("\n")
                                 } else {
                                     "Merging video & audio..."
                                 }
                             } else if (download.format == "audio_extracted" && msg.startsWith("extracting|")) {
-                                val parts = msg.split("|")
-                                val elapsedMs = parts.getOrNull(1)?.toLongOrNull() ?: 0L
-                                val remainingMs = parts.getOrNull(2)?.toLongOrNull() ?: 0L
                                 val pct = (download.progress * 100).toInt()
-                                "Extracting audio: $pct% · ${compactDuration(elapsedMs)} · ${compactDuration(remainingMs)} left"
+                                listOf("Extracting audio: $pct%", meta).joinToString("\n")
                             } else if (msg.startsWith("downloading|")) {
-                                val parts = msg.split("|")
-                                "${(download.progress * 100).toInt()}%${formatTransferTiming(parts, 2)}"
+                                val pctLine = "${(download.progress * 100).toInt()}%"
+                                listOf(pctLine, meta).joinToString("\n")
                             } else if (download.fileSizeBytes > 0L) {
                                 val downloadedMb = (download.progress * download.fileSizeBytes) / (1024f * 1024f)
                                 val totalMb = download.fileSizeBytes / (1024f * 1024f)

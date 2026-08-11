@@ -1623,7 +1623,10 @@ class DownloadService : Service() {
           if (startedAt == null) return ""
           val elapsedMs = SystemClock.elapsedRealtime() - startedAt
           val remainingMs = if (progress > 0) elapsedMs * (100L - progress) / progress else 0L
-          return " - ${compactDuration(elapsedMs)} - ${compactDuration(remainingMs)} left"
+          return buildString {
+              append(compactDuration(elapsedMs))
+              if (remainingMs > 0L) append(" \u00b7 ${compactDuration(remainingMs)} left")
+          }
       }
 
       private suspend fun updateNotification() {
@@ -1809,8 +1812,9 @@ class DownloadService : Service() {
              )
 
              val speedText = formatSpeed(active.speedBytesPerSec)
-             val contentTextSingle = "$pct% \u2014 ${downloadedMb}/${totalMb} MB$timing" +
-                 (if (speedText.isNotEmpty()) " \u00b7 $speedText" else "")
+             val line1 = "$pct% \u2014 ${downloadedMb}/${totalMb} MB"
+             val line2 = (if (speedText.isNotEmpty()) speedText else "") + (if (timing.isNotEmpty() && speedText.isNotEmpty()) " \u00b7 " else "") + timing.trim()
+             val contentTextSingle = if (line2.isBlank()) line1 else "$line1\n$line2"
 
              val builder = NotificationCompat.Builder(this, CHANNEL_ID)
                  .setContentTitle(active.title)
@@ -1855,8 +1859,9 @@ class DownloadService : Service() {
              val timing = transferTiming(reallyActive.keys.mapNotNull { activeStartedAt[it] }.minOrNull(), pct)
              val totalSpeed = reallyActive.values.sumOf { it.speedBytesPerSec }
              val speedText = formatSpeed(totalSpeed)
-             val contentTextMulti = "$pct% \u2014 ${downloadedMb}/${totalMb} MB$timing" +
-                 (if (speedText.isNotEmpty()) " \u00b7 $speedText total" else "")
+             val line1Multi = "$pct% \u2014 ${downloadedMb}/${totalMb} MB"
+             val line2Multi = (if (speedText.isNotEmpty()) "$speedText total" else "") + (if (timing.isNotEmpty() && speedText.isNotEmpty()) " \u00b7 " else "") + timing.trim()
+             val contentTextMulti = if (line2Multi.isBlank()) line1Multi else "$line1Multi\n$line2Multi"
              
              val pauseAllIntent = Intent(this, DownloadService::class.java).apply {
                  action = ACTION_PAUSE_ALL
