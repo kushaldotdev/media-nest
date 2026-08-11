@@ -43,7 +43,13 @@ class UpdateCheckWorker @AssistedInject constructor(
         }
 
         if (result.updateAvailable) {
-            showUpdateAvailableNotification(result.latestVersion, result.changelog)
+            // Debug builds target a different package (com.example.medianest.debug);
+            // a release-update notification would be misleading, so skip it.
+            if (com.example.medianest.BuildConfig.DEBUG) {
+                android.util.Log.d("UpdateCheckWorker", "Update available v${result.latestVersion}, but skipping notification in debug build.")
+            } else {
+                showUpdateAvailableNotification(result.latestVersion, result.changelog)
+            }
         }
         return Result.success()
     }

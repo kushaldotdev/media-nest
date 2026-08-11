@@ -49,3 +49,11 @@ cmd.exe /c 'D:\dev\media-nest\build-debug.bat'
 
 Pass `clean` as the first argument for a clean build: `cmd.exe /c 'D:\dev\media-nest\build-debug.bat clean'`.
 `powershell.exe` is usually not on the WSL PATH; `cmd.exe` is at `/mnt/c/Windows/System32/cmd.exe` (add that dir to PATH or use the full path).
+
+### Build logs
+
+Both build scripts write all Gradle output to a **single** log file: `D:\dev\media-nest\build.log` (overwritten on every run, regardless of debug/release).
+
+On failure the script echoes the full log to the terminal, prints the exit code, and exits non-zero. The full log is always saved to `build.log` (also echoed to the terminal on every run).
+When a build fails, **read the log file** to diagnose the actual error instead of relying on the truncated console tail — from WSL: `tail -n 100 D:/dev/media-nest/build.log` or `grep -n "error:\|e: \|FAILED" D:/dev/media-nest/build.log`.
+Note: `build.log` is written to the repo root and is git-ignored (see `.gitignore`).

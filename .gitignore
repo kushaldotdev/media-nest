@@ -16,3 +16,8 @@ local.properties
 .agents/mcp_config.json
 
 .pi-subagents/*
+
+# Build logs
+build.log
+build-debug.log
+build-release.log

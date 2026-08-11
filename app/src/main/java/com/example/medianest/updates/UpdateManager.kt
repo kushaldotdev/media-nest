@@ -169,6 +169,8 @@ class UpdateManager @Inject constructor(
     /** Performs a check against the GitHub latest release API. No-op if a check is already in flight. */
     suspend fun checkForUpdates() {
         if (isChecking) return
+        // Never clobber an in-flight or completed download with a check result.
+        if (_updateState.value is UpdateState.Downloading || _updateState.value is UpdateState.ReadyToInstall) return
         // Rate-limit guard: skip when a check happened within 5 minutes AND the current
         // state is a successful check result (UpdateAvailable/NoUpdateAvailable) that is
         // still meaningful to show. Errors and Idle always allow a re-check (Try Again).
@@ -287,6 +289,11 @@ class UpdateManager @Inject constructor(
     }
 
     suspend fun downloadAndInstallUpdate(downloadUrl: String) {
+        // Defensive guard: debug builds must never download/install the release APK.
+        if (com.example.medianest.BuildConfig.DEBUG) {
+            _updateState.value = UpdateState.Error("Updates are disabled in debug builds.")
+            return
+        }
         _updateState.value = UpdateState.Downloading(0f)
         updatePreferences.setState(UpdatePreferences.STATE_DOWNLOADING, progress = 0f)
         updatePreferences.setDownloadUrl(downloadUrl)
@@ -294,6 +301,11 @@ class UpdateManager @Inject constructor(
     }
 
     suspend fun installApk() {
+        // Debug builds must never install the release APK (different package/signing).
+        if (com.example.medianest.BuildConfig.DEBUG) {
+            _updateState.value = UpdateState.Error("Updates are disabled in debug builds.")
+            return
+        }
         val file = updateApkFile
         if (!file.exists()) {
             _updateState.value = UpdateState.Error("Download lost — please re-download.")

@@ -1075,24 +1075,31 @@ fun SettingsScreen(
                     }
                     Spacer(Modifier.height(12.dp))
 
-                    val isDebug = com.example.medianest.BuildConfig.DEBUG
+                    // Manual check is always available, even when auto-check is enabled.
+                    val isChecking = updateState is UpdateState.Checking
+                    val isBusy = updateState is UpdateState.Downloading || updateState is UpdateState.ReadyToInstall
+                    Button(
+                        onClick = { viewModel.checkForUpdates() },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !isChecking && !isBusy
+                    ) {
+                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Check for Updates")
+                    }
+                    Spacer(Modifier.height(12.dp))
+
                     when (val s = updateState) {
                         is UpdateState.Idle -> {
-                            if (isDebug) {
-                                Text(
-                                    text = "Updates are disabled in debug builds. Please update via Gradle/Android Studio.",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(vertical = 4.dp)
-                                )
-                            } else {
-                                Button(
-                                    onClick = { viewModel.checkForUpdates() },
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Text("Check for Updates")
-                                }
-                            }
+                            Text(
+                                text = if (autoCheckInterval > 0) {
+                                    "Updates are checked automatically, and you can check manually anytime."
+                                } else {
+                                    "Auto-check is off. Check manually anytime."
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
                         is UpdateState.Checking -> {
                             Row(
@@ -1117,22 +1124,56 @@ fun SettingsScreen(
                                         Text(s.changelog, style = MaterialTheme.typography.bodySmall, maxLines = 5, overflow = TextOverflow.Ellipsis)
                                     }
                                 }
-                                Spacer(Modifier.height(8.dp))
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    Button(
-                                        onClick = { viewModel.downloadAndInstallUpdate(s.downloadUrl) },
-                                        modifier = Modifier.weight(1.5f)
+                                if (com.example.medianest.BuildConfig.DEBUG) {
+                                    // Debug builds must not install the release APK; inform instead.
+                                    Spacer(Modifier.height(8.dp))
+                                    Card(
+                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+                                        modifier = Modifier.fillMaxWidth()
                                     ) {
-                                        Text("Download & Install")
+                                        Row(
+                                            modifier = Modifier.padding(12.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(
+                                                Icons.Default.Info,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                            Spacer(Modifier.width(8.dp))
+                                            Text(
+                                                text = "You're on a debug build — updates can't be installed here. Please update via the release build (Gradle/Android Studio).",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
                                     }
+                                    Spacer(Modifier.height(8.dp))
                                     TextButton(
                                         onClick = { viewModel.resetUpdateState() },
-                                        modifier = Modifier.weight(1f)
+                                        modifier = Modifier.align(Alignment.End)
                                     ) {
-                                        Text("Cancel")
+                                        Text("Dismiss")
+                                    }
+                                } else {
+                                    Spacer(Modifier.height(8.dp))
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Button(
+                                            onClick = { viewModel.downloadAndInstallUpdate(s.downloadUrl) },
+                                            modifier = Modifier.weight(1.5f)
+                                        ) {
+                                            Text("Download & Install")
+                                        }
+                                        TextButton(
+                                            onClick = { viewModel.resetUpdateState() },
+                                            modifier = Modifier.weight(1f)
+                                        ) {
+                                            Text("Cancel")
+                                        }
                                     }
                                 }
                             }
@@ -1205,7 +1246,8 @@ fun SettingsScreen(
                                     Text("Try Again")
                                 }
                                 val hasPendingDownload by viewModel.hasPendingDownload.collectAsStateWithLifecycle()
-                                if (hasPendingDownload) {
+                                // Downloads are disabled in debug builds, so hide Retry Download there.
+                                if (hasPendingDownload && !com.example.medianest.BuildConfig.DEBUG) {
                                     Spacer(Modifier.height(4.dp))
                                     TextButton(
                                         onClick = { viewModel.retryUpdateDownload() },
