@@ -60,7 +60,25 @@ object DownloadPathResolver {
 
     private fun ownedFile(entity: DownloadEntity, outputDir: File, suffix: String): File {
         val uuid = requireValidUuid(entity.downloadUuid)
-        return validatePathUnderRoot(File(outputDir, "$uuid$suffix"), outputDir)
+        val name = buildString {
+            append(sanitizeFileName(entity.title))
+            if (isNotEmpty()) append(" - ")
+            append(uuid.take(8))
+            append(" - ")
+            append(sanitizeFileName(entity.quality))
+            append(suffix)
+        }
+        return validatePathUnderRoot(File(outputDir, name), outputDir)
+    }
+
+    private fun sanitizeFileName(value: String): String {
+        val cleaned = value
+            .replace(Regex("[\\\\/:*?\"<>|]"), "_")
+            .replace(Regex("[\\p{Cntrl}]"), "_")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+            .take(80)
+        return cleaned.ifEmpty { "video" }
     }
 
     private fun requireValidUuid(value: String): String {
