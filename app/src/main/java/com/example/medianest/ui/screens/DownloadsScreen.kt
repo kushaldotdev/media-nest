@@ -774,10 +774,36 @@ private fun DownloadItem(
                                 size = androidx.compose.ui.geometry.Size(filledWidth, height)
                             )
                         } else if (download.format == "video_only" && (msg.startsWith("downloading_video") || msg.startsWith("downloading_audio"))) {
-                            drawRect(
-                                color = if (msg.startsWith("downloading_audio")) audioColor else videoColor,
-                                size = androidx.compose.ui.geometry.Size(download.progress * width, height)
-                            )
+                            if (msg.startsWith("downloading_audio")) {
+                                // Video portion stays blue; only the audio segment is orange
+                                val parts = msg.split("|")
+                                val videoSize = parts.getOrNull(3)?.toLongOrNull() ?: 0L
+                                val audioDownloaded = parts.getOrNull(1)?.toLongOrNull() ?: 0L
+                                val audioTotal = parts.getOrNull(2)?.toLongOrNull() ?: 0L
+                                val totalSize = videoSize + audioTotal
+                                if (totalSize > 0L) {
+                                    val videoEnd = (videoSize.toFloat() / totalSize) * width
+                                    val audioEnd = ((videoSize + audioDownloaded).toFloat() / totalSize) * width
+                                    // Blue: the already-downloaded video portion (0 .. videoEnd)
+                                    drawRect(
+                                        color = videoColor,
+                                        size = androidx.compose.ui.geometry.Size(videoEnd, height)
+                                    )
+                                    // Orange: the audio portion being downloaded (videoEnd .. audioEnd)
+                                    if (audioEnd > videoEnd) {
+                                        drawRect(
+                                            color = audioColor,
+                                            topLeft = androidx.compose.ui.geometry.Offset(videoEnd, 0f),
+                                            size = androidx.compose.ui.geometry.Size(audioEnd - videoEnd, height)
+                                        )
+                                    }
+                                }
+                            } else {
+                                drawRect(
+                                    color = videoColor,
+                                    size = androidx.compose.ui.geometry.Size(download.progress * width, height)
+                                )
+                            }
                         } else {
                             // Pure audio or standard download format
                             val barColor = if (download.format == "audio" || download.format == "audio_extracted") audioColor else videoColor

@@ -171,7 +171,7 @@ fun LibraryScreen(
 
             val tabs = listOf(LibraryTab.HISTORY, LibraryTab.WATCHED, LibraryTab.FOLDERS, LibraryTab.FAVORITES, LibraryTab.PLAYLISTS, LibraryTab.SUBSCRIPTIONS)
             val tabLabels = listOf("History", "Watched", "Folders", "Favorites", "Playlists", "Channels")
-            ScrollableTabRow(
+            SecondaryScrollableTabRow(
                 selectedTabIndex = tabs.indexOf(uiState.currentTab),
                 edgePadding = 8.dp,
                 divider = {},

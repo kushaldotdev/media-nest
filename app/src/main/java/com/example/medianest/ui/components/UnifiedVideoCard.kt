@@ -8,6 +8,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.DriveFileMove
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.*
@@ -349,7 +350,7 @@ fun UnifiedVideoCard(
                         if (config.showMoveToFolderButton) {
                             IconButton(onClick = onMoveToFolder) {
                                 Icon(
-                                    imageVector = Icons.Default.DriveFileMove,
+                                    imageVector = Icons.AutoMirrored.Filled.DriveFileMove,
                                     contentDescription = "Move to folder",
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -629,7 +630,7 @@ fun UnifiedVideoRow(
                         if (config.showMoveToFolderButton) {
                             IconButton(onClick = onMoveToFolder, modifier = Modifier.size(32.dp)) {
                                 Icon(
-                                    imageVector = Icons.Default.DriveFileMove,
+                                    imageVector = Icons.AutoMirrored.Filled.DriveFileMove,
                                     contentDescription = "Move to folder",
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(20.dp)
@@ -727,7 +728,7 @@ fun QuickDownloadMenu(
                         )
                     }
                 }
-                androidx.compose.material3.Divider()
+                HorizontalDivider()
             }
 
             val videoStreams = streams.filter { it.format == "video" || it.format == "video_only" }
