@@ -71,7 +71,7 @@ class DownloadsViewModel @Inject constructor(
     val downloads: StateFlow<List<DownloadEntity>> = downloadRepository.getAllDownloads()
         .map { list ->
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                list.map { download ->
+                val mapped = list.map { download ->
                     if (download.status == com.example.medianest.data.local.entity.DownloadStatus.COMPLETED) {
                         if (download.filePath.isEmpty() || !java.io.File(download.filePath).exists()) {
                             download.copy(errorMessage = "file_missing")
@@ -82,9 +82,38 @@ class DownloadsViewModel @Inject constructor(
                         download
                     }
                 }
+                // Reconcile VideoEntity.localFilePath so the Library "Downloaded" badge
+                // is cleared when no completed download for the video still has a file on disk.
+                mapped.filter { it.status == DownloadStatus.COMPLETED && it.errorMessage == "file_missing" }
+                    .distinctBy { it.videoId }
+                    .forEach { download ->
+                        try {
+                            reconcileMissingFile(download.videoId)
+                        } catch (e: Exception) {
+                            android.util.Log.w("DownloadsViewModel", "Failed to reconcile missing file for ${download.videoId}", e)
+                        }
+                    }
+                mapped
             }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /**
+     * Clears [VideoEntity.localFilePath] for [videoId] when no completed download for that
+     * video still has a file present on disk. No-op when another download's file still exists.
+     */
+    private suspend fun reconcileMissingFile(videoId: String) {
+        val hasRemainingFile = downloadRepository.getLocalDownloadsForVideo(videoId)
+            .any { it.filePath.isNotEmpty() && File(it.filePath).exists() }
+        if (hasRemainingFile) return
+        val video = videoDao.getVideoById(videoId) ?: return
+        // Only clear when the current path is itself gone: if a new download for this
+        // video completed concurrently, localFilePath points at an existing file and
+        // must not be wiped (narrow stale-snapshot race in the remaining-file check).
+        if (video.localFilePath.isNotEmpty() && !File(video.localFilePath).exists()) {
+            videoDao.update(video.copy(localFilePath = ""))
+        }
+    }
 
     val videosMap: StateFlow<Map<String, VideoEntity>> = videoRepository.getAllVideos()
         .map { list -> list.associateBy { it.id } }
@@ -153,6 +182,7 @@ class DownloadsViewModel @Inject constructor(
                             val file = if (download.filePath.isNotEmpty()) File(download.filePath) else null
                             if (file == null || !file.exists()) {
                                 downloadRepository.update(download.copy(errorMessage = "file_missing"))
+                                reconcileMissingFile(download.videoId)
                             } else if (download.errorMessage == "file_missing") {
                                 downloadRepository.update(download.copy(errorMessage = null))
                             }

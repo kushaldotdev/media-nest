@@ -1,6 +1,7 @@
 package com.example.medianest.ui.screens
 
 import android.text.format.Formatter
+import java.io.File
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -620,7 +621,7 @@ private fun VideoListLayout(
                     durationSeconds = video.durationSeconds,
                     uploadDate = video.uploadDate,
                     isFavorite = video.favorite,
-                    isDownloaded = video.localFilePath.isNotEmpty(),
+                    isDownloaded = video.localFilePath.isNotEmpty() && File(video.localFilePath).exists(),
                     isSelected = selectedIds.contains(video.id),
                     playbackProgressFraction = progressFraction,
                     watchCount = video.watchCount,
@@ -678,7 +679,7 @@ private fun VideoListLayout(
                     durationSeconds = video.durationSeconds,
                     uploadDate = video.uploadDate,
                     isFavorite = video.favorite,
-                    isDownloaded = video.localFilePath.isNotEmpty(),
+                    isDownloaded = video.localFilePath.isNotEmpty() && File(video.localFilePath).exists(),
                     isSelected = selectedIds.contains(video.id),
                     playbackProgressFraction = progressFraction,
                     watchCount = video.watchCount,
@@ -860,7 +861,7 @@ private fun FolderContent(
                                     durationSeconds = video.durationSeconds,
                                     uploadDate = video.uploadDate,
                                     isFavorite = video.favorite,
-                                    isDownloaded = video.localFilePath.isNotEmpty(),
+                                    isDownloaded = video.localFilePath.isNotEmpty() && File(video.localFilePath).exists(),
                                     isSelected = selectedIds.contains(video.id),
                                     playbackProgressFraction = progressFraction,
                                     watchCount = video.watchCount,
@@ -916,7 +917,7 @@ private fun FolderContent(
                                     durationSeconds = video.durationSeconds,
                                     uploadDate = video.uploadDate,
                                     isFavorite = video.favorite,
-                                    isDownloaded = video.localFilePath.isNotEmpty(),
+                                    isDownloaded = video.localFilePath.isNotEmpty() && File(video.localFilePath).exists(),
                                     isSelected = selectedIds.contains(video.id),
                                     playbackProgressFraction = progressFraction,
                                     watchCount = video.watchCount,
