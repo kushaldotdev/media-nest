@@ -21,3 +21,6 @@ local.properties
 build.log
 build-debug.log
 build-release.log
+build-publish.log
+new-design-media-nest/*
+dist/*

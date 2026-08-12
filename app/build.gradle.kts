@@ -57,6 +57,11 @@ android {
             keepDebugSymbols.add("**/*.so")
         }
     }
+    // Skip lintVitalRelease on release builds — big time saver (~1min of the 7m build).
+    // Lint still runs in CI / via `gradlew lint` if needed.
+    lint {
+        checkReleaseBuilds = false
+    }
 }
 
 kotlin {

@@ -52,8 +52,16 @@ Pass `clean` as the first argument for a clean build: `cmd.exe /c 'D:\dev\media-
 
 ### Build logs
 
-Both build scripts write all Gradle output to a **single** log file: `D:\dev\media-nest\build.log` (overwritten on every run, regardless of debug/release).
+Each workflow writes its **own** log file at the repo root (all git-ignored):
 
-On failure the script echoes the full log to the terminal, prints the exit code, and exits non-zero. The full log is always saved to `build.log` (also echoed to the terminal on every run).
-When a build fails, **read the log file** to diagnose the actual error instead of relying on the truncated console tail — from WSL: `tail -n 100 D:/dev/media-nest/build.log` or `grep -n "error:\|e: \|FAILED" D:/dev/media-nest/build.log`.
-Note: `build.log` is written to the repo root and is git-ignored (see `.gitignore`).
+| Workflow | Log file |
+| --- | --- |
+| Debug build | `D:\dev\media-nest\build-debug.log` |
+| Release build | `D:\dev\media-nest\build-release.log` |
+| Publish to GitHub | `D:\dev\media-nest\build-publish.log` |
+
+Every log has a timestamped header (start time), per-line elapsed timers (`[+mm:ss]`), and a footer with end time, total duration, and exit code. Output is streamed **live** to the terminal and to the log simultaneously.
+
+On failure the script prints the exit code and exits non-zero. The full log is always saved to the per-workflow file above (also echoed live to the terminal).
+When a build fails, **read the log file** to diagnose the actual error instead of relying on the truncated console tail — from WSL: `tail -n 100 D:/dev/media-nest/build-release.log` or `grep -n "error:\|e: \|FAILED" D:/dev/media-nest/build-release.log`.
+Note: the logs are written to the repo root and are git-ignored (see `.gitignore`).
