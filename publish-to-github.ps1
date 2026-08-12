@@ -1,4 +1,4 @@
-# publish-to-github.ps1
+﻿# publish-to-github.ps1
 param(
     [string]$VersionArg = ""
 )
@@ -120,11 +120,41 @@ try {
         Write-Error "GitHub CLI is not authenticated. Please run 'gh auth login' first."
     }
 
-    & gh release create $versionTag $apkDest --title "Release $versionTag" --notes "Update to $versionTag"
-    $releaseExit = $LASTEXITCODE
+    # 5. Upload with visible progress: gh shows only a silent spinner when stdout
+    #    is not a TTY (as in this script). Run gh in a background job and animate a
+    #    spinner + elapsed counter until it finishes.
+    $apkSizeMB = [math]::Round((Get-Item $apkDest).Length / 1MB, 1)
+    Write-Host ""
+    Write-Host ("  Uploading {0} ({1} MB) to GitHub..." -f (Split-Path $apkDest -Leaf), $apkSizeMB)
+
+    $uploadJob = Start-Job -ScriptBlock {
+        param($tag, $asset, $title, $notes)
+        & gh release create $tag $asset --title $title --notes $notes 2>&1
+        exit $LASTEXITCODE
+    } -ArgumentList $versionTag, $apkDest, "Release $versionTag", "Update to $versionTag"
+
+    $spinner = @('|', '/', '-', '\\')
+    $spinIndex = 0
+    $uploadSw = [System.Diagnostics.Stopwatch]::StartNew()
+    $lastLine = ""
+    while ($uploadJob.State -eq 'Running') {
+        $elapsed = $uploadSw.Elapsed
+        $line = ("  {0} uploading... [{1}]" -f $spinner[$spinIndex], (Format-Duration $elapsed))
+        Write-Host ("`r" + $line) -NoNewline
+        $lastLine = $line
+        $spinIndex = ($spinIndex + 1) % 4
+        Start-Sleep -Milliseconds 250
+    }
+
+    # Clear the spinner line
+    if ($lastLine) { Write-Host ("`r" + (' ' * $lastLine.Length) + "`r") -NoNewline }
+
+    Receive-Job $uploadJob -Wait | ForEach-Object { Write-Host $_ }
+    $releaseExit = $uploadJob.ExitCode
+    Remove-Job $uploadJob -Force
 
     if ($releaseExit -eq 0) {
-        Write-Host "Successfully published $versionTag"
+        Write-Host ("  ✓ Release {0} published (took {1})" -f $versionTag, (Format-Duration $uploadSw.Elapsed)) -ForegroundColor Green
     } else {
         Write-Error "Failed to publish $versionTag to GitHub releases"
     }
