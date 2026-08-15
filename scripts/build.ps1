@@ -7,12 +7,19 @@
 param(
     [string]$Task = ":app:assembleDebug",
     [switch]$Clean,
+    [string]$ScriptDir = "",
     [string]$ApkSource = "",
     [string]$ApkDestination = "",
-    [string]$LogPath = "D:\dev\media-nest\build.log"
+    [string]$LogPath = ""
 )
 
 $ErrorActionPreference = "Stop"
+
+# Derive default log path from the invoking script's directory so the build
+# works identically from the main checkout or any isolated git worktree.
+if ([string]::IsNullOrEmpty($LogPath)) {
+    $LogPath = if ([string]::IsNullOrEmpty($ScriptDir)) { "build.log" } else { (Join-Path $ScriptDir "build.log") }
+}
 
 $logPath = $LogPath
 $start = Get-Date
