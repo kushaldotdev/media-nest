@@ -1,0 +1,110 @@
+/* ============================================================================
+   MediaNest — Design Tokens
+   Single source of truth for the visual identity.
+   Source: MEDIANEST_BRAND_GUIDELINES.md (Theme: Dark red)
+   ========================================================================== */
+
+:root {
+	/* ----- Core palette (brand) ----- */
+	--mn-background: #120b0e;
+	--mn-navbar: #241417;
+	--mn-card: #2a1a1f;
+	--mn-raised: #382027;
+	--mn-border: #4b2b33;
+	--mn-text-primary: #fff7f8;
+	--mn-text-secondary: #c8aeb4;
+	--mn-accent: #ffb1b6;
+	--mn-accent-deep: #8f1d2c;
+	--mn-nav-active: #682b38;
+	--mn-success: #67d98a;
+
+	/* ----- Supporting palette ----- */
+	--mn-destructive: #ea4a59;
+	--mn-youtube: #d21f31;
+	--mn-progress-watched: #d21f31; /* watched-progress fill (YouTube red, per request) */
+	--mn-progress-track: #54333c;
+	/* Download progress colors (mirrors Android app video/audio/merging download colors) */
+	--mn-progress-video: #ffb1b6;
+	--mn-progress-audio: #ff9800;
+	--mn-progress-merge: #67d98a;
+	--mn-player-surface: #090506;
+	--mn-on-accent: #3a0b12;
+
+	/* ----- Semantic aliases ----- */
+	--mn-surface: var(--mn-card);
+	--mn-surface-raised: var(--mn-raised);
+	--mn-action: var(--mn-accent);
+	--mn-selected: var(--mn-accent-deep);
+	--mn-nav-item-active: var(--mn-nav-active);
+	--mn-error: var(--mn-destructive);
+	--mn-completed: var(--mn-success);
+
+	/* ----- Derived / glass surfaces ----- */
+	--mn-glass: rgba(42, 26, 31, 0.62);
+	--mn-glass-strong: rgba(56, 32, 39, 0.72);
+	--mn-glass-border: rgba(255, 183, 191, 0.14);
+	--mn-scrim: rgba(9, 5, 6, 0.62);
+	--mn-overlay: rgba(9, 5, 6, 0.5);
+
+	/* ----- Type scale ----- */
+	--mn-font: "Inter", "Roboto", system-ui, -apple-system, "Segoe UI", sans-serif;
+	--mn-fs-display: 28px;
+	--mn-fs-title: 22px;
+	--mn-fs-section: 17px;
+	--mn-fs-card: 14px;
+	--mn-fs-body: 13.5px;
+	--mn-fs-meta: 11.5px;
+	--mn-fs-mini: 10.5px;
+	--mn-fw-normal: 400;
+	--mn-fw-medium: 500;
+	--mn-fw-semibold: 600;
+	--mn-fw-bold: 700;
+
+	/* ----- Spacing ----- */
+	--mn-sp-1: 4px;
+	--mn-sp-2: 8px;
+	--mn-sp-3: 12px;
+	--mn-sp-4: 16px;
+	--mn-sp-5: 20px;
+	--mn-sp-6: 24px;
+	--mn-sp-7: 32px;
+	--mn-screen-pad: 16px;
+
+	/* ----- Radii ----- */
+	--mn-r-sm: 8px;
+	--mn-r-md: 12px;
+	--mn-r-lg: 14px;
+	--mn-r-hero: 16px;
+	--mn-r-pill: 999px;
+	--mn-r-btn: 20px;
+
+	/* ----- Sizing ----- */
+	--mn-touch: 44px;
+	--mn-nav-height: 72px;
+	--mn-appbar-height: 60px;
+	--mn-icon-sm: 16px;
+	--mn-icon-md: 20px;
+	--mn-icon-lg: 24px;
+	--mn-icon-xl: 32px;
+
+	/* ----- Shadows / elevation ----- */
+	--mn-shadow-1: 0 1px 2px rgba(0, 0, 0, 0.35), 0 1px 3px rgba(0, 0, 0, 0.25);
+	--mn-shadow-2: 0 4px 12px rgba(0, 0, 0, 0.35), 0 2px 4px rgba(0, 0, 0, 0.3);
+	--mn-shadow-3: 0 12px 32px rgba(0, 0, 0, 0.5), 0 4px 12px rgba(0, 0, 0, 0.4);
+	--mn-glow-accent:
+		0 0 0 1px rgba(255, 177, 182, 0.25), 0 4px 16px rgba(255, 177, 182, 0.1);
+
+	/* ----- Motion ----- */
+	--mn-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+	--mn-speed: 180ms;
+	--mn-speed-fast: 120ms;
+	--mn-speed-slow: 320ms;
+
+	/* ----- Z-index ----- */
+	--mn-z-appbar: 40;
+	--mn-z-nav: 50;
+	--mn-z-mini: 60;
+	--mn-z-sheet: 100;
+	--mn-z-dialog: 110;
+	--mn-z-toast: 130;
+}

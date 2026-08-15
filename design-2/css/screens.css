@@ -1,0 +1,95 @@
+/* ============================================================================
+   MediaNest — Screen-level styles
+   Per-screen layout helpers that build on components.css.
+   ========================================================================== */
+
+/* Home */
+.mn-home-hero {
+	margin-bottom: var(--mn-sp-4);
+}
+.mn-home-url {
+	display: flex;
+	gap: var(--mn-sp-2);
+	margin-top: 12px;
+}
+.mn-home-history {
+	margin-top: var(--mn-sp-4);
+}
+
+/* Collections */
+.mn-coll-tabs {
+	position: static;
+	top: auto;
+	z-index: auto;
+	background: transparent;
+	padding: 8px 0;
+}
+.mn-coll-section {
+	margin-top: var(--mn-sp-3);
+}
+
+/* Downloads */
+.mn-dl-toolbar {
+	display: flex;
+	align-items: center;
+	gap: var(--mn-sp-2);
+	margin-bottom: var(--mn-sp-3);
+	flex-wrap: wrap;
+}
+.mn-dl-item {
+	margin-bottom: var(--mn-sp-3);
+}
+
+/* Settings */
+.mn-settings-group {
+	margin-bottom: var(--mn-sp-5);
+}
+.mn-settings-group h2 {
+	margin: 0 0 var(--mn-sp-2);
+}
+
+/* Player */
+.mn-player-overlay {
+	position: absolute;
+	inset: 0;
+	z-index: 5;
+}
+/* Player: allow the controls + queue panel to scroll when content is tall,
+   keeping the stage visible while scrolling down (like YouTube's menus). */
+.mn-player__controls {
+	overflow-y: auto;
+	overflow-x: hidden;
+	max-height: 58%;
+	scrollbar-width: thin;
+}
+.mn-player__stage {
+	min-height: 200px;
+}
+
+/* Home: link-history rows with a type identifier icon */
+.mn-history-row {
+	width: 100%;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 10px 12px;
+	text-align: left;
+	border-radius: var(--mn-r-md);
+}
+.mn-history-row__type {
+	width: 36px;
+	height: 36px;
+	border-radius: 10px;
+	flex: 0 0 auto;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	background: var(--mn-card);
+	border: 1px solid var(--mn-border);
+	color: var(--mn-accent);
+}
+
+/* Video detail */
+.mn-detail-hero {
+	margin-bottom: var(--mn-sp-4);
+}
