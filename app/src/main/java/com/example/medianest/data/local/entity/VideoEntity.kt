@@ -19,5 +19,6 @@ data class VideoEntity(
     val lastPlayedAt: Long? = null,
     val downloadedAt: Long? = null,
     val syncVersion: Long = 0,
-    val watchCount: Int = 0
+    val watchCount: Int = 0,
+    val mediaType: String = "VIDEO"
 )

@@ -20,7 +20,19 @@ class DownloadPreferences(private val context: Context) {
         private val KEY_DOWNLOAD_FOLDER = stringPreferencesKey("download_folder")
         private val KEY_AUTO_BACKUP_INTERVAL_HOURS = intPreferencesKey("auto_backup_interval_hours")
         private val KEY_AUTO_BACKUP_SCHEDULED_AT = longPreferencesKey("auto_backup_scheduled_at")
+        private val KEY_DEFAULT_RESOLUTION = stringPreferencesKey("default_resolution")
+        private val KEY_SORT_MODE = stringPreferencesKey("sort_mode")
         const val DEFAULT_MAX = 2
+        const val DEFAULT_RESOLUTION = "360p"
+        const val DEFAULT_SORT_MODE = "DATE_DESC"
+    }
+
+    val defaultResolution: Flow<String> = context.downloadStore.data.map { prefs ->
+        prefs[KEY_DEFAULT_RESOLUTION] ?: DEFAULT_RESOLUTION
+    }
+
+    val sortMode: Flow<String> = context.downloadStore.data.map { prefs ->
+        prefs[KEY_SORT_MODE] ?: DEFAULT_SORT_MODE
     }
 
     val maxConcurrentDownloads: Flow<Int> = context.downloadStore.data.map { prefs ->
@@ -43,6 +55,18 @@ class DownloadPreferences(private val context: Context) {
 
     val autoBackupScheduledAt: Flow<Long> = context.downloadStore.data.map { prefs ->
         prefs[KEY_AUTO_BACKUP_SCHEDULED_AT] ?: 0L
+    }
+
+    suspend fun setDefaultResolution(resolution: String) {
+        context.downloadStore.edit { prefs ->
+            prefs[KEY_DEFAULT_RESOLUTION] = resolution
+        }
+    }
+
+    suspend fun setSortMode(mode: String) {
+        context.downloadStore.edit { prefs ->
+            prefs[KEY_SORT_MODE] = mode
+        }
     }
 
     suspend fun setMaxConcurrentDownloads(max: Int) {

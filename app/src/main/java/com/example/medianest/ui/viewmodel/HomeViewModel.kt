@@ -522,14 +522,14 @@ class HomeViewModel @Inject constructor(
         .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000), emptyList())
 
     private fun saveLinkToHistory(url: String, state: HomeUiState) {
-        val title = when (state) {
-            is HomeUiState.Success -> state.video.title
-            is HomeUiState.PlaylistResult -> state.playlist.name
-            is HomeUiState.ChannelResult -> state.channel.name
+        val (title, linkType) = when (state) {
+            is HomeUiState.Success -> Pair(state.video.title, "VIDEO")
+            is HomeUiState.PlaylistResult -> Pair(state.playlist.name, "PLAYLIST")
+            is HomeUiState.ChannelResult -> Pair(state.channel.name, "CHANNEL")
             else -> return
         }
         viewModelScope.launch {
-            linkHistoryDao.insertWithLimit(LinkHistoryEntity(url = url, title = title))
+            linkHistoryDao.insertWithLimit(LinkHistoryEntity(url = url, title = title, linkType = linkType))
         }
     }
 

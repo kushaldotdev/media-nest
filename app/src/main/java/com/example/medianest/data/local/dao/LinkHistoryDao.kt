@@ -22,6 +22,9 @@ interface LinkHistoryDao {
     @Query("DELETE FROM link_history WHERE url NOT IN (SELECT url FROM (SELECT url FROM link_history ORDER BY extractedAt DESC LIMIT 100))")
     suspend fun pruneOldEntries()
 
+    @Query("DELETE FROM link_history WHERE extractedAt < :cutoffTimestamp")
+    suspend fun deleteOlderThan(cutoffTimestamp: Long)
+
     @Transaction
     suspend fun insertWithLimit(linkHistory: LinkHistoryEntity) {
         insert(linkHistory)

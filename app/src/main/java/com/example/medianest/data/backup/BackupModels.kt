@@ -31,7 +31,8 @@ data class BackupVideo(
     val addedAt: Long,
     @EncodeDefault(EncodeDefault.Mode.NEVER) val lastPlayedAt: Long? = null,
     @EncodeDefault(EncodeDefault.Mode.NEVER) val downloadedAt: Long? = null,
-    @EncodeDefault(EncodeDefault.Mode.NEVER) val syncVersion: Long = 0
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val syncVersion: Long = 0,
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val mediaType: String = "VIDEO"
 )
 
 @OptIn(ExperimentalSerializationApi::class)
@@ -73,11 +74,13 @@ data class BackupWatchSession(
     val watchedAt: Long
 )
 
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class BackupLinkHistory(
     val url: String,
     val title: String,
-    val extractedAt: Long
+    val extractedAt: Long,
+    @EncodeDefault(EncodeDefault.Mode.NEVER) val linkType: String = "VIDEO"
 )
 
 @OptIn(ExperimentalSerializationApi::class)

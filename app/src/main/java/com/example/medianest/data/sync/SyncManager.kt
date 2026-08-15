@@ -304,6 +304,7 @@ class SyncManager @Inject constructor(
                 val description = jsonString(obj["description"]).ifBlank { null }
                 val uploadDate = jsonString(obj["uploadDate"]).ifBlank { null }
                 val syncVersion = jsonLong(obj["syncVersion"])
+                val mediaType = jsonString(obj["mediaType"]).ifBlank { "VIDEO" }
                 
                 if (existing == null) {
                     videoDao.insert(VideoEntity(
@@ -318,7 +319,8 @@ class SyncManager @Inject constructor(
                         localFilePath = "", // Clear absolute path on pull
                         favorite = favorite,
                         addedAt = jsonLong(obj["addedAt"], System.currentTimeMillis()),
-                        syncVersion = syncVersion
+                        syncVersion = syncVersion,
+                        mediaType = mediaType
                     ))
                 } else {
                     videoDao.update(existing.copy(
@@ -330,7 +332,8 @@ class SyncManager @Inject constructor(
                         description = description,
                         uploadDate = uploadDate,
                         favorite = favorite,
-                        syncVersion = syncVersion
+                        syncVersion = syncVersion,
+                        mediaType = if (mediaType.isNotBlank()) mediaType else existing.mediaType
                     ))
                 }
             }

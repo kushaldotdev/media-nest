@@ -215,6 +215,25 @@ object DatabaseModule {
         }
     }
 
+    private val MIGRATION_16_17 = object : Migration(16, 17) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE videos ADD COLUMN mediaType TEXT NOT NULL DEFAULT 'VIDEO'")
+            db.execSQL("ALTER TABLE link_history ADD COLUMN linkType TEXT NOT NULL DEFAULT 'VIDEO'")
+            db.execSQL("""
+                UPDATE videos SET mediaType = 'AUDIO'
+                WHERE id IN (
+                    SELECT videoId FROM downloads
+                    WHERE lower(format) LIKE '%audio%' OR lower(quality) = 'audio'
+                )
+                OR lower(localFilePath) LIKE '%/audio/%'
+                OR lower(localFilePath) LIKE '%.mp3'
+                OR lower(localFilePath) LIKE '%.m4a'
+                OR lower(localFilePath) LIKE '%.opus'
+                OR lower(localFilePath) LIKE '%.aac'
+            """)
+        }
+    }
+
     private val MIGRATION_4_5 = object : Migration(4, 5) {
         override fun migrate(db: SupportSQLiteDatabase) {
             db.execSQL("ALTER TABLE videos ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0")
@@ -262,6 +281,7 @@ object DatabaseModule {
             .addMigrations(MIGRATION_13_14)
             .addMigrations(MIGRATION_14_15)
             .addMigrations(MIGRATION_15_16)
+            .addMigrations(MIGRATION_16_17)
             .fallbackToDestructiveMigration(dropAllTables = true)
             .build()
     }

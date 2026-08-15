@@ -7,5 +7,6 @@ import androidx.room.PrimaryKey
 data class LinkHistoryEntity(
     @PrimaryKey val url: String,
     val title: String,
-    val extractedAt: Long = System.currentTimeMillis()
+    val extractedAt: Long = System.currentTimeMillis(),
+    val linkType: String = "VIDEO"
 )

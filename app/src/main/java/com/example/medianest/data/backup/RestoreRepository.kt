@@ -202,7 +202,8 @@ class RestoreRepository @Inject constructor(
             description = description, uploadDate = uploadDate,
             localFilePath = if (exists) resolvedPath else "",
             favorite = favorite, addedAt = addedAt,
-            lastPlayedAt = lastPlayedAt, downloadedAt = downloadedAt, syncVersion = syncVersion
+            lastPlayedAt = lastPlayedAt, downloadedAt = downloadedAt, syncVersion = syncVersion,
+            mediaType = mediaType
         )
     }
 
@@ -269,6 +270,6 @@ class RestoreRepository @Inject constructor(
     )
 
     private fun BackupLinkHistory.toEntity() = com.example.medianest.data.local.entity.LinkHistoryEntity(
-        url = url, title = title, extractedAt = extractedAt
+        url = url, title = title, extractedAt = extractedAt, linkType = linkType
     )
 }

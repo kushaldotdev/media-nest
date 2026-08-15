@@ -28,6 +28,9 @@ class DevicePreferences(private val context: Context) {
     val lastSyncVersion: Flow<Long> = context.syncStore.data.map { it[KEY_LAST_SYNC_VERSION]?.toLongOrNull() ?: 0L }
     val lastSyncAt: Flow<Long> = context.syncStore.data.map { it[KEY_LAST_SYNC_AT]?.toLongOrNull() ?: 0L }
     val syncIntervalHours: Flow<Int> = context.syncStore.data.map { it[KEY_SYNC_INTERVAL_HOURS]?.toIntOrNull() ?: 6 }
+    // Reconciled with CollectionsPreferences:
+    // libraryViewMode is retained here in syncStore for backward compatibility with legacy views.
+    // CollectionsPreferences.viewMode (in collections_prefs) is the dedicated viewMode store for Collections.
     val libraryViewMode: Flow<String> = context.syncStore.data.map { it[KEY_LIBRARY_VIEW_MODE] ?: "GRID" }
 
     suspend fun setServerUrl(url: String) { context.syncStore.edit { it[KEY_SERVER_URL] = url } }

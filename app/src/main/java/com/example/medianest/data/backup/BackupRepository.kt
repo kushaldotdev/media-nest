@@ -169,7 +169,8 @@ class BackupRepository @Inject constructor(
         durationSeconds = durationSeconds, thumbnailUrl = thumbnailUrl,
         description = description, uploadDate = uploadDate,
         localFilePath = localFilePath?.let { File(it).name } ?: "", favorite = favorite, addedAt = addedAt,
-        lastPlayedAt = lastPlayedAt, downloadedAt = downloadedAt, syncVersion = syncVersion
+        lastPlayedAt = lastPlayedAt, downloadedAt = downloadedAt, syncVersion = syncVersion,
+        mediaType = mediaType
     )
 
     private fun DownloadEntity.toBackup() = BackupDownload(
@@ -212,6 +213,6 @@ class BackupRepository @Inject constructor(
     )
 
     private fun com.example.medianest.data.local.entity.LinkHistoryEntity.toBackup() = BackupLinkHistory(
-        url = url, title = title, extractedAt = extractedAt
+        url = url, title = title, extractedAt = extractedAt, linkType = linkType
     )
 }
