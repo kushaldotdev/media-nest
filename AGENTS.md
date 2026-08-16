@@ -1,3 +1,9 @@
+# Agent Orchestration
+
+For ANY multi-agent work (delegating to `worker`/`researcher`/`scout` subagents, isolated worktrees, WSL→Windows builds, merge/review/commit discipline), **read `.agents/ORCHESTRATION.md` FIRST** — it is the reusable, task-agnostic playbook. Do not re-derive the workflow.
+
+---
+
 # Codebase Knowledge Graph (codebase-memory-mcp)
 
 This project uses codebase-memory-mcp to maintain a knowledge graph of the codebase.
