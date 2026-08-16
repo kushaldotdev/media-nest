@@ -180,7 +180,7 @@ fun MainScreen() {
                             listOf(
                                 BottomNavItem.Home,
                                 BottomNavItem.Downloads,
-                                BottomNavItem.Library,
+                                BottomNavItem.Collections,
                                 BottomNavItem.Settings
                             ).forEach { item ->
                                 NavigationBarItem(

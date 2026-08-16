@@ -12,49 +12,50 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.ui.layout.ContentScale
-import kotlinx.coroutines.launch
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.example.medianest.data.local.entity.SubscriptionEntity
+import com.example.medianest.data.preferences.SubscriptionsPreferences
+import com.example.medianest.ui.components.GlassCard
 import com.example.medianest.ui.viewmodel.SubscriptionsViewModel
 import com.example.medianest.ui.viewmodel.ViewMode
-import com.example.medianest.ui.components.GlassCard
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -63,112 +64,167 @@ fun SubscriptionsScreen(
     searchQuery: String = "",
     viewMode: ViewMode = ViewMode.LIST,
     onSubscriptionClick: (String, String) -> Unit,
-    viewModel: SubscriptionsViewModel = hiltViewModel()
+    viewModel: SubscriptionsViewModel = hiltViewModel(),
+    subscriptionsPreferences: SubscriptionsPreferences? = null
 ) {
     val subscriptions by viewModel.subscriptions.collectAsStateWithLifecycle()
-    val snackbarHostState = androidx.compose.runtime.remember { SnackbarHostState() }
-    val coroutineScope = androidx.compose.runtime.rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val coroutineScope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val prefs = remember(context, subscriptionsPreferences) {
+        subscriptionsPreferences ?: SubscriptionsPreferences(context.applicationContext)
+    }
+    val showShorts by prefs.showShorts.collectAsStateWithLifecycle(initialValue = SubscriptionsPreferences.DEFAULT_SHOW_SHORTS)
+
     val filtered = subscriptions.filter { 
         it.sourceType == sourceType && 
         (searchQuery.isBlank() || it.name.contains(searchQuery, ignoreCase = true))
     }
 
-    if (filtered.isEmpty()) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                if (searchQuery.isNotEmpty()) "No results found" else "No subscriptions yet",
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    } else {
-        if (viewMode == ViewMode.GRID) {
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(2),
-                modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            // Show Shorts filter toggle header
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                items(filtered, key = { it.id }) { sub ->
-                    SubscriptionCard(
-                        subscription = sub,
-                        onAutoDownloadChange = { autoDownload, audioOnly ->
-                            viewModel.updateAutoDownload(sub.id, autoDownload, audioOnly)
-                            coroutineScope.launch {
-                                snackbarHostState.showSnackbar(
-                                    if (autoDownload) "Auto-download enabled for ${sub.name}" else "Auto-download disabled for ${sub.name}"
-                                )
-                            }
-                        },
-                        onUnsubscribe = { 
-                            viewModel.unsubscribe(sub.id) 
-                            coroutineScope.launch {
-                                snackbarHostState.showSnackbar("Unsubscribed from ${sub.name}")
-                            }
-                        },
-                        onClick = { onSubscriptionClick(sub.sourceType, sub.sourceId) }
+                Text(
+                    text = "Show Shorts",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Switch(
+                    checked = showShorts,
+                    onCheckedChange = { checked ->
+                        coroutineScope.launch {
+                            prefs.setShowShorts(checked)
+                        }
+                    },
+                    modifier = Modifier.scale(0.8f)
+                )
+            }
+
+            if (filtered.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = if (searchQuery.isNotEmpty()) "No results found" else "No subscriptions yet",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                item(span = { GridItemSpan(maxLineSpan) }) {
-                    Text(
-                        text = "*Automatically downloads new uploads*",
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
-                        ),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+            } else {
+                if (viewMode == ViewMode.GRID) {
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(2),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 8.dp),
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                    )
-                }
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                items(filtered, key = { it.id }) { sub ->
-                    SubscriptionCard(
-                        subscription = sub,
-                        onAutoDownloadChange = { autoDownload, audioOnly ->
-                            viewModel.updateAutoDownload(sub.id, autoDownload, audioOnly)
-                            coroutineScope.launch {
-                                snackbarHostState.showSnackbar(
-                                    if (autoDownload) "Auto-download enabled for ${sub.name}" else "Auto-download disabled for ${sub.name}"
-                                )
-                            }
-                        },
-                        onUnsubscribe = { 
-                            viewModel.unsubscribe(sub.id) 
-                            coroutineScope.launch {
-                                snackbarHostState.showSnackbar("Unsubscribed from ${sub.name}")
-                            }
-                        },
-                        onClick = { onSubscriptionClick(sub.sourceType, sub.sourceId) }
-                    )
-                }
-                item {
-                    Text(
-                        text = "*Automatically downloads new uploads*",
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
-                        ),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            .weight(1f)
+                            .padding(horizontal = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(filtered, key = { it.id }) { sub ->
+                            SubscriptionCard(
+                                subscription = sub,
+                                onAutoDownloadChange = { autoDownload, audioOnly ->
+                                    viewModel.updateAutoDownload(sub.id, autoDownload, audioOnly)
+                                    coroutineScope.launch {
+                                        val msg = when {
+                                            autoDownload != sub.autoDownload && autoDownload -> "Auto-download enabled for ${sub.name}"
+                                            autoDownload != sub.autoDownload && !autoDownload -> "Auto-download disabled for ${sub.name}"
+                                            audioOnly != sub.audioOnly && audioOnly -> "Audio-only auto-download enabled for ${sub.name}"
+                                            else -> "Audio-only auto-download disabled for ${sub.name}"
+                                        }
+                                        snackbarHostState.showSnackbar(msg)
+                                    }
+                                },
+                                onUnsubscribe = { 
+                                    viewModel.unsubscribe(sub.id) 
+                                    coroutineScope.launch {
+                                        snackbarHostState.showSnackbar("Unsubscribed from ${sub.name}")
+                                    }
+                                },
+                                onClick = { onSubscriptionClick(sub.sourceType, sub.sourceId) }
+                            )
+                        }
+                        item(span = { GridItemSpan(maxLineSpan) }) {
+                            Text(
+                                text = "*Automatically downloads new uploads*",
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    fontStyle = FontStyle.Italic
+                                ),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp),
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                } else {
+                    LazyColumn(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 8.dp),
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                    )
+                            .weight(1f)
+                            .padding(horizontal = 8.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(filtered, key = { it.id }) { sub ->
+                            SubscriptionCard(
+                                subscription = sub,
+                                onAutoDownloadChange = { autoDownload, audioOnly ->
+                                    viewModel.updateAutoDownload(sub.id, autoDownload, audioOnly)
+                                    coroutineScope.launch {
+                                        val msg = when {
+                                            autoDownload != sub.autoDownload && autoDownload -> "Auto-download enabled for ${sub.name}"
+                                            autoDownload != sub.autoDownload && !autoDownload -> "Auto-download disabled for ${sub.name}"
+                                            audioOnly != sub.audioOnly && audioOnly -> "Audio-only auto-download enabled for ${sub.name}"
+                                            else -> "Audio-only auto-download disabled for ${sub.name}"
+                                        }
+                                        snackbarHostState.showSnackbar(msg)
+                                    }
+                                },
+                                onUnsubscribe = { 
+                                    viewModel.unsubscribe(sub.id) 
+                                    coroutineScope.launch {
+                                        snackbarHostState.showSnackbar("Unsubscribed from ${sub.name}")
+                                    }
+                                },
+                                onClick = { onSubscriptionClick(sub.sourceType, sub.sourceId) }
+                            )
+                        }
+                        item {
+                            Text(
+                                text = "*Automatically downloads new uploads*",
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    fontStyle = FontStyle.Italic
+                                ),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp),
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
                 }
             }
         }
-        
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
-            SnackbarHost(hostState = snackbarHostState, modifier = Modifier.padding(bottom = 80.dp))
-        }
+
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 80.dp)
+        )
     }
 }
 
@@ -221,20 +277,39 @@ private fun SubscriptionCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Text(
-                        "Auto-download",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    androidx.compose.material3.Switch(
-                        checked = subscription.autoDownload,
-                        onCheckedChange = { onAutoDownloadChange(it, subscription.audioOnly) },
-                        modifier = Modifier.scale(0.8f)
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            "Auto-download",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Switch(
+                            checked = subscription.autoDownload,
+                            onCheckedChange = { onAutoDownloadChange(it, subscription.audioOnly) },
+                            modifier = Modifier.scale(0.8f)
+                        )
+                    }
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            "Audio only",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Switch(
+                            checked = subscription.audioOnly,
+                            onCheckedChange = { onAutoDownloadChange(subscription.autoDownload, it) },
+                            modifier = Modifier.scale(0.8f)
+                        )
+                    }
                 }
                 IconButton(onClick = onUnsubscribe) {
                     Icon(

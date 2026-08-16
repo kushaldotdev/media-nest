@@ -23,20 +23,25 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.medianest.data.preferences.CollectionsPreferences
+import com.example.medianest.data.preferences.DownloadPreferences
+import com.example.medianest.data.preferences.SubscriptionsPreferences
 import com.example.medianest.data.sync.SyncLogEntry
 import com.example.medianest.data.sync.SyncState
+import com.example.medianest.ui.theme.MediaNestColors
+import com.example.medianest.ui.theme.MediaNestSemanticColors
 import com.example.medianest.ui.viewmodel.ExportImportState
 import com.example.medianest.ui.viewmodel.ExportImportViewModel
 import com.example.medianest.ui.viewmodel.LocalBackupInfo
@@ -61,6 +66,10 @@ fun SettingsScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val applicationContext = context.applicationContext
+    val downloadPreferences = remember { DownloadPreferences(applicationContext) }
+    val subscriptionsPreferences = remember { SubscriptionsPreferences(applicationContext) }
+    val collectionsPreferences = remember { CollectionsPreferences(applicationContext) }
     val scrollState = rememberScrollState()
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
@@ -380,7 +389,7 @@ fun SettingsScreen(
                 }
             }
 
-            // Section: Download Folder Location
+            // Section: Download Folder Location & Quality
             Text("Downloads", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
             
             GlassCard(modifier = Modifier.fillMaxWidth()) {
@@ -445,6 +454,175 @@ fun SettingsScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Tune, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Default Download Resolution", style = MaterialTheme.typography.titleMedium)
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    Text("Select default resolution for video downloads.", style = MaterialTheme.typography.bodySmall)
+                    Spacer(Modifier.height(12.dp))
+
+                    val defaultResolution by downloadPreferences.defaultResolution.collectAsStateWithLifecycle(
+                        initialValue = DownloadPreferences.DEFAULT_RESOLUTION
+                    )
+                    val resolutionOptions = listOf("1080p", "720p", "480p", "360p", "Audio")
+                    var resolutionExpanded by remember { mutableStateOf(false) }
+
+                    ExposedDropdownMenuBox(
+                        expanded = resolutionExpanded,
+                        onExpandedChange = { resolutionExpanded = it }
+                    ) {
+                        OutlinedTextField(
+                            value = defaultResolution,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Default Download Resolution") },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = resolutionExpanded) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .menuAnchor(
+                                    ExposedDropdownMenuAnchorType.PrimaryNotEditable,
+                                    enabled = true
+                                ),
+                            singleLine = true
+                        )
+                        ExposedDropdownMenu(
+                            expanded = resolutionExpanded,
+                            onDismissRequest = { resolutionExpanded = false }
+                        ) {
+                            resolutionOptions.forEach { option ->
+                                DropdownMenuItem(
+                                    text = { Text(option) },
+                                    onClick = {
+                                        coroutineScope.launch {
+                                            downloadPreferences.setDefaultResolution(option)
+                                        }
+                                        resolutionExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Section: Display & Content Preferences
+            Text("Preferences", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
+
+            GlassCard(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    // Show Shorts toggle
+                    val showShorts by subscriptionsPreferences.showShorts.collectAsStateWithLifecycle(
+                        initialValue = SubscriptionsPreferences.DEFAULT_SHOW_SHORTS
+                    )
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                coroutineScope.launch {
+                                    subscriptionsPreferences.setShowShorts(!showShorts)
+                                }
+                            }
+                            .padding(vertical = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    Icons.Default.Subscriptions,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text("Show Shorts", style = MaterialTheme.typography.titleMedium)
+                            }
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "Include YouTube Shorts in subscriptions and feed lists.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Spacer(Modifier.width(16.dp))
+                        Switch(
+                            checked = showShorts,
+                            onCheckedChange = { checked ->
+                                coroutineScope.launch {
+                                    subscriptionsPreferences.setShowShorts(checked)
+                                }
+                            }
+                        )
+                    }
+
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+
+                    // Collections View Mode toggle
+                    val collectionsViewMode by collectionsPreferences.viewMode.collectAsStateWithLifecycle(
+                        initialValue = CollectionsPreferences.DEFAULT_VIEW_MODE
+                    )
+                    val isGrid = collectionsViewMode.equals("GRID", ignoreCase = true)
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    Icons.Default.Collections,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text("Collections View Mode", style = MaterialTheme.typography.titleMedium)
+                            }
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "Default layout for collections (${if (isGrid) "Grid" else "List"}).",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            FilterChip(
+                                selected = isGrid,
+                                onClick = {
+                                    coroutineScope.launch {
+                                        collectionsPreferences.setViewMode("GRID")
+                                    }
+                                },
+                                label = { Text("Grid") },
+                                leadingIcon = if (isGrid) {
+                                    { Icon(Icons.Default.GridView, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                                } else null
+                            )
+                            FilterChip(
+                                selected = !isGrid,
+                                onClick = {
+                                    coroutineScope.launch {
+                                        collectionsPreferences.setViewMode("LIST")
+                                    }
+                                },
+                                label = { Text("List") },
+                                leadingIcon = if (!isGrid) {
+                                    { Icon(Icons.AutoMirrored.Filled.ViewList, contentDescription = null, modifier = Modifier.size(16.dp)) }
+                                } else null
+                            )
+                        }
+                    }
                 }
             }
 
@@ -538,7 +716,7 @@ fun SettingsScreen(
                                         modifier = Modifier.padding(12.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF4CAF50))
+                                        Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MediaNestColors.Success)
                                         Spacer(Modifier.width(8.dp))
                                         Text(s.message, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                                         IconButton(onClick = { viewModel.resetState() }) {
@@ -791,7 +969,7 @@ fun SettingsScreen(
                                         Row(
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF4CAF50))
+                                            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MediaNestColors.Success)
                                             Spacer(Modifier.width(8.dp))
                                             Text(s.message, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
                                             IconButton(onClick = { viewModel.resetState() }) {
@@ -868,7 +1046,7 @@ fun SettingsScreen(
                     if (hasScannedOrphans && !isScanningOrphans) {
                         if (orphanFiles.isEmpty()) {
                             Spacer(Modifier.height(8.dp))
-                            Text("No broken files found.", style = MaterialTheme.typography.bodyMedium, color = Color(0xFF4CAF50))
+                            Text("No broken files found.", style = MaterialTheme.typography.bodyMedium, color = MediaNestColors.Success)
                         } else {
                             val totalSize = orphanFiles.sumOf { it.sizeBytes }
                             Spacer(Modifier.height(12.dp))
@@ -1183,7 +1361,7 @@ fun SettingsScreen(
                                 modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF4CAF50), modifier = Modifier.size(20.dp))
+                                Icon(Icons.Default.CheckCircle, contentDescription = null, tint = MediaNestColors.Success, modifier = Modifier.size(20.dp))
                                 Spacer(Modifier.width(8.dp))
                                 Text("You are on the latest version.", style = MaterialTheme.typography.bodyMedium)
                                 Spacer(Modifier.weight(1f))

@@ -287,7 +287,7 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
             )
         }
         composable(
-            route = BottomNavItem.Library.route,
+            route = BottomNavItem.Collections.route,
             exitTransition = {
                 if (targetState.destination.route?.contains("player") == true) {
                     fadeOut(animationSpec = tween(450), targetAlpha = 0.9f)

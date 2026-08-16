@@ -92,6 +92,28 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.foundation.shape.RoundedCornerShape
 
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.rememberDraggableState
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.DragHandle
+import androidx.compose.material.icons.filled.PlaylistPlay
+import androidx.compose.material.icons.filled.QueueMusic
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import com.example.medianest.ui.theme.MediaNestColors
+import com.example.medianest.ui.theme.MediaNestSemanticColors
+import com.example.medianest.ui.utils.UiUtils
+
 private fun Context.findActivity(): Activity? {
     var currentContext = this
     while (currentContext is ContextWrapper) {
@@ -103,6 +125,20 @@ private fun Context.findActivity(): Activity? {
     return null
 }
 
+/**
+ * Item representation for the Up Next queue in the player.
+ */
+data class PlayerQueueItem(
+    val id: String,
+    val title: String,
+    val channelName: String = "",
+    val durationSeconds: Long = 0L,
+    val thumbnailUrl: String? = null,
+    val isPlaying: Boolean = false,
+    val downloadId: Long? = null,
+    val streamIndex: Int = 0
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlayerScreen(
@@ -110,10 +146,58 @@ fun PlayerScreen(
     streamIndex: Int,
     downloadId: Long? = null,
     viewModel: PlayerViewModel = hiltViewModel(),
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    queue: List<PlayerQueueItem> = emptyList(),
+    contextTitle: String? = null,
+    contextType: String? = null,
+    autoplayNext: Boolean = true,
+    onQueueReordered: ((List<PlayerQueueItem>) -> Unit)? = null,
+    onQueueItemClick: ((PlayerQueueItem) -> Unit)? = null,
+    onAutoplayToggle: ((Boolean) -> Unit)? = null,
+    onRemoveFromQueue: ((PlayerQueueItem) -> Unit)? = null
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val player by viewModel.player.collectAsStateWithLifecycle()
+
+    var currentQueue by remember(queue) { mutableStateOf(queue) }
+    var isAutoplayEnabled by remember(autoplayNext) { mutableStateOf(autoplayNext) }
+    var isQueueExpanded by rememberSaveable { mutableStateOf(true) }
+    val hasQueueContext = currentQueue.isNotEmpty() || !contextTitle.isNullOrEmpty() || !contextType.isNullOrEmpty()
+
+    fun moveQueueItem(fromIndex: Int, toIndex: Int) {
+        if (fromIndex in currentQueue.indices && toIndex in currentQueue.indices && fromIndex != toIndex) {
+            val updated = currentQueue.toMutableList()
+            val item = updated.removeAt(fromIndex)
+            updated.add(toIndex, item)
+            currentQueue = updated
+            onQueueReordered?.invoke(updated)
+        }
+    }
+
+    val isPlaybackEnded = player?.playbackState == androidx.media3.common.Player.STATE_ENDED
+    var hasTriggeredAutoplay by remember(state.videoId) { mutableStateOf(false) }
+
+    LaunchedEffect(isPlaybackEnded, isAutoplayEnabled, currentQueue) {
+        if (isPlaybackEnded && isAutoplayEnabled && !hasTriggeredAutoplay && currentQueue.isNotEmpty()) {
+            val currentIndex = currentQueue.indexOfFirst { it.id == state.videoId }
+            val nextIndex = if (currentIndex != -1 && currentIndex + 1 < currentQueue.size) {
+                currentIndex + 1
+            } else if (currentIndex == -1 && currentQueue.isNotEmpty()) {
+                0
+            } else {
+                -1
+            }
+            if (nextIndex in currentQueue.indices) {
+                hasTriggeredAutoplay = true
+                val nextItem = currentQueue[nextIndex]
+                if (onQueueItemClick != null) {
+                    onQueueItemClick(nextItem)
+                } else {
+                    viewModel.initialize(nextItem.id, nextItem.streamIndex, nextItem.downloadId)
+                }
+            }
+        }
+    }
 
     var showResumeButton by rememberSaveable(videoId) { mutableStateOf(true) }
     var localPosition by remember { mutableStateOf<Float?>(null) }
@@ -632,9 +716,15 @@ fun PlayerScreen(
                     modifier = Modifier.fillMaxSize()
                 ) {
                     Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f)
+                        modifier = if (hasQueueContext && isQueueExpanded) {
+                            Modifier
+                                .fillMaxWidth()
+                                .aspectRatio(16f / 9f)
+                        } else {
+                            Modifier
+                                .fillMaxWidth()
+                                .weight(1f)
+                        }
                     ) {
                         if (state.isAudioOnly) {
                             Box(
@@ -1151,7 +1241,7 @@ fun PlayerScreen(
                                                                 Icon(
                                                                     imageVector = Icons.Default.CheckCircle,
                                                                     contentDescription = "Downloaded",
-                                                                    tint = Color(0xFF4CAF50),
+                                                                    tint = MediaNestColors.Success,
                                                                     modifier = Modifier.size(16.dp)
                                                                 )
                                                             }
@@ -1166,6 +1256,95 @@ fun PlayerScreen(
                                                     }
                                                 )
                                             }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if (hasQueueContext) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .then(if (isQueueExpanded) Modifier.weight(1f) else Modifier)
+                                .padding(horizontal = 12.dp, vertical = 4.dp)
+                        ) {
+                            AutoplayQueueHeader(
+                                contextTitle = contextTitle,
+                                contextType = contextType,
+                                queueSize = currentQueue.size,
+                                isAutoplayEnabled = isAutoplayEnabled,
+                                isExpanded = isQueueExpanded,
+                                onAutoplayToggle = {
+                                    isAutoplayEnabled = it
+                                    onAutoplayToggle?.invoke(it)
+                                },
+                                onExpandToggle = {
+                                    isQueueExpanded = !isQueueExpanded
+                                }
+                            )
+
+                            if (isQueueExpanded) {
+                                Spacer(Modifier.height(6.dp))
+
+                                if (currentQueue.isEmpty()) {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .weight(1f),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                            Icon(
+                                                imageVector = Icons.Default.QueueMusic,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                                modifier = Modifier.size(36.dp)
+                                            )
+                                            Spacer(Modifier.height(6.dp))
+                                            Text(
+                                                text = "Queue is empty",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                } else {
+                                    LazyColumn(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .weight(1f),
+                                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                                        contentPadding = PaddingValues(vertical = 4.dp)
+                                    ) {
+                                        itemsIndexed(
+                                            items = currentQueue,
+                                            key = { _, item -> "${item.id}_${item.streamIndex}_${item.downloadId}" }
+                                        ) { index, item ->
+                                            PlayerQueueItemRow(
+                                                item = item,
+                                                index = index,
+                                                totalCount = currentQueue.size,
+                                                isCurrent = item.id == state.videoId || item.isPlaying,
+                                                onMoveUp = { moveQueueItem(index, index - 1) },
+                                                onMoveDown = { moveQueueItem(index, index + 1) },
+                                                onDragMove = { targetIdx -> moveQueueItem(index, targetIdx) },
+                                                onClick = {
+                                                    if (onQueueItemClick != null) {
+                                                        onQueueItemClick(item)
+                                                    } else {
+                                                        viewModel.initialize(item.id, item.streamIndex, item.downloadId)
+                                                    }
+                                                },
+                                                onRemove = {
+                                                    val updated = currentQueue.toMutableList()
+                                                    updated.removeAt(index)
+                                                    currentQueue = updated
+                                                    onRemoveFromQueue?.invoke(item)
+                                                    onQueueReordered?.invoke(updated)
+                                                }
+                                            )
                                         }
                                     }
                                 }
@@ -1264,6 +1443,317 @@ fun WatchCountDisplay(
                 color = textColor,
                 style = style.copy(fontWeight = FontWeight.Bold)
             )
+        }
+    }
+}
+
+@Composable
+fun AutoplayQueueHeader(
+    contextTitle: String?,
+    contextType: String?,
+    queueSize: Int,
+    isAutoplayEnabled: Boolean,
+    isExpanded: Boolean,
+    onAutoplayToggle: (Boolean) -> Unit,
+    onExpandToggle: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+        ),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            val contextIcon = when (contextType?.lowercase()) {
+                "playlist" -> Icons.Default.PlaylistPlay
+                "folder" -> Icons.Default.Folder
+                "favorites" -> Icons.Default.Favorite
+                else -> Icons.Default.QueueMusic
+            }
+            val defaultTitle = when (contextType?.lowercase()) {
+                "playlist" -> "Playlist"
+                "folder" -> "Folder"
+                "favorites" -> "Favorites"
+                else -> "Up Next Queue"
+            }
+            val titleText = contextTitle?.ifBlank { defaultTitle } ?: defaultTitle
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .weight(1f, fill = false)
+                    .clickable { onExpandToggle() }
+            ) {
+                Icon(
+                    imageVector = contextIcon,
+                    contentDescription = null,
+                    tint = if (contextType?.lowercase() == "favorites") MediaNestColors.Destructive else MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Column {
+                    Text(
+                        text = titleText,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = if (queueSize > 0) "$queueSize videos" else "Empty queue",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = "Autoplay next",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Switch(
+                    checked = isAutoplayEnabled,
+                    onCheckedChange = onAutoplayToggle,
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
+                        checkedTrackColor = MaterialTheme.colorScheme.primary,
+                        uncheckedThumbColor = MaterialTheme.colorScheme.outline,
+                        uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
+                    ),
+                    modifier = Modifier.graphicsLayer {
+                        scaleX = 0.8f
+                        scaleY = 0.8f
+                    }
+                )
+                IconButton(
+                    onClick = onExpandToggle,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                        contentDescription = if (isExpanded) "Collapse Queue" else "Expand Queue",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun PlayerQueueItemRow(
+    item: PlayerQueueItem,
+    index: Int,
+    totalCount: Int,
+    isCurrent: Boolean,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit,
+    onDragMove: (targetIndex: Int) -> Unit,
+    onClick: () -> Unit,
+    onRemove: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var dragAccumulator by remember { mutableStateOf(0f) }
+    val dragThresholdPx = 120f
+
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(8.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isCurrent) {
+                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
+            } else {
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f)
+            }
+        ),
+        border = BorderStroke(
+            width = if (isCurrent) 1.5.dp else 1.dp,
+            color = if (isCurrent) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+            }
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Drag handle with draggable modifier
+            Box(
+                modifier = Modifier
+                    .size(28.dp)
+                    .draggable(
+                        orientation = Orientation.Vertical,
+                        state = rememberDraggableState { delta ->
+                            dragAccumulator += delta
+                            if (dragAccumulator > dragThresholdPx && index < totalCount - 1) {
+                                onDragMove(index + 1)
+                                dragAccumulator = 0f
+                            } else if (dragAccumulator < -dragThresholdPx && index > 0) {
+                                onDragMove(index - 1)
+                                dragAccumulator = 0f
+                            }
+                        },
+                        onDragStopped = {
+                            dragAccumulator = 0f
+                        }
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.DragHandle,
+                    contentDescription = "Reorder Drag Handle",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+
+            Spacer(Modifier.width(4.dp))
+
+            // Thumbnail with duration overlay
+            Box(
+                modifier = Modifier
+                    .width(68.dp)
+                    .aspectRatio(16f / 9f)
+                    .clip(RoundedCornerShape(4.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                if (!item.thumbnailUrl.isNullOrEmpty()) {
+                    AsyncImage(
+                        model = item.thumbnailUrl,
+                        contentDescription = item.title,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+                if (item.durationSeconds > 0L) {
+                    Surface(
+                        color = Color.Black.copy(alpha = 0.75f),
+                        shape = RoundedCornerShape(2.dp),
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(2.dp)
+                    ) {
+                        Text(
+                            text = UiUtils.formatDuration(item.durationSeconds),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color.White,
+                            modifier = Modifier.padding(horizontal = 3.dp, vertical = 1.dp)
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.width(10.dp))
+
+            // Title & Channel
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(end = 4.dp)
+            ) {
+                if (isCurrent) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier.padding(bottom = 2.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PlayArrow,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Text(
+                            text = "NOW PLAYING",
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+                Text(
+                    text = item.title,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium,
+                    color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (item.channelName.isNotEmpty()) {
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = item.channelName,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+
+            // Up / Down Reorder Buttons + Remove Button
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(0.dp)
+            ) {
+                IconButton(
+                    onClick = onMoveUp,
+                    enabled = index > 0,
+                    modifier = Modifier.size(28.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.KeyboardArrowUp,
+                        contentDescription = "Move Up",
+                        tint = if (index > 0) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+                IconButton(
+                    onClick = onMoveDown,
+                    enabled = index < totalCount - 1,
+                    modifier = Modifier.size(28.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.KeyboardArrowDown,
+                        contentDescription = "Move Down",
+                        tint = if (index < totalCount - 1) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f),
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+                IconButton(
+                    onClick = onRemove,
+                    modifier = Modifier.size(28.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Remove from Queue",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
         }
     }
 }

@@ -5,14 +5,14 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.dp
+import com.example.medianest.ui.theme.MediaNestColors
 
 /**
- * A reusable glassmorphism Card wrapper that applies standard translucent background
+ * A reusable glassmorphism Card wrapper that applies standard background
  * and outline borders to maintain consistent styling across the application.
  */
 @Composable
@@ -27,11 +27,11 @@ fun GlassCard(
             modifier = modifier,
             shape = shape,
             colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                containerColor = MediaNestColors.Card
             ),
             border = BorderStroke(
                 1.dp,
-                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                MediaNestColors.Border
             ),
             onClick = onClick
         ) {
@@ -42,11 +42,11 @@ fun GlassCard(
             modifier = modifier,
             shape = shape,
             colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                containerColor = MediaNestColors.Card
             ),
             border = BorderStroke(
                 1.dp,
-                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                MediaNestColors.Border
             )
         ) {
             content()

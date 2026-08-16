@@ -1,6 +1,5 @@
 package com.example.medianest.ui.components
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
@@ -9,9 +8,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.example.medianest.ui.theme.MediaNestColors
 
 @Composable
 fun YoutubeSubscribeButton(
@@ -19,18 +18,16 @@ fun YoutubeSubscribeButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val isDark = isSystemInDarkTheme()
-
     val backgroundColor = if (isSubscribed) {
-        if (isDark) Color(0xFF272727) else Color(0xFFF2F2F2)
+        MediaNestColors.AccentDeep
     } else {
-        if (isDark) Color(0xFFF1F1F1) else Color(0xFF0F0F0F)
+        MediaNestColors.Accent
     }
 
     val contentColor = if (isSubscribed) {
-        if (isDark) Color(0xFFF1F1F1) else Color(0xFF0F0F0F)
+        MediaNestColors.TextPrimary
     } else {
-        if (isDark) Color(0xFF0F0F0F) else Color(0xFFFFFFFF)
+        MediaNestColors.OnAccent
     }
 
     Button(

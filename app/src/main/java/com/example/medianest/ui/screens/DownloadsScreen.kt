@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -63,9 +64,15 @@ import com.example.medianest.data.local.entity.DownloadEntity
 import com.example.medianest.data.local.entity.DownloadStatus
 import com.example.medianest.data.local.entity.VideoEntity
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import com.example.medianest.data.preferences.DownloadPreferences
+import com.example.medianest.ui.theme.MediaNestColors
+import com.example.medianest.ui.theme.MediaNestSemanticColors
 import com.example.medianest.ui.viewmodel.DownloadsViewModel
 
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 
 private fun compactDuration(ms: Long): String {
     val totalSecs = (ms / 1000L).coerceAtLeast(0L)
@@ -123,14 +130,85 @@ private fun appendTiming(items: MutableList<String>, parts: List<String>, offset
     if (remainingMs > 0L) items.add("${compactDuration(remainingMs)} left")
 }
 
+/**
+ * Resolves download resolution falling back to configured [defaultResolution] or [DownloadPreferences.DEFAULT_RESOLUTION].
+ */
+fun resolveDownloadResolution(
+    explicitResolution: String? = null,
+    defaultResolution: String? = null
+): String {
+    return explicitResolution?.takeIf { it.isNotBlank() }
+        ?: defaultResolution?.takeIf { it.isNotBlank() }
+        ?: DownloadPreferences.DEFAULT_RESOLUTION
+}
+
+/**
+ * Sorts the download list according to [sortMode] preference.
+ * Supported modes:
+ * - DATE_DESC: Newest downloads first (default)
+ * - PROGRESS_DESC: Highest download progress percentage first
+ * - SIZE_DESC: Largest file size first
+ * - STATUS_ASC: Active downloading first, followed by queued, paused, failed, canceled, completed
+ */
+fun sortDownloads(
+    downloads: List<DownloadEntity>,
+    sortMode: String = DownloadPreferences.DEFAULT_SORT_MODE
+): List<DownloadEntity> {
+    return when (sortMode) {
+        "PROGRESS_DESC" -> downloads.sortedWith(
+            compareByDescending<DownloadEntity> { it.progress }
+                .thenByDescending { it.downloadedAt }
+                .thenByDescending { it.id }
+        )
+        "SIZE_DESC" -> downloads.sortedWith(
+            compareByDescending<DownloadEntity> { it.fileSizeBytes }
+                .thenByDescending { it.downloadedAt }
+                .thenByDescending { it.id }
+        )
+        "STATUS_ASC" -> {
+            fun statusRank(status: DownloadStatus): Int = when (status) {
+                DownloadStatus.DOWNLOADING -> 0
+                DownloadStatus.QUEUED -> 1
+                DownloadStatus.PAUSED -> 2
+                DownloadStatus.FAILED -> 3
+                DownloadStatus.CANCELED -> 4
+                DownloadStatus.COMPLETED -> 5
+            }
+            downloads.sortedWith(
+                compareBy<DownloadEntity> { statusRank(it.status) }
+                    .thenByDescending { it.downloadedAt }
+                    .thenByDescending { it.id }
+            )
+        }
+        "DATE_DESC" -> downloads.sortedWith(
+            compareByDescending<DownloadEntity> { it.downloadedAt }
+                .thenByDescending { it.id }
+        )
+        else -> downloads.sortedWith(
+            compareByDescending<DownloadEntity> { it.downloadedAt }
+                .thenByDescending { it.id }
+        )
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DownloadsScreen(
     onPlayDownload: (DownloadEntity) -> Unit,
     onVideoClick: (String) -> Unit,
-    viewModel: DownloadsViewModel = hiltViewModel()
+    viewModel: DownloadsViewModel = hiltViewModel(),
+    downloadPreferences: DownloadPreferences? = null
 ) {
+    val context = LocalContext.current
+    val prefs = downloadPreferences ?: remember(context) { DownloadPreferences(context) }
+    val coroutineScope = rememberCoroutineScope()
+    val sortMode by prefs.sortMode.collectAsStateWithLifecycle(initialValue = DownloadPreferences.DEFAULT_SORT_MODE)
+    val defaultResolution by prefs.defaultResolution.collectAsStateWithLifecycle(initialValue = DownloadPreferences.DEFAULT_RESOLUTION)
+
     val downloads by viewModel.downloads.collectAsStateWithLifecycle()
+    val sortedDownloads = remember(downloads, sortMode) {
+        sortDownloads(downloads, sortMode)
+    }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val playingVideoId by viewModel.playingVideoId.collectAsStateWithLifecycle()
     val playingUri by viewModel.playingUri.collectAsStateWithLifecycle()
@@ -180,20 +258,92 @@ fun DownloadsScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text("Downloads", style = MaterialTheme.typography.titleLarge)
-                    var expanded by remember { mutableStateOf(false) }
-                    Box {
-                        Button(onClick = { expanded = true }) {
-                            Text("Max: ${uiState.maxConcurrent}")
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        var sortExpanded by remember { mutableStateOf(false) }
+                        val sortLabel = when (sortMode) {
+                            "PROGRESS_DESC" -> "Progress"
+                            "SIZE_DESC" -> "Size"
+                            "STATUS_ASC" -> "Status"
+                            "DATE_DESC" -> "Date"
+                            else -> "Date"
                         }
-                        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                            (1..5).forEach { n ->
-                                DropdownMenuItem(
-                                    text = { Text("$n concurrent") },
-                                    onClick = {
-                                        viewModel.setMaxConcurrent(n)
-                                        expanded = false
-                                    }
+                        Box {
+                            OutlinedButton(
+                                onClick = { sortExpanded = true },
+                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                                modifier = Modifier.height(36.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Sort,
+                                    contentDescription = "Sort queue",
+                                    modifier = Modifier.size(16.dp)
                                 )
+                                Spacer(Modifier.width(4.dp))
+                                Text(sortLabel, style = MaterialTheme.typography.labelMedium)
+                            }
+                            DropdownMenu(
+                                expanded = sortExpanded,
+                                onDismissRequest = { sortExpanded = false }
+                            ) {
+                                val sortOptions = listOf(
+                                    "DATE_DESC" to "Date (Newest)",
+                                    "PROGRESS_DESC" to "Progress (Highest)",
+                                    "SIZE_DESC" to "Size (Largest)",
+                                    "STATUS_ASC" to "Status (Active First)"
+                                )
+                                sortOptions.forEach { (mode, label) ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Text(label)
+                                                if (sortMode == mode) {
+                                                    Spacer(Modifier.width(8.dp))
+                                                    Icon(
+                                                        imageVector = Icons.Default.Check,
+                                                        contentDescription = "Selected",
+                                                        tint = MaterialTheme.colorScheme.primary,
+                                                        modifier = Modifier.size(16.dp)
+                                                    )
+                                                }
+                                            }
+                                        },
+                                        onClick = {
+                                            coroutineScope.launch {
+                                                prefs.setSortMode(mode)
+                                            }
+                                            sortExpanded = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+
+                        var expanded by remember { mutableStateOf(false) }
+                        Box {
+                            Button(
+                                onClick = { expanded = true },
+                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                modifier = Modifier.height(36.dp)
+                            ) {
+                                Text("Max: ${uiState.maxConcurrent}", style = MaterialTheme.typography.labelMedium)
+                            }
+                            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                                (1..5).forEach { n ->
+                                    DropdownMenuItem(
+                                        text = { Text("$n concurrent") },
+                                        onClick = {
+                                            viewModel.setMaxConcurrent(n)
+                                            expanded = false
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
@@ -279,8 +429,9 @@ fun DownloadsScreen(
                             }
                             Spacer(Modifier.width(12.dp))
                             Column(modifier = Modifier.weight(1f)) {
+                                val effectiveQuality = download.quality.ifEmpty { resolveDownloadResolution(null, defaultResolution) }
                                 Text(
-                                    text = download.title.ifEmpty { download.quality },
+                                    text = download.title.ifEmpty { effectiveQuality },
                                     style = MaterialTheme.typography.titleSmall,
                                     color = MaterialTheme.colorScheme.onSurface,
                                     maxLines = 2,
@@ -303,14 +454,25 @@ fun DownloadsScreen(
                 }
             }
 
-            if (downloads.isNotEmpty()) {
+            if (sortedDownloads.isNotEmpty()) {
                 item {
-                    Text("Download Queue & Files", style = MaterialTheme.typography.titleMedium)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("Download Queue & Files", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            text = "${sortedDownloads.size} items",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                     Spacer(Modifier.height(8.dp))
                 }
             }
 
-            if (downloads.isEmpty()) {
+            if (sortedDownloads.isEmpty()) {
                 item {
                     Box(
                         modifier = Modifier
@@ -322,10 +484,10 @@ fun DownloadsScreen(
                     }
                 }
             } else {
-                items(downloads, key = { it.id }) { download ->
+                items(sortedDownloads, key = { it.id }) { download ->
                     DownloadItem(
                         download = download,
-                        hasExtractedAudio = downloads.any {
+                        hasExtractedAudio = sortedDownloads.any {
                             it.videoId == download.videoId && it.format == "audio_extracted"
                         },
                         videosMap = videosMap,
@@ -336,7 +498,8 @@ fun DownloadsScreen(
                         onRestartClick = { showRestartDialogFor = it },
                         playingVideoId = playingVideoId,
                         playingUri = playingUri,
-                        isPlaying = isPlaying
+                        isPlaying = isPlaying,
+                        defaultResolution = defaultResolution
                     )
                 }
             }
@@ -346,6 +509,8 @@ fun DownloadsScreen(
     if (showDeleteDialogFor != null) {
         val download = showDeleteDialogFor!!
         val isActive = download.status == DownloadStatus.DOWNLOADING || download.status == DownloadStatus.QUEUED
+        val effectiveQuality = download.quality.ifEmpty { resolveDownloadResolution(null, defaultResolution) }
+        val displayTitle = download.title.ifEmpty { effectiveQuality }
         
         AlertDialog(
             onDismissRequest = { showDeleteDialogFor = null },
@@ -355,9 +520,9 @@ fun DownloadsScreen(
             text = {
                 Text(
                     text = if (isActive) {
-                        "Are you sure you want to cancel downloading \"${download.title}\"?"
+                        "Are you sure you want to cancel downloading \"$displayTitle\"?"
                     } else {
-                        "Choose how you want to delete \"${download.title}\"."
+                        "Choose how you want to delete \"$displayTitle\"."
                     }
                 )
             },
@@ -408,13 +573,15 @@ fun DownloadsScreen(
 
     if (showRestartDialogFor != null) {
         val download = showRestartDialogFor!!
+        val effectiveQuality = download.quality.ifEmpty { resolveDownloadResolution(null, defaultResolution) }
+        val displayTitle = download.title.ifEmpty { effectiveQuality }
         AlertDialog(
             onDismissRequest = { showRestartDialogFor = null },
             title = {
                 Text("Restart Download")
             },
             text = {
-                Text("Are you sure you want to restart downloading \"${download.title}\"? This will delete any partially downloaded files and start from scratch.")
+                Text("Are you sure you want to restart downloading \"$displayTitle\"? This will delete any partially downloaded files and start from scratch.")
             },
             confirmButton = {
                 TextButton(
@@ -491,7 +658,8 @@ private fun DownloadItem(
     onRestartClick: (DownloadEntity) -> Unit,
     playingVideoId: String?,
     playingUri: String?,
-    isPlaying: Boolean
+    isPlaying: Boolean,
+    defaultResolution: String = DownloadPreferences.DEFAULT_RESOLUTION
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val playbackHistory by viewModel.playbackHistory.collectAsStateWithLifecycle()
@@ -512,6 +680,7 @@ private fun DownloadItem(
     val progressFraction = if (durationSeconds > 0 && positionMillis > 0) {
         ((positionMillis.toFloat() / 1000f) / durationSeconds.toFloat()).coerceIn(0f, 1f)
     } else 0f
+    val effectiveQuality = download.quality.ifEmpty { resolveDownloadResolution(null, defaultResolution) }
 
     Card(
         modifier = Modifier
@@ -564,7 +733,7 @@ private fun DownloadItem(
                             Icon(
                                 imageVector = Icons.Default.CheckCircle,
                                 contentDescription = "Downloaded",
-                                tint = Color(0xFF4CAF50),
+                                tint = MediaNestSemanticColors.Completed,
                                 modifier = Modifier.size(12.dp)
                             )
                             if (download.fileSizeBytes > 0L) {
@@ -614,7 +783,7 @@ private fun DownloadItem(
                 // Title, Format Badge, and Quality text
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = download.title.ifEmpty { download.quality },
+                        text = download.title.ifEmpty { effectiveQuality },
                         style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 2,
@@ -635,7 +804,7 @@ private fun DownloadItem(
                             )
                         }
                         Text(
-                            text = download.quality,
+                            text = effectiveQuality,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -762,8 +931,8 @@ private fun DownloadItem(
                 val msg = download.errorMessage ?: ""
                 val trackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
                 val videoColor = MaterialTheme.colorScheme.primary
-                val audioColor = Color(0xFFFF9800) // Orange color for audio
-                val mergeColor = Color(0xFF4CAF50) // Green color for merging
+                val audioColor = MaterialTheme.colorScheme.tertiary
+                val mergeColor = MediaNestColors.Success
 
                 if (msg == "merging") {
                     LinearProgressIndicator(
