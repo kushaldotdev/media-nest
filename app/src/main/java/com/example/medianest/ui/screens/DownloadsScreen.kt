@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import com.example.medianest.ui.components.GlassCard
+import com.example.medianest.ui.components.EndOfListIndicator
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MusicNote
@@ -607,6 +608,9 @@ fun DownloadsScreen(
                         isPlaying = isPlaying,
                         defaultResolution = defaultResolution
                     )
+                }
+                item {
+                    EndOfListIndicator()
                 }
             }
         }

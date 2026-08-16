@@ -41,6 +41,9 @@ interface VideoDao {
     @Query("SELECT * FROM videos WHERE lastPlayedAt IS NOT NULL ORDER BY lastPlayedAt DESC LIMIT 100")
     fun getWatchHistoryVideos(): Flow<List<VideoEntity>>
 
+    @Query("SELECT * FROM videos WHERE lastPlayedAt IS NOT NULL ORDER BY lastPlayedAt DESC LIMIT :limit")
+    fun getWatchHistoryVideosPaged(limit: Int): Flow<List<VideoEntity>>
+
     @Query("UPDATE videos SET favorite = :favorite WHERE id = :videoId")
     suspend fun setFavorite(videoId: String, favorite: Boolean)
 

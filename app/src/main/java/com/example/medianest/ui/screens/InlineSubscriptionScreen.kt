@@ -71,6 +71,7 @@ import com.example.medianest.ui.components.GlassCard
 import com.example.medianest.ui.components.QuickDownloadMenu
 import com.example.medianest.ui.components.WatchCountDialog
 import com.example.medianest.ui.components.YoutubeSubscribeButton
+import com.example.medianest.ui.components.EndOfListIndicator
 import com.example.medianest.ui.viewmodel.HomeUiState
 import com.example.medianest.ui.viewmodel.HomeViewModel
 import kotlinx.coroutines.launch
@@ -365,6 +366,10 @@ fun InlineSubscriptionScreen(
                                     CircularProgressIndicator()
                                 }
                             }
+                        } else if (!state.hasMore && filteredVideos.isNotEmpty()) {
+                            item {
+                                EndOfListIndicator()
+                            }
                         }
                     }
                 }
@@ -527,6 +532,10 @@ fun InlineSubscriptionScreen(
                                 ) {
                                     CircularProgressIndicator()
                                 }
+                            }
+                        } else if (!state.hasMore && filteredVideos.isNotEmpty()) {
+                            item {
+                                EndOfListIndicator()
                             }
                         }
                     }

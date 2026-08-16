@@ -54,6 +54,7 @@ import com.example.medianest.ui.components.UnifiedVideoRow
 import com.example.medianest.ui.components.VideoCardConfig
 import com.example.medianest.ui.components.GlassCard
 import com.example.medianest.ui.components.QuickDownloadMenu
+import com.example.medianest.ui.components.EndOfListIndicator
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -86,6 +87,10 @@ fun LibraryScreen(
     val videoFolderMap by viewModel.videoFolderMap.collectAsStateWithLifecycle()
     val folderStatsMap by viewModel.folderStatsMap.collectAsStateWithLifecycle()
     val playbackHistory by viewModel.playbackHistory.collectAsStateWithLifecycle()
+    val historyLimit by viewModel.historyLimit.collectAsStateWithLifecycle()
+    val favoritesLimit by viewModel.favoritesLimit.collectAsStateWithLifecycle()
+    val watchedLimit by viewModel.watchedLimit.collectAsStateWithLifecycle()
+    val folderVideosLimit by viewModel.folderVideosLimit.collectAsStateWithLifecycle()
     val focusManager = LocalFocusManager.current
 
     val snackbarHostState = remember { SnackbarHostState() }
@@ -240,6 +245,7 @@ fun LibraryScreen(
                             allDownloads = allDownloads,
                             playbackHistory = playbackHistory,
                             showContinueWatching = true,
+                            isEndReached = videos.isNotEmpty() && videos.size < historyLimit,
                             onVideoClick = onVideoClick,
                             onVideoLongClick = { viewModel.toggleSelectionMode(); viewModel.toggleVideoSelection(it) },
                             onToggleSelection = { viewModel.toggleVideoSelection(it) },
@@ -283,6 +289,7 @@ fun LibraryScreen(
                             fetchedStreams = fetchedStreams,
                             allDownloads = allDownloads,
                             playbackHistory = playbackHistory,
+                            isEndReached = watchedVideos.isNotEmpty() && watchedVideos.size < watchedLimit,
                             onVideoClick = onVideoClick,
                             onVideoLongClick = { viewModel.toggleSelectionMode(); viewModel.toggleVideoSelection(it) },
                             onToggleSelection = { viewModel.toggleVideoSelection(it) },
@@ -328,6 +335,7 @@ fun LibraryScreen(
                         fetchedStreams = fetchedStreams,
                         allDownloads = allDownloads,
                         playbackHistory = playbackHistory,
+                        isEndReached = folderVideos.isNotEmpty() && folderVideos.size < folderVideosLimit,
                         onFolderClick = { viewModel.selectFolder(it) },
                         onCreateFolder = { name -> 
                             viewModel.createFolder(name, uiState.selectedFolder?.id)
@@ -388,6 +396,7 @@ fun LibraryScreen(
                             fetchedStreams = fetchedStreams,
                             allDownloads = allDownloads,
                             playbackHistory = playbackHistory,
+                            isEndReached = favoriteVideos.isNotEmpty() && favoriteVideos.size < favoritesLimit,
                             onVideoClick = onVideoClick,
                             onVideoLongClick = { viewModel.toggleSelectionMode(); viewModel.toggleVideoSelection(it) },
                             onToggleSelection = { viewModel.toggleVideoSelection(it) },
@@ -744,7 +753,8 @@ private fun VideoListLayout(
     onExtractAudio: (com.example.medianest.data.local.entity.DownloadEntity) -> Unit,
     onLoadMore: (() -> Unit)? = null,
     onMarkWatched: (String) -> Unit = {},
-    showContinueWatching: Boolean = false
+    showContinueWatching: Boolean = false,
+    isEndReached: Boolean = false
 ) {
     val onMoveToFolderClick = LocalMoveToFolder.current
     val context = LocalContext.current
@@ -875,6 +885,11 @@ private fun VideoListLayout(
                     }
                 )
             }
+            if (isEndReached) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    EndOfListIndicator()
+                }
+            }
         }
     } else {
         LazyColumn(
@@ -951,6 +966,11 @@ private fun VideoListLayout(
                     }
                 )
             }
+            if (isEndReached) {
+                item {
+                    EndOfListIndicator()
+                }
+            }
         }
     }
 }
@@ -990,7 +1010,8 @@ private fun FolderContent(
     onDeleteDownload: (com.example.medianest.data.local.entity.DownloadEntity) -> Unit,
     onExtractAudio: (com.example.medianest.data.local.entity.DownloadEntity) -> Unit,
     onLoadMoreVideos: (() -> Unit)? = null,
-    onMarkWatched: (String) -> Unit = {}
+    onMarkWatched: (String) -> Unit = {},
+    isEndReached: Boolean = false
 ) {
     var showCreateDialog by remember { mutableStateOf(false) }
     var newFolderName by remember { mutableStateOf("") }
@@ -1190,6 +1211,11 @@ private fun FolderContent(
                                         )
                                     }
                                 )
+                            }
+                        }
+                        if (isEndReached) {
+                            item(span = { GridItemSpan(maxLineSpan) }) {
+                                EndOfListIndicator()
                             }
                         }
                     }

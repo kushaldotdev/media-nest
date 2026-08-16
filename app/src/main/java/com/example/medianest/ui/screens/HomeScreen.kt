@@ -86,6 +86,7 @@ import com.example.medianest.ui.components.UnifiedVideoRow
 import com.example.medianest.ui.components.VideoCardConfig
 import com.example.medianest.ui.components.WatchCountDialog
 import com.example.medianest.ui.components.YoutubeSubscribeButton
+import com.example.medianest.ui.components.EndOfListIndicator
 import com.example.medianest.ui.theme.MediaNestColors
 import com.example.medianest.ui.utils.UiUtils
 import com.example.medianest.ui.viewmodel.HomeUiState
@@ -425,6 +426,10 @@ fun HomeScreen(
                                 CircularProgressIndicator()
                             }
                         }
+                    } else if (!state.hasMore && (if (showShorts) state.playlist.videos else state.playlist.videos.filter { !it.isShort }).isNotEmpty()) {
+                        item {
+                            EndOfListIndicator()
+                        }
                     }
                 }
                 is HomeUiState.ChannelResult -> {
@@ -564,6 +569,10 @@ fun HomeScreen(
                                 CircularProgressIndicator()
                             }
                         }
+                    } else if (!state.hasMore && (if (showShorts) state.channel.uploads else state.channel.uploads.filter { !it.isShort }).isNotEmpty()) {
+                        item {
+                            EndOfListIndicator()
+                        }
                     }
                 }
             }
@@ -627,6 +636,9 @@ fun HomeScreen(
                             viewModel.onUrlSubmitted(item.url)
                         }
                     )
+                }
+                item {
+                    EndOfListIndicator()
                 }
             }
 

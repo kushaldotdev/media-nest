@@ -71,40 +71,44 @@ class LibraryViewModel @Inject constructor(
 
     private val _searchQuery = MutableStateFlow("")
 
-    private val _historyLimit = MutableStateFlow(50)
-    private val _favoritesLimit = MutableStateFlow(50)
-    private val _folderVideosLimit = MutableStateFlow(50)
-    private val _watchedLimit = MutableStateFlow(50)
+    private val _historyLimit = MutableStateFlow(10)
+    val historyLimit: StateFlow<Int> = _historyLimit
+    private val _favoritesLimit = MutableStateFlow(10)
+    val favoritesLimit: StateFlow<Int> = _favoritesLimit
+    private val _folderVideosLimit = MutableStateFlow(10)
+    val folderVideosLimit: StateFlow<Int> = _folderVideosLimit
+    private val _watchedLimit = MutableStateFlow(10)
+    val watchedLimit: StateFlow<Int> = _watchedLimit
 
     fun loadMoreHistory() {
-        _historyLimit.value += 50
+        _historyLimit.value += 10
     }
 
     fun loadMoreFavorites() {
-        _favoritesLimit.value += 50
+        _favoritesLimit.value += 10
     }
 
     fun loadMoreFolderVideos() {
-        _folderVideosLimit.value += 50
+        _folderVideosLimit.value += 10
     }
 
     fun loadMoreWatched() {
-        _watchedLimit.value += 50
+        _watchedLimit.value += 10
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    val videos: StateFlow<List<VideoEntity>> = _searchQuery.flatMapLatest { query ->
+    val videos: StateFlow<List<VideoEntity>> = combine(_searchQuery, _historyLimit) { query, limit ->
+        query to limit
+    }.flatMapLatest { (query, limit) ->
         if (query.isBlank()) {
-            videoDao.getWatchHistoryVideos()
+            videoDao.getWatchHistoryVideosPaged(limit)
         } else {
             videoDao.searchHistoryVideos(query)
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    @OptIn(ExperimentalCoroutinesApi::class)
-    val playbackHistory: StateFlow<List<com.example.medianest.data.local.entity.HistoryEntity>> = _historyLimit.flatMapLatest { limit ->
-        historyDao.getHistoryPaged(limit)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    val playbackHistory: StateFlow<List<com.example.medianest.data.local.entity.HistoryEntity>> = historyDao.getAllHistory()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val favoriteVideos: StateFlow<List<VideoEntity>> = combine(_uiState, _searchQuery, _favoritesLimit) { state, query, limit ->
@@ -354,10 +358,10 @@ class LibraryViewModel @Inject constructor(
     }
 
     fun setTab(tab: LibraryTab) {
-        _historyLimit.value = 50
-        _favoritesLimit.value = 50
-        _folderVideosLimit.value = 50
-        _watchedLimit.value = 50
+        _historyLimit.value = 10
+        _favoritesLimit.value = 10
+        _folderVideosLimit.value = 10
+        _watchedLimit.value = 10
         _uiState.value = _uiState.value.copy(currentTab = tab, selectedFolder = null)
     }
 
@@ -392,12 +396,12 @@ class LibraryViewModel @Inject constructor(
     }
 
     fun selectFolder(folder: FolderEntity) {
-        _folderVideosLimit.value = 50
+        _folderVideosLimit.value = 10
         _uiState.value = _uiState.value.copy(currentTab = LibraryTab.FOLDERS, selectedFolder = folder)
     }
 
     fun navigateBackFromFolder() {
-        _folderVideosLimit.value = 50
+        _folderVideosLimit.value = 10
         val currentFolder = _uiState.value.selectedFolder
         if (currentFolder?.parentId != null) {
             viewModelScope.launch {

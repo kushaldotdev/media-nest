@@ -53,6 +53,7 @@ import coil.compose.AsyncImage
 import com.example.medianest.data.local.entity.SubscriptionEntity
 import com.example.medianest.data.preferences.SubscriptionsPreferences
 import com.example.medianest.ui.components.GlassCard
+import com.example.medianest.ui.components.EndOfListIndicator
 import com.example.medianest.ui.viewmodel.SubscriptionsViewModel
 import com.example.medianest.ui.viewmodel.ViewMode
 import kotlinx.coroutines.launch
@@ -168,6 +169,9 @@ fun SubscriptionsScreen(
                                 textAlign = TextAlign.Center
                             )
                         }
+                        item(span = { GridItemSpan(maxLineSpan) }) {
+                            EndOfListIndicator()
+                        }
                     }
                 } else {
                     LazyColumn(
@@ -213,6 +217,9 @@ fun SubscriptionsScreen(
                                     .padding(vertical = 8.dp),
                                 textAlign = TextAlign.Center
                             )
+                        }
+                        item {
+                            EndOfListIndicator()
                         }
                     }
                 }
