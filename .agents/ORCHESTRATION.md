@@ -133,8 +133,8 @@ Rules:
 
 ```js
 // blocking wait (use for run-to-completion turns)
-subagent_wait({ id: "<runId>", timeoutMs: 600000 })   // 10 min
-subagent_wait({ all: true, timeoutMs: 600000 })        // wait for all active
+subagent_wait({ id: "<runId>", timeoutMs: 900000 })     // 15 min (worker)
+subagent_wait({ all: true, timeoutMs: 300000 })          // 5-min heartbeat for monitor loop (§6a)
 ```
 
 ### Inspect status / result
@@ -170,10 +170,26 @@ Artifacts live at:
 
 ## 6. Subagent budget & limits
 
-- **Time budget:** `timeoutMs: 600000` (10 min) per subagent.
-- **Turn budget:** ~15 turns. If a worker loops, interrupt it and retry with a
-  more precise prompt.
-- **Max concurrent writers:** default ~5; see §5 for the build caveat.
+- **Time budget — raise the defaults, don't starve deep work.** Set a generous
+  `timeoutMs` on the workflow itself (not just the child):
+  - **Workers (edit + build):** `timeoutMs: 900000` (15 min) per child, and give
+    the **parent `workflowScript` at least 1.5× the longest child** (e.g.
+    `timeoutMs: 1500000`) so the orchestrator never kills children before they
+    flush their report.
+  - **Reviewers / researchers (read-only, deep thinking):** `timeoutMs: 1500000`
+    (25 min) per child; parent `workflowScript` `timeoutMs: 1800000` (30 min).
+    A 10-min parent cap is what silently truncated a 5-reviewer wave mid-flight —
+    the parent timed out, the children's final outputs never flushed, and their
+    result artifacts landed empty (0 bytes).
+  - **Never let the parent `workflowScript` timeout be smaller than or equal to
+    the child timeout.** Parent must be the *largest* number in the graph.
+- **Turn budget:** ~15 turns is a *soft* signal, not a hard wall. If a subagent is
+  still making forward progress (files read, notes taken, last activity recent),
+  let it run past the turn count — do not interrupt a productive agent. Interrupt
+  only on a genuine loop (same tool call repeated, no new state, last activity
+  stale).
+- **Max concurrent writers:** default ~5; see §5 for the build caveat. Read-only
+  reviewer/researcher waves can run wider (they share no Gradle daemon).
 - When two workers share a file, tell each worker which region/concern it owns,
   and warn it not to touch the other region. The orchestrator then treats the
   merge of that file as conflict-prone and reconciles via one fixup worker.
@@ -183,6 +199,25 @@ Artifacts live at:
   - a **"Do NOT run git add/commit/push"** instruction,
   - the **mandatory reads** (spec files),
   - a **"report files changed + diff summary + BUILD SUCCESSFUL"** instruction.
+
+### 6a. Monitor-and-nudge loop (check every 5 minutes)
+
+Do **not** fire-and-forget a wave. Act as a supervisor with a 5-minute heartbeat:
+
+1. After launching a wave, `subagent_wait({ all: true, timeoutMs: 300000 })` —
+   this blocks ~5 min and returns either on completion or on timeout.
+2. On timeout, `subagent({ action: "status", id: "<runId>" })` and read each
+   child's `last activity` + state.
+3. **Nudge when a child is off-path, stalled, or erroring:**
+   - Off-path: `subagent({ action: "steer", id, index, message: "<correction>" })`.
+   - Stalled > 5 min (no recent activity) but alive: steer with a reminder of the
+     remaining checklist and the required output format.
+   - Errored/failed: check its output artifact; if empty, relaunch that one
+     concern fresh (not the whole wave) with a longer parent timeout.
+4. Repeat steps 1–3 until every child is `completed` (or `failed` with a captured
+   report). Read `results[0].output` / the per-child output artifact for the text.
+5. Track a 4-column table (child / state / last activity / action) so you can
+   report progress on demand and never lose a finished child's result.
 
 ---
 
@@ -226,6 +261,7 @@ Artifacts live at:
 | `local.properties` is gitignored | `cp` it into every new worktree. |
 | Concurrent full Gradle builds OOM (7.8 GB) | Compile-only gate in worktrees (§3); one serial full build on main. |
 | `workflowScript` SyntaxError from escaped backslashes/quotes | Build task text with `array.join("\n")`; avoid raw backtick template literals; prefer `build-debug.bat -nopause` (no backslashes) over the `set JAVA_HOME=...` form in prompts. |
+| Parent workflow times out before children finish → children's outputs lost (empty artifacts) | Raise parent `workflowScript` `timeoutMs` above every child (§6). Restart only the unfinished concerns fresh, never the whole wave. |
 | `git merge --no-ff` → `fatal: stash failed` | Retry the merge (transient). |
 | (removed) Review subagent "no edits" acceptance flags | No longer applies — use `agent: "reviewer"`, which is read-only by design. |
 
