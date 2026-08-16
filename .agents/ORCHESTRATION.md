@@ -133,7 +133,7 @@ Rules:
 
 ```js
 // blocking wait (use for run-to-completion turns)
-subagent_wait({ id: "<runId>", timeoutMs: 900000 })     // 15 min (worker)
+subagent_wait({ id: "<runId>", timeoutMs: 1500000 })    // 25 min (worker)
 subagent_wait({ all: true, timeoutMs: 300000 })          // 5-min heartbeat for monitor loop (§6a)
 ```
 
@@ -171,18 +171,23 @@ Artifacts live at:
 ## 6. Subagent budget & limits
 
 - **Time budget — raise the defaults, don't starve deep work.** Set a generous
-  `timeoutMs` on the workflow itself (not just the child):
-  - **Workers (edit + build):** `timeoutMs: 900000` (15 min) per child, and give
-    the **parent `workflowScript` at least 1.5× the longest child** (e.g.
-    `timeoutMs: 1500000`) so the orchestrator never kills children before they
-    flush their report.
-  - **Reviewers / researchers (read-only, deep thinking):** `timeoutMs: 1500000`
-    (25 min) per child; parent `workflowScript` `timeoutMs: 1800000` (30 min).
-    A 10-min parent cap is what silently truncated a 5-reviewer wave mid-flight —
-    the parent timed out, the children's final outputs never flushed, and their
-    result artifacts landed empty (0 bytes).
-  - **Never let the parent `workflowScript` timeout be smaller than or equal to
-    the child timeout.** Parent must be the *largest* number in the graph.
+  `timeoutMs` on the workflow itself (not just the child). These numbers are
+  **calibrated from observed runs** (a 4-reviewer wave recorded child durations
+  of 11.7 / 14.7 / 17.5 / **25.0 min** — the slowest child finished exactly at
+  the 25-min ceiling, so do NOT go lower):
+  - **Workers (edit + build):** `timeoutMs: 1500000` (25 min) per child. A worker
+    that builds often needs read → edit → build → fix → rebuild cycles, and a
+    cold compile-only build alone is ~4–5 min. 15 min is too tight for two
+    compile-fix rounds.
+  - **Reviewers / researchers (read-only, deep thinking):** `timeoutMs: 2400000`
+    (40 min) per child — the 25-min tail is at the ceiling, not comfortably
+    inside it.
+  - **Parent `workflowScript` must be the LARGEST number in the graph:** give it
+    ~1.5× the longest child (e.g. workers `1500000` → parent `2250000`;
+    reviewers `2400000` → parent `3600000`). A parent cap ≤ the child cap is
+    what silently truncated the first 5-reviewer wave: the parent timed out,
+    children's final outputs never flushed, and their result artifacts landed
+    empty (0 bytes).
 - **Turn budget:** ~15 turns is a *soft* signal, not a hard wall. If a subagent is
   still making forward progress (files read, notes taken, last activity recent),
   let it run past the turn count — do not interrupt a productive agent. Interrupt
