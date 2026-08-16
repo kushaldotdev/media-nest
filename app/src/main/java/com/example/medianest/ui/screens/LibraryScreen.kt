@@ -215,12 +215,12 @@ fun LibraryScreen(
                         Box(
                             modifier = Modifier
                                 .clip(RoundedCornerShape(50))
-                                .background(if (isSelected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
+                                .background(if (isSelected) MediaNestColors.AccentDeep else Color.Transparent)
                                 .padding(horizontal = 16.dp, vertical = 8.dp)
                         ) {
                             Text(
                                 tabLabels[index],
-                                color = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
+                                color = if (isSelected) MediaNestColors.TextPrimary else MaterialTheme.colorScheme.onSurface,
                                 style = MaterialTheme.typography.labelLarge
                             )
                         }
@@ -853,6 +853,7 @@ private fun VideoListLayout(
                     playbackProgressFraction = progressFraction,
                     watchCount = video.watchCount,
                     folders = videoFolderMap[video.id] ?: emptyList(),
+                    mediaType = video.mediaType,
                     config = VideoCardConfig(
                         showFavoriteButton = !isSelectionMode,
                         showMoveToFolderButton = !isSelectionMode,
@@ -861,7 +862,8 @@ private fun VideoListLayout(
                         showFolderBadges = true,
                         showPlaybackProgress = true,
                         showDownloadedBadge = true,
-                        showMarkWatchedButton = !isSelectionMode
+                        showMarkWatchedButton = !isSelectionMode,
+                        showMediaTypeBadge = true
                     ),
                     onClick = { if (isSelectionMode) onToggleSelection(video.id) else onVideoClick(video.id) },
                     onLongClick = { onVideoLongClick(video.id) },
@@ -931,6 +933,7 @@ private fun VideoListLayout(
                     playbackProgressFraction = progressFraction,
                     watchCount = video.watchCount,
                     folders = videoFolderMap[video.id] ?: emptyList(),
+                    mediaType = video.mediaType,
                     config = VideoCardConfig(
                         showFavoriteButton = !isSelectionMode,
                         showMoveToFolderButton = !isSelectionMode,
@@ -939,7 +942,8 @@ private fun VideoListLayout(
                         showFolderBadges = true,
                         showPlaybackProgress = true,
                         showDownloadedBadge = true,
-                        showMarkWatchedButton = !isSelectionMode
+                        showMarkWatchedButton = !isSelectionMode,
+                        showMediaTypeBadge = true
                     ),
                     onClick = { if (isSelectionMode) onToggleSelection(video.id) else onVideoClick(video.id) },
                     onLongClick = { onVideoLongClick(video.id) },
@@ -1119,6 +1123,7 @@ private fun FolderContent(
                                     playbackProgressFraction = progressFraction,
                                     watchCount = video.watchCount,
                                     folders = videoFolderMap[video.id] ?: emptyList(),
+                                    mediaType = video.mediaType,
                                     config = VideoCardConfig(
                                         showFavoriteButton = !isSelectionMode,
                                         showMoveToFolderButton = !isSelectionMode,
@@ -1128,7 +1133,8 @@ private fun FolderContent(
                                         showFolderBadges = true,
                                         showPlaybackProgress = true,
                                         showDownloadedBadge = true,
-                                        showMarkWatchedButton = !isSelectionMode
+                                        showMarkWatchedButton = !isSelectionMode,
+                                        showMediaTypeBadge = true
                                     ),
                                     onClick = { if (isSelectionMode) onToggleSelection(video.id) else onVideoClick(video.id) },
                                     onLongClick = { onVideoLongClick(video.id) },
@@ -1175,6 +1181,7 @@ private fun FolderContent(
                                     playbackProgressFraction = progressFraction,
                                     watchCount = video.watchCount,
                                     folders = videoFolderMap[video.id] ?: emptyList(),
+                                    mediaType = video.mediaType,
                                     config = VideoCardConfig(
                                         showFavoriteButton = !isSelectionMode,
                                         showMoveToFolderButton = !isSelectionMode,
@@ -1184,7 +1191,8 @@ private fun FolderContent(
                                         showFolderBadges = true,
                                         showPlaybackProgress = true,
                                         showDownloadedBadge = true,
-                                        showMarkWatchedButton = !isSelectionMode
+                                        showMarkWatchedButton = !isSelectionMode,
+                                        showMediaTypeBadge = true
                                     ),
                                     onClick = { if (isSelectionMode) onToggleSelection(video.id) else onVideoClick(video.id) },
                                     onLongClick = { onVideoLongClick(video.id) },

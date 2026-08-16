@@ -19,6 +19,7 @@ object MediaNestColors {
     val ProgressTrack = Color(0xFF54333C)
     val PlayerSurface = Color(0xFF090506)
     val OnAccent = Color(0xFF3A0B12)
+    val AudioDownload = Color(0xFFFF9800)
 }
 
 object MediaNestSemanticColors {

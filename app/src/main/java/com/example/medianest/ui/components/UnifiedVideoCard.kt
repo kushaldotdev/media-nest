@@ -29,7 +29,6 @@ import com.example.medianest.data.local.entity.DownloadEntity
 import com.example.medianest.data.model.ExtractedVideoInfo
 import com.example.medianest.data.model.StreamSource
 import com.example.medianest.ui.theme.MediaNestColors
-import com.example.medianest.ui.theme.MediaNestSemanticColors
 
 /**
  * Configuration options for displaying optional features on the unified video card.
@@ -191,55 +190,49 @@ fun UnifiedVideoCard(
                     modifier = Modifier.fillMaxSize()
                 )
 
-                // Green Downloaded badge - TOP LEFT corner on thumbnail
+                // Green Downloaded badge - TOP RIGHT corner on thumbnail
                 if (config.showDownloadedBadge && isDownloaded) {
                     Icon(
                         imageVector = Icons.Default.CheckCircle,
                         contentDescription = "Downloaded",
                         tint = MediaNestColors.Success,
                         modifier = Modifier
-                            .align(Alignment.TopStart)
-                            .padding(8.dp)
-                            .size(24.dp)
+                            .align(Alignment.TopEnd)
+                            .padding(6.dp)
+                            .size(20.dp)
                             .background(MediaNestColors.PlayerSurface.copy(alpha = 0.6f), RoundedCornerShape(50))
                     )
                 }
 
-                // Media type badge - BOTTOM LEFT corner on thumbnail
+                // Media type badge - TOP LEFT corner on thumbnail
                 if (config.showMediaTypeBadge) {
                     val isAudio = mediaType.equals("AUDIO", ignoreCase = true)
-                    Row(
+                    Box(
                         modifier = Modifier
-                            .align(Alignment.BottomStart)
-                            .padding(8.dp)
+                            .align(Alignment.TopStart)
+                            .padding(6.dp)
                             .background(
                                 color = if (isAudio) MediaNestColors.AccentDeep.copy(alpha = 0.85f) else MediaNestColors.PlayerSurface.copy(alpha = 0.7f),
                                 shape = RoundedCornerShape(4.dp)
                             )
-                            .padding(horizontal = 4.dp, vertical = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(2.dp)
+                            .padding(3.dp),
+                        contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = if (isAudio) Icons.Default.AudioFile else Icons.Default.Videocam,
-                            contentDescription = if (isAudio) "AUDIO" else "VIDEO",
+                            contentDescription = if (isAudio) "Audio" else "Video",
                             tint = MediaNestColors.TextPrimary,
-                            modifier = Modifier.size(12.dp)
-                        )
-                        Text(
-                            text = if (isAudio) "AUDIO" else "VIDEO",
-                            color = MediaNestColors.TextPrimary,
-                            style = MaterialTheme.typography.labelSmall
+                            modifier = Modifier.size(14.dp)
                         )
                     }
                 }
 
-                // Eye icon with view count - TOP RIGHT corner on thumbnail
+                // Eye icon with view count - BOTTOM LEFT corner on thumbnail
                 if (watchCount > 0) {
                     Row(
                         modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(8.dp)
+                            .align(Alignment.BottomStart)
+                            .padding(6.dp)
                             .background(
                                 color = MediaNestColors.PlayerSurface.copy(alpha = 0.6f),
                                 shape = RoundedCornerShape(4.dp)
@@ -374,7 +367,7 @@ fun UnifiedVideoCard(
                                 Icon(
                                     imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Outlined.FavoriteBorder,
                                     contentDescription = "Favorite",
-                                    tint = if (isFavorite) MediaNestColors.YouTubeRed else MaterialTheme.colorScheme.onSurfaceVariant
+                                    tint = if (isFavorite) MediaNestColors.Accent else MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
@@ -496,54 +489,48 @@ fun UnifiedVideoRow(
                         modifier = Modifier.fillMaxSize()
                     )
 
-                    // Green Downloaded badge - TOP LEFT corner on thumbnail
+                    // Green Downloaded badge - TOP RIGHT corner on thumbnail
                     if (config.showDownloadedBadge && isDownloaded) {
                         Icon(
                             imageVector = Icons.Default.CheckCircle,
                             contentDescription = "Downloaded",
                             tint = MediaNestColors.Success,
                             modifier = Modifier
-                                .align(Alignment.TopStart)
+                                .align(Alignment.TopEnd)
                                 .padding(4.dp)
                                 .size(16.dp)
                                 .background(MediaNestColors.PlayerSurface.copy(alpha = 0.6f), RoundedCornerShape(50))
                         )
                     }
 
-                    // Media type badge - BOTTOM LEFT corner on thumbnail
+                    // Media type badge - TOP LEFT corner on thumbnail
                     if (config.showMediaTypeBadge) {
                         val isAudio = mediaType.equals("AUDIO", ignoreCase = true)
-                        Row(
+                        Box(
                             modifier = Modifier
-                                .align(Alignment.BottomStart)
+                                .align(Alignment.TopStart)
                                 .padding(4.dp)
                                 .background(
                                     color = if (isAudio) MediaNestColors.AccentDeep.copy(alpha = 0.85f) else MediaNestColors.PlayerSurface.copy(alpha = 0.7f),
                                     shape = RoundedCornerShape(4.dp)
                                 )
-                                .padding(horizontal = 4.dp, vertical = 1.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(2.dp)
+                                .padding(2.dp),
+                            contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = if (isAudio) Icons.Default.AudioFile else Icons.Default.Videocam,
-                                contentDescription = if (isAudio) "AUDIO" else "VIDEO",
+                                contentDescription = if (isAudio) "Audio" else "Video",
                                 tint = MediaNestColors.TextPrimary,
-                                modifier = Modifier.size(10.dp)
-                            )
-                            Text(
-                                text = if (isAudio) "AUDIO" else "VIDEO",
-                                color = MediaNestColors.TextPrimary,
-                                style = MaterialTheme.typography.labelSmall
+                                modifier = Modifier.size(12.dp)
                             )
                         }
                     }
 
-                    // Eye icon with view count - TOP RIGHT corner on thumbnail
+                    // Eye icon with view count - BOTTOM LEFT corner on thumbnail
                     if (watchCount > 0) {
                         Row(
                             modifier = Modifier
-                                .align(Alignment.TopEnd)
+                                .align(Alignment.BottomStart)
                                 .padding(4.dp)
                                 .background(
                                     color = MediaNestColors.PlayerSurface.copy(alpha = 0.6f),
@@ -683,7 +670,7 @@ fun UnifiedVideoRow(
                                 Icon(
                                     imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Outlined.FavoriteBorder,
                                     contentDescription = "Favorite",
-                                    tint = if (isFavorite) MediaNestColors.YouTubeRed else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    tint = if (isFavorite) MediaNestColors.Accent else MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(20.dp)
                                 )
                             }

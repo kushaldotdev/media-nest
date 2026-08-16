@@ -103,6 +103,7 @@ class HomeViewModel @Inject constructor(
 
     fun onUrlSubmitted(inputUrl: String) {
         _linkHistoryLimit.value = 10
+        _showShorts.value = false
         val url = inputUrl.trim()
         if (url.isBlank()) {
             _uiState.value = HomeUiState.Error("Please enter a URL")
@@ -507,7 +508,11 @@ class HomeViewModel @Inject constructor(
     val subscriptions: StateFlow<List<com.example.medianest.data.local.entity.SubscriptionEntity>> = subscriptionRepository.getAllSubscriptions()
         .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val defaultResolution: StateFlow<String> = downloadPreferences.defaultResolution
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DownloadPreferences.DEFAULT_RESOLUTION)
+
     private val _linkHistoryLimit = MutableStateFlow(10)
+    val linkHistoryLimit: StateFlow<Int> = _linkHistoryLimit
 
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     val linkHistory: StateFlow<List<LinkHistoryEntity>> = _linkHistoryLimit.flatMapLatest { limit ->

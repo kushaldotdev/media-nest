@@ -12,9 +12,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
@@ -41,6 +41,8 @@ import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -50,11 +52,15 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -67,6 +73,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
+import com.example.medianest.ui.components.EndOfListIndicator
 import com.example.medianest.ui.components.GlassCard
 import com.example.medianest.ui.theme.MediaNestColors
 import com.example.medianest.ui.viewmodel.StatisticsUiState
@@ -81,6 +88,9 @@ fun StatisticsScreen(
     viewModel: StatisticsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    var topVideosLimit by remember { mutableStateOf(10) }
+    var channelsLimit by remember { mutableStateOf(10) }
+    var foldersLimit by remember { mutableStateOf(10) }
 
     Scaffold(
         topBar = {
@@ -109,477 +119,556 @@ fun StatisticsScreen(
                 CircularProgressIndicator(color = MediaNestColors.Accent)
             }
         } else {
-            Column(
+            LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding)
-                    .verticalScroll(rememberScrollState())
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 // Header Banner
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(MediaNestColors.AccentDeep),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Icons.Default.BarChart,
-                            contentDescription = null,
-                            tint = MediaNestColors.Accent,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-                    Spacer(Modifier.width(12.dp))
-                    Column {
-                        Text(
-                            "App Statistics",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onBackground
-                        )
-                        Text(
-                            "Library usage at a glance",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MediaNestColors.TextSecondary
-                        )
-                    }
-                }
-
-                // 1. Overall Engagement & Library Overview
-                StatSectionHeader(
-                    icon = Icons.Default.BarChart,
-                    title = "Overall Engagement",
-                    badge = "${uiState.totalTracked} tracked videos"
-                )
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                item {
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        StatCard(
-                            title = "Tracked Videos",
-                            value = uiState.totalTracked.toString(),
-                            icon = Icons.Default.VideoLibrary,
-                            subtitle = "library items",
-                            modifier = Modifier.weight(1f)
-                        )
-                        StatCard(
-                            title = "Library Ratio",
-                            value = "${uiState.videoRatioPct}% / ${uiState.audioRatioPct}%",
-                            icon = Icons.Default.Audiotrack,
-                            subtitle = "${uiState.videoTrackCount} video · ${uiState.audioTrackCount} audio",
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        StatCard(
-                            title = "Library Completion",
-                            value = "${uiState.completionPct}%",
-                            icon = Icons.Default.CheckCircle,
-                            subtitle = "${uiState.watchedVideos} of ${uiState.totalTracked} watched",
-                            modifier = Modifier.weight(1f)
-                        )
-                        StatCard(
-                            title = "Total Plays",
-                            value = uiState.totalPlayCount.toString(),
-                            icon = Icons.Default.PlayArrow,
-                            subtitle = "sessions recorded",
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        StatCard(
-                            title = "Favorites",
-                            value = uiState.favorites.toString(),
-                            icon = Icons.Default.Favorite,
-                            subtitle = "favorited videos",
-                            modifier = Modifier.weight(1f)
-                        )
-                        StatCard(
-                            title = "Subscriptions",
-                            value = uiState.subCount.toString(),
-                            icon = Icons.Default.Notifications,
-                            subtitle = "${uiState.autoDownloadCount} auto-syncing",
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
-
-                // 2. Engagement & Watch Metrics
-                StatSectionHeader(
-                    icon = Icons.Default.History,
-                    title = "Engagement & Watch Metrics",
-                    badge = "${uiState.sessionsThisWeek} sessions this week"
-                )
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        StatCard(
-                            title = "Total Watch Time",
-                            value = formatWatchTime(uiState.totalWatchTimeMillis),
-                            icon = Icons.Default.History,
-                            subtitle = "cumulative watch time",
-                            modifier = Modifier.weight(1f)
-                        )
-                        StatCard(
-                            title = "Watch This Week",
-                            value = formatWatchTime(uiState.weekWatchTimeMillis),
-                            icon = Icons.Default.AccessTime,
-                            subtitle = "${uiState.sessionsThisWeek} sessions",
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        StatCard(
-                            title = "Average Session",
-                            value = formatWatchTime(uiState.avgSessionMillis),
-                            icon = Icons.Default.PlayArrow,
-                            subtitle = "per playback session",
-                            modifier = Modifier.weight(1f)
-                        )
-                        StatCard(
-                            title = "Longest Session",
-                            value = formatWatchTime(uiState.longestSessionMillis),
-                            icon = Icons.Default.Star,
-                            subtitle = "single longest session",
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
-
-                // 3. Storage Details
-                StatSectionHeader(
-                    icon = Icons.Default.Storage,
-                    title = "Storage Details",
-                    badge = "${formatBytes(uiState.totalDownloadBytes)} on disk"
-                )
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        StatCard(
-                            title = "Total Storage",
-                            value = formatBytes(uiState.totalDownloadBytes),
-                            icon = Icons.Default.Storage,
-                            subtitle = "${uiState.totalDownloadsCount} downloads",
-                            modifier = Modifier.weight(1f)
-                        )
-                        StatCard(
-                            title = "Video Storage",
-                            value = formatBytes(uiState.videoBytes),
-                            icon = Icons.Default.Videocam,
-                            subtitle = "video files",
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        StatCard(
-                            title = "Audio Storage",
-                            value = formatBytes(uiState.audioBytes),
-                            icon = Icons.Default.Audiotrack,
-                            subtitle = "audio files",
-                            modifier = Modifier.weight(1f)
-                        )
-                        StatCard(
-                            title = "Average File Size",
-                            value = formatBytes(uiState.avgFileSizeBytes),
-                            icon = Icons.AutoMirrored.Filled.InsertDriveFile,
-                            subtitle = "per download",
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                    StatCard(
-                        title = "Audio Extractions",
-                        value = uiState.audioExtractionCount.toString(),
-                        icon = Icons.Default.Extension,
-                        subtitle = "extracted tracks",
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-
-                // Storage breakdown progress bars
-                GlassCard(modifier = Modifier.fillMaxWidth()) {
-                    Column(
-                        modifier = Modifier.padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        val totalBytes = uiState.totalDownloadBytes.coerceAtLeast(1L)
-                        StatBarRow(
-                            label = "Video Storage",
-                            count = uiState.videoBytes,
-                            total = totalBytes,
-                            color = MediaNestColors.Accent
-                        )
-                        StatBarRow(
-                            label = "Audio Storage",
-                            count = uiState.audioBytes,
-                            total = totalBytes,
-                            color = MediaNestColors.Success
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        StatTextRow("Completed on disk", formatBytes(uiState.completedBytes))
-                        StatTextRow("Total download footprint", formatBytes(uiState.totalDownloadBytes))
-                    }
-                }
-
-                // 4. Download Health
-                StatSectionHeader(
-                    icon = Icons.Default.CheckCircle,
-                    title = "Download Health",
-                    badge = "${uiState.downloadSuccessRate}% success rate"
-                )
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        StatCard(
-                            title = "Success Rate",
-                            value = "${uiState.downloadSuccessRate}%",
-                            icon = Icons.Default.CheckCircle,
-                            subtitle = "${uiState.completedDownloads} completed",
-                            modifier = Modifier.weight(1f)
-                        )
-                        StatCard(
-                            title = "Completed",
-                            value = uiState.completedDownloads.toString(),
-                            icon = Icons.Default.FileDownload,
-                            subtitle = formatBytes(uiState.completedBytes),
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        StatCard(
-                            title = "Active / Queued",
-                            value = uiState.activeDownloads.toString(),
-                            icon = Icons.Default.Sync,
-                            subtitle = "in progress",
-                            modifier = Modifier.weight(1f)
-                        )
-                        StatCard(
-                            title = "Failed / Canceled",
-                            value = (uiState.failedDownloads + uiState.canceledDownloads).toString(),
-                            icon = Icons.Default.Warning,
-                            subtitle = "unsuccessful",
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
-
-                // 5. Link Extraction Stats
-                StatSectionHeader(
-                    icon = Icons.Default.Link,
-                    title = "Link Extraction",
-                    badge = "${uiState.totalExtractedLinks} total extracted links"
-                )
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        StatCard(
-                            title = "Extracted Links",
-                            value = uiState.totalExtractedLinks.toString(),
-                            icon = Icons.Default.Link,
-                            subtitle = "in link history",
-                            modifier = Modifier.weight(1f)
-                        )
-                        StatCard(
-                            title = "Video Links",
-                            value = uiState.videoLinksCount.toString(),
-                            icon = Icons.Default.PlayCircle,
-                            subtitle = "single videos",
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        StatCard(
-                            title = "Playlist Links",
-                            value = uiState.playlistLinksCount.toString(),
-                            icon = Icons.AutoMirrored.Filled.PlaylistPlay,
-                            subtitle = "playlists",
-                            modifier = Modifier.weight(1f)
-                        )
-                        StatCard(
-                            title = "Channel Links",
-                            value = uiState.channelLinksCount.toString(),
-                            icon = Icons.Default.AccountCircle,
-                            subtitle = "channels",
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
-
-                // 6. Subscriptions & Folders
-                StatSectionHeader(
-                    icon = Icons.Default.Folder,
-                    title = "Subscriptions & Folders",
-                    badge = "${uiState.subCount} subs · ${uiState.totalFolders} folders"
-                )
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        StatCard(
-                            title = "Subscriptions",
-                            value = uiState.subCount.toString(),
-                            icon = Icons.Default.Notifications,
-                            subtitle = "channels & playlists",
-                            modifier = Modifier.weight(1f)
-                        )
-                        StatCard(
-                            title = "Auto-Downloads",
-                            value = uiState.autoDownloadCount.toString(),
-                            icon = Icons.Default.Sync,
-                            subtitle = "auto-sync enabled",
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                    StatCard(
-                        title = "Total Folders",
-                        value = uiState.totalFolders.toString(),
-                        icon = Icons.Default.Folder,
-                        subtitle = "organized folders",
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-
-                // 7. Top Content
-                StatSectionHeader(
-                    icon = Icons.Default.Star,
-                    title = "Top Content",
-                    badge = if (uiState.topVideos.isNotEmpty()) "${uiState.topVideos.size} most played" else null
-                )
-                if (uiState.topVideos.isEmpty()) {
-                    GlassCard(modifier = Modifier.fillMaxWidth()) {
-                        Column(
+                        Box(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(24.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
+                                .size(40.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(MediaNestColors.AccentDeep),
+                            contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                Icons.Default.Star,
+                                Icons.Default.BarChart,
                                 contentDescription = null,
                                 tint = MediaNestColors.Accent,
-                                modifier = Modifier.size(32.dp)
+                                modifier = Modifier.size(24.dp)
                             )
-                            Spacer(Modifier.height(8.dp))
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column {
                             Text(
-                                "No plays yet",
+                                "App Statistics",
                                 style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onBackground
                             )
-                            Spacer(Modifier.height(4.dp))
                             Text(
-                                "Play some videos to populate your top content.",
+                                "Library usage at a glance",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MediaNestColors.TextSecondary
                             )
                         }
                     }
-                } else {
+                }
+
+                // 1. Overall Engagement & Library Overview
+                item {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        uiState.topVideos.forEachIndexed { index, video ->
-                            TopVideoCard(video = video, rank = index + 1)
+                        StatSectionHeader(
+                            icon = Icons.Default.BarChart,
+                            title = "Overall Engagement",
+                            badge = "${uiState.totalTracked} tracked videos"
+                        )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            StatCard(
+                                title = "Tracked Videos",
+                                value = uiState.totalTracked.toString(),
+                                icon = Icons.Default.VideoLibrary,
+                                subtitle = "library items",
+                                modifier = Modifier.weight(1f)
+                            )
+                            StatCard(
+                                title = "Library Ratio",
+                                value = "${uiState.videoRatioPct}% / ${uiState.audioRatioPct}%",
+                                icon = Icons.Default.Audiotrack,
+                                subtitle = "${uiState.videoTrackCount} video · ${uiState.audioTrackCount} audio",
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            StatCard(
+                                title = "Library Completion",
+                                value = "${uiState.completionPct}%",
+                                icon = Icons.Default.CheckCircle,
+                                subtitle = "${uiState.watchedVideos} of ${uiState.totalTracked} watched",
+                                modifier = Modifier.weight(1f)
+                            )
+                            StatCard(
+                                title = "Total Plays",
+                                value = uiState.totalPlayCount.toString(),
+                                icon = Icons.Default.PlayArrow,
+                                subtitle = "sessions recorded",
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            StatCard(
+                                title = "Favorites",
+                                value = uiState.favorites.toString(),
+                                icon = Icons.Default.Favorite,
+                                subtitle = "favorited videos",
+                                modifier = Modifier.weight(1f)
+                            )
+                            StatCard(
+                                title = "Subscriptions",
+                                value = uiState.subCount.toString(),
+                                icon = Icons.Default.Notifications,
+                                subtitle = "${uiState.autoDownloadCount} auto-syncing",
+                                modifier = Modifier.weight(1f)
+                            )
                         }
                     }
                 }
 
-                // 8. Breakdown by Resolution
-                if (uiState.resolutionMap.isNotEmpty()) {
-                    StatSectionHeader(
-                        icon = Icons.Default.HighQuality,
-                        title = "By Resolution",
-                        badge = "${uiState.resolutionMap.size} qualities"
-                    )
-                    GlassCard(modifier = Modifier.fillMaxWidth()) {
-                        Column(
-                            modifier = Modifier.padding(14.dp),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                // 2. Engagement & Watch Metrics
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        StatSectionHeader(
+                            icon = Icons.Default.History,
+                            title = "Engagement & Watch Metrics",
+                            badge = "${uiState.sessionsThisWeek} sessions this week"
+                        )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            val total = uiState.resolutionMap.values.sum().coerceAtLeast(1)
-                            uiState.resolutionMap.entries.sortedByDescending { it.value }.forEach { (quality, count) ->
+                            StatCard(
+                                title = "Total Watch Time",
+                                value = formatWatchTime(uiState.totalWatchTimeMillis),
+                                icon = Icons.Default.History,
+                                subtitle = "cumulative watch time",
+                                modifier = Modifier.weight(1f)
+                            )
+                            StatCard(
+                                title = "Watch This Week",
+                                value = formatWatchTime(uiState.weekWatchTimeMillis),
+                                icon = Icons.Default.AccessTime,
+                                subtitle = "${uiState.sessionsThisWeek} sessions",
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            StatCard(
+                                title = "Average Session",
+                                value = formatWatchTime(uiState.avgSessionMillis),
+                                icon = Icons.Default.PlayArrow,
+                                subtitle = "per playback session",
+                                modifier = Modifier.weight(1f)
+                            )
+                            StatCard(
+                                title = "Longest Session",
+                                value = formatWatchTime(uiState.longestSessionMillis),
+                                icon = Icons.Default.Star,
+                                subtitle = "single longest session",
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
+
+                // 3. Storage Details
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        StatSectionHeader(
+                            icon = Icons.Default.Storage,
+                            title = "Storage Details",
+                            badge = "${formatBytes(uiState.totalDownloadBytes)} on disk"
+                        )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            StatCard(
+                                title = "Total Storage",
+                                value = formatBytes(uiState.totalDownloadBytes),
+                                icon = Icons.Default.Storage,
+                                subtitle = "${uiState.totalDownloadsCount} downloads",
+                                modifier = Modifier.weight(1f)
+                            )
+                            StatCard(
+                                title = "Video Storage",
+                                value = formatBytes(uiState.videoBytes),
+                                icon = Icons.Default.Videocam,
+                                subtitle = "video files",
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            StatCard(
+                                title = "Audio Storage",
+                                value = formatBytes(uiState.audioBytes),
+                                icon = Icons.Default.Audiotrack,
+                                subtitle = "audio files",
+                                modifier = Modifier.weight(1f)
+                            )
+                            StatCard(
+                                title = "Average File Size",
+                                value = formatBytes(uiState.avgFileSizeBytes),
+                                icon = Icons.AutoMirrored.Filled.InsertDriveFile,
+                                subtitle = "per download",
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                        StatCard(
+                            title = "Audio Extractions",
+                            value = uiState.audioExtractionCount.toString(),
+                            icon = Icons.Default.Extension,
+                            subtitle = "extracted tracks",
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        // Storage breakdown progress bars
+                        GlassCard(modifier = Modifier.fillMaxWidth()) {
+                            Column(
+                                modifier = Modifier.padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                val totalBytes = uiState.totalDownloadBytes.coerceAtLeast(1L)
                                 StatBarRow(
-                                    label = quality,
-                                    count = count.toLong(),
-                                    total = total.toLong(),
-                                    color = if (quality.equals("Audio", ignoreCase = true)) MediaNestColors.Success else MediaNestColors.Accent
+                                    label = "Video Storage",
+                                    count = uiState.videoBytes,
+                                    total = totalBytes,
+                                    color = MediaNestColors.Accent
+                                )
+                                StatBarRow(
+                                    label = "Audio Storage",
+                                    count = uiState.audioBytes,
+                                    total = totalBytes,
+                                    color = MediaNestColors.Success
+                                )
+                                Spacer(Modifier.height(4.dp))
+                                StatTextRow("Completed on disk", formatBytes(uiState.completedBytes))
+                                StatTextRow("Total download footprint", formatBytes(uiState.totalDownloadBytes))
+                            }
+                        }
+                    }
+                }
+
+                // 4. Download Health
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        StatSectionHeader(
+                            icon = Icons.Default.CheckCircle,
+                            title = "Download Health",
+                            badge = "${uiState.downloadSuccessRate}% success rate"
+                        )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            StatCard(
+                                title = "Success Rate",
+                                value = "${uiState.downloadSuccessRate}%",
+                                icon = Icons.Default.CheckCircle,
+                                subtitle = "${uiState.completedDownloads} completed",
+                                modifier = Modifier.weight(1f)
+                            )
+                            StatCard(
+                                title = "Completed",
+                                value = uiState.completedDownloads.toString(),
+                                icon = Icons.Default.FileDownload,
+                                subtitle = formatBytes(uiState.completedBytes),
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            StatCard(
+                                title = "Active / Queued",
+                                value = uiState.activeDownloads.toString(),
+                                icon = Icons.Default.Sync,
+                                subtitle = "in progress",
+                                modifier = Modifier.weight(1f)
+                            )
+                            StatCard(
+                                title = "Failed / Canceled",
+                                value = (uiState.failedDownloads + uiState.canceledDownloads).toString(),
+                                icon = Icons.Default.Warning,
+                                subtitle = "unsuccessful",
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
+
+                // 5. Link Extraction Stats
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        StatSectionHeader(
+                            icon = Icons.Default.Link,
+                            title = "Link Extraction",
+                            badge = "${uiState.totalExtractedLinks} total extracted links"
+                        )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            StatCard(
+                                title = "Extracted Links",
+                                value = uiState.totalExtractedLinks.toString(),
+                                icon = Icons.Default.Link,
+                                subtitle = "in link history",
+                                modifier = Modifier.weight(1f)
+                            )
+                            StatCard(
+                                title = "Video Links",
+                                value = uiState.videoLinksCount.toString(),
+                                icon = Icons.Default.PlayCircle,
+                                subtitle = "single videos",
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            StatCard(
+                                title = "Playlist Links",
+                                value = uiState.playlistLinksCount.toString(),
+                                icon = Icons.AutoMirrored.Filled.PlaylistPlay,
+                                subtitle = "playlists",
+                                modifier = Modifier.weight(1f)
+                            )
+                            StatCard(
+                                title = "Channel Links",
+                                value = uiState.channelLinksCount.toString(),
+                                icon = Icons.Default.AccountCircle,
+                                subtitle = "channels",
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
+
+                // 6. Subscriptions & Folders
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        StatSectionHeader(
+                            icon = Icons.Default.Folder,
+                            title = "Subscriptions & Folders",
+                            badge = "${uiState.subCount} subs · ${uiState.totalFolders} folders"
+                        )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            StatCard(
+                                title = "Subscriptions",
+                                value = uiState.subCount.toString(),
+                                icon = Icons.Default.Notifications,
+                                subtitle = "channels & playlists",
+                                modifier = Modifier.weight(1f)
+                            )
+                            StatCard(
+                                title = "Auto-Downloads",
+                                value = uiState.autoDownloadCount.toString(),
+                                icon = Icons.Default.Sync,
+                                subtitle = "auto-sync enabled",
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                        StatCard(
+                            title = "Total Folders",
+                            value = uiState.totalFolders.toString(),
+                            icon = Icons.Default.Folder,
+                            subtitle = "organized folders",
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+
+                // 7. Top Content (Dynamic list with 10-item batching + EndOfListIndicator)
+                item {
+                    StatSectionHeader(
+                        icon = Icons.Default.Star,
+                        title = "Top Content",
+                        badge = if (uiState.topVideos.isNotEmpty()) "${uiState.topVideos.size} most played" else null
+                    )
+                }
+                if (uiState.topVideos.isEmpty()) {
+                    item {
+                        GlassCard(modifier = Modifier.fillMaxWidth()) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Icon(
+                                    Icons.Default.Star,
+                                    contentDescription = null,
+                                    tint = MediaNestColors.Accent,
+                                    modifier = Modifier.size(32.dp)
+                                )
+                                Spacer(Modifier.height(8.dp))
+                                Text(
+                                    "No plays yet",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Spacer(Modifier.height(4.dp))
+                                Text(
+                                    "Play some videos to populate your top content.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MediaNestColors.TextSecondary
                                 )
                             }
                         }
                     }
+                } else {
+                    val displayedTopVideos = uiState.topVideos.take(topVideosLimit)
+                    items(displayedTopVideos, key = { it.id }) { video ->
+                        val rank = uiState.topVideos.indexOf(video) + 1
+                        TopVideoCard(video = video, rank = rank)
+                    }
+                    if (uiState.topVideos.size > topVideosLimit) {
+                        item {
+                            Box(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Button(
+                                    onClick = { topVideosLimit += 10 },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MediaNestColors.Raised,
+                                        contentColor = MediaNestColors.Accent
+                                    )
+                                ) {
+                                    Text("Show more top content (${uiState.topVideos.size - topVideosLimit} remaining)")
+                                }
+                            }
+                        }
+                    } else {
+                        item {
+                            EndOfListIndicator()
+                        }
+                    }
                 }
 
-                // 9. Breakdown by Channel
+                // 8. Breakdown by Resolution (inherently small list: ~5 buckets)
+                if (uiState.resolutionMap.isNotEmpty()) {
+                    item {
+                        StatSectionHeader(
+                            icon = Icons.Default.HighQuality,
+                            title = "By Resolution",
+                            badge = "${uiState.resolutionMap.size} qualities"
+                        )
+                        GlassCard(modifier = Modifier.fillMaxWidth()) {
+                            Column(
+                                modifier = Modifier.padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                val total = uiState.resolutionMap.values.sum().coerceAtLeast(1)
+                                uiState.resolutionMap.entries.sortedByDescending { it.value }.forEach { (quality, count) ->
+                                    StatBarRow(
+                                        label = quality,
+                                        count = count.toLong(),
+                                        total = total.toLong(),
+                                        color = if (quality.equals("Audio", ignoreCase = true)) MediaNestColors.Success else MediaNestColors.Accent
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 9. Breakdown by Channel (Dynamic breakdown with 10-item batching + EndOfListIndicator)
                 if (uiState.channelMap.isNotEmpty()) {
-                    StatSectionHeader(
-                        icon = Icons.Default.AccountCircle,
-                        title = "By Channel",
-                        badge = "${uiState.channelMap.size} channels"
-                    )
-                    GlassCard(modifier = Modifier.fillMaxWidth()) {
-                        Column(
-                            modifier = Modifier.padding(14.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            uiState.channelMap.entries.sortedByDescending { it.value }.take(10).forEach { (channel, count) ->
-                                StatTextRow(channel, "$count videos")
+                    item {
+                        StatSectionHeader(
+                            icon = Icons.Default.AccountCircle,
+                            title = "By Channel",
+                            badge = "${uiState.channelMap.size} channels"
+                        )
+                        GlassCard(modifier = Modifier.fillMaxWidth()) {
+                            Column(
+                                modifier = Modifier.padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                val sortedChannels = remember(uiState.channelMap) {
+                                    uiState.channelMap.entries.sortedByDescending { it.value }
+                                }
+                                sortedChannels.take(channelsLimit).forEach { (channel, count) ->
+                                    StatTextRow(channel, "$count videos")
+                                }
+                                if (sortedChannels.size > channelsLimit) {
+                                    TextButton(
+                                        onClick = { channelsLimit += 10 },
+                                        modifier = Modifier.align(Alignment.CenterHorizontally)
+                                    ) {
+                                        Text(
+                                            "Show more channels (${sortedChannels.size - channelsLimit} remaining)",
+                                            color = MediaNestColors.Accent
+                                        )
+                                    }
+                                } else {
+                                    EndOfListIndicator()
+                                }
                             }
                         }
                     }
                 }
 
-                // 10. Breakdown by Folder
+                // 10. Breakdown by Folder (Dynamic breakdown with 10-item batching + EndOfListIndicator)
                 if (uiState.folderMap.isNotEmpty()) {
-                    StatSectionHeader(
-                        icon = Icons.Default.Folder,
-                        title = "By Folder",
-                        badge = "${uiState.folderMap.size} folders"
-                    )
-                    GlassCard(modifier = Modifier.fillMaxWidth()) {
-                        Column(
-                            modifier = Modifier.padding(14.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            uiState.folderMap.entries.sortedByDescending { it.value }.forEach { (folderName, count) ->
-                                StatTextRow(folderName, "$count items")
+                    item {
+                        StatSectionHeader(
+                            icon = Icons.Default.Folder,
+                            title = "By Folder",
+                            badge = "${uiState.folderMap.size} folders"
+                        )
+                        GlassCard(modifier = Modifier.fillMaxWidth()) {
+                            Column(
+                                modifier = Modifier.padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                val sortedFolders = remember(uiState.folderMap) {
+                                    uiState.folderMap.entries.sortedByDescending { it.value }
+                                }
+                                sortedFolders.take(foldersLimit).forEach { (folderName, count) ->
+                                    StatTextRow(folderName, "$count items")
+                                }
+                                if (sortedFolders.size > foldersLimit) {
+                                    TextButton(
+                                        onClick = { foldersLimit += 10 },
+                                        modifier = Modifier.align(Alignment.CenterHorizontally)
+                                    ) {
+                                        Text(
+                                            "Show more folders (${sortedFolders.size - foldersLimit} remaining)",
+                                            color = MediaNestColors.Accent
+                                        )
+                                    }
+                                } else {
+                                    EndOfListIndicator()
+                                }
                             }
                         }
                     }
                 }
 
-                Spacer(Modifier.height(24.dp))
+                item {
+                    Spacer(Modifier.height(24.dp))
+                }
             }
         }
     }

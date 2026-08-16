@@ -1085,7 +1085,7 @@ private fun DownloadItem(
                 val msg = download.errorMessage ?: ""
                 val trackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
                 val videoColor = MaterialTheme.colorScheme.primary
-                val audioColor = MaterialTheme.colorScheme.tertiary
+                val audioColor = MediaNestColors.AudioDownload
                 val mergeColor = MediaNestColors.Success
 
                 if (msg == "merging") {

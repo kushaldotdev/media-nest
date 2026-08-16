@@ -102,6 +102,8 @@ fun HomeScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val subscriptions by viewModel.subscriptions.collectAsStateWithLifecycle()
     val linkHistory by viewModel.linkHistory.collectAsStateWithLifecycle()
+    val linkHistoryLimit by viewModel.linkHistoryLimit.collectAsStateWithLifecycle()
+    val defaultResolution by viewModel.defaultResolution.collectAsStateWithLifecycle()
     val showShorts by viewModel.showShorts.collectAsStateWithLifecycle()
     val favoriteVideoIds by viewModel.favoriteVideoIds.collectAsStateWithLifecycle()
     val folders by viewModel.folders.collectAsStateWithLifecycle()
@@ -123,6 +125,7 @@ fun HomeScreen(
 
     var showMoveToFolderDialog by remember { mutableStateOf(false) }
     var showClearHistoryDialog by remember { mutableStateOf(false) }
+    var historyItemToDelete by remember { mutableStateOf<com.example.medianest.data.local.entity.LinkHistoryEntity?>(null) }
     var videoToMove by remember { mutableStateOf<ExtractedVideoInfo?>(null) }
     var expandedDownloadVideoId by remember { mutableStateOf<String?>(null) }
 
@@ -627,7 +630,7 @@ fun HomeScreen(
                             }
                         },
                         onDelete = {
-                            viewModel.deleteHistoryItem(item.url)
+                            historyItemToDelete = item
                         },
                         onReExtract = {
                             urlInput = item.url
@@ -637,8 +640,10 @@ fun HomeScreen(
                         }
                     )
                 }
-                item {
-                    EndOfListIndicator()
+                if (linkHistory.size < linkHistoryLimit) {
+                    item {
+                        EndOfListIndicator()
+                    }
                 }
             }
 
@@ -646,6 +651,33 @@ fun HomeScreen(
                 Spacer(Modifier.height(72.dp))
             }
         }
+    }
+
+    if (historyItemToDelete != null) {
+        val itemToDelete = historyItemToDelete
+        AlertDialog(
+            onDismissRequest = { historyItemToDelete = null },
+            title = { Text("Delete history item") },
+            text = { Text("Remove this link from your history?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        itemToDelete?.let { viewModel.deleteHistoryItem(it.url) }
+                        historyItemToDelete = null
+                        coroutineScope.launch {
+                            snackbarHostState.showSnackbar("History item removed")
+                        }
+                    }
+                ) {
+                    Text("Delete", color = MediaNestColors.Destructive)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { historyItemToDelete = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 
     if (showClearHistoryDialog) {
@@ -717,7 +749,7 @@ fun HomeScreen(
 
     if (showBulkQualityDialog) {
         val qualities = listOf("1080p", "720p", "480p", "360p", "Audio")
-        var selectedQuality by remember { mutableStateOf("720p") }
+        var selectedQuality by remember(defaultResolution) { mutableStateOf(defaultResolution) }
         AlertDialog(
             onDismissRequest = { viewModel.setBulkQualityDialogVisible(false) },
             title = { Text("Download All by Resolution") },
@@ -998,13 +1030,15 @@ fun VideoResultCard(
             showFavoriteButton = onFavoriteToggle != null,
             showFolderBadges = folders.isNotEmpty(),
             showPlaybackProgress = playbackProgressFraction > 0f,
-            showMarkWatchedButton = true
+            showMarkWatchedButton = true,
+            showMediaTypeBadge = true
         ),
         onClick = onSelectQuality,
         onFavoriteToggle = {
             onFavoriteToggle?.invoke(video, !isFavorite)
         },
-        onMarkWatched = onMarkWatched
+        onMarkWatched = onMarkWatched,
+        mediaType = "VIDEO"
     )
 }
 
@@ -1042,7 +1076,8 @@ fun VideoListItem(
             showPlaybackProgress = playbackProgressFraction > 0f,
             showDownloadedBadge = false,
             showFolderBadges = folders.isNotEmpty(),
-            showMarkWatchedButton = true
+            showMarkWatchedButton = true,
+            showMediaTypeBadge = true
         ),
         onClick = onClick,
         onFavoriteToggle = {
@@ -1052,6 +1087,7 @@ fun VideoListItem(
         onDownloadClick = { onDownloadClick?.invoke(video.videoId) },
         downloadMenuContent = downloadMenuContent,
         serialNumber = serialNumber,
-        onMarkWatched = onMarkWatched
+        onMarkWatched = onMarkWatched,
+        mediaType = "VIDEO"
     )
 }
