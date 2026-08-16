@@ -27,6 +27,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Subscriptions
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
@@ -44,6 +45,7 @@ import androidx.compose.material3.TextButton
 import com.example.medianest.data.local.entity.DownloadEntity
 import com.example.medianest.data.local.entity.DownloadStatus
 import com.example.medianest.data.local.entity.VideoEntity
+import com.example.medianest.ui.theme.MediaNestColors
 import com.example.medianest.ui.utils.UiUtils
 import com.example.medianest.ui.components.YoutubeSubscribeButton
 import androidx.compose.ui.text.style.TextOverflow
@@ -51,6 +53,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.material3.TopAppBar
 import android.content.Intent
 import android.net.Uri
+import android.text.format.Formatter
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.graphics.Color
@@ -105,6 +108,7 @@ fun VideoDetailScreen(
     onResetWatchPosition: () -> Unit = {},
     onMarkWatched: (Int) -> Unit = {}
 ) {
+    val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
     var showWatchCountDialog by remember { mutableStateOf(false) }
@@ -129,7 +133,7 @@ fun VideoDetailScreen(
                             Icon(
                                 Icons.Default.Favorite,
                                 contentDescription = "Favorite",
-                                tint = if (isFavorite) Color.Red else MaterialTheme.colorScheme.onSurfaceVariant
+                                tint = if (isFavorite) MediaNestColors.Destructive else MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
@@ -175,8 +179,8 @@ fun VideoDetailScreen(
                 val localWatches = localVideo?.watchCount ?: 0
                 if (localWatches > 0) {
                     Surface(
-                        color = Color.Black.copy(alpha = 0.7f),
-                        contentColor = Color.White,
+                        color = MediaNestColors.PlayerSurface.copy(alpha = 0.7f),
+                        contentColor = MediaNestColors.TextPrimary,
                         shape = RoundedCornerShape(bottomStart = 8.dp),
                         modifier = Modifier.align(Alignment.TopEnd)
                     ) {
@@ -188,7 +192,7 @@ fun VideoDetailScreen(
                             Icon(
                                 imageVector = Icons.Default.Visibility,
                                 contentDescription = null,
-                                tint = Color.White,
+                                tint = MediaNestColors.TextPrimary,
                                 modifier = Modifier.size(14.dp)
                             )
                             Text(
@@ -203,7 +207,7 @@ fun VideoDetailScreen(
                 // Play overlay button in the center of the thumbnail
                 IconButton(
                     onClick = {
-                        val completedVideoDownloads = downloads.filter { it.status == DownloadStatus.COMPLETED && it.format != "audio" }
+                        val completedVideoDownloads = downloads.filter { it.status == DownloadStatus.COMPLETED && it.format != "audio" && it.format != "audio_extracted" }
                         if (completedVideoDownloads.isNotEmpty()) {
                             val highestDownloaded = completedVideoDownloads.maxByOrNull { download ->
                                 download.quality.substringBefore("p").toIntOrNull() ?: 0
@@ -228,12 +232,12 @@ fun VideoDetailScreen(
                     modifier = Modifier
                         .align(Alignment.Center)
                         .size(64.dp)
-                        .background(Color.Black.copy(alpha = 0.5f), shape = androidx.compose.foundation.shape.CircleShape)
+                        .background(MediaNestColors.PlayerSurface.copy(alpha = 0.5f), shape = androidx.compose.foundation.shape.CircleShape)
                 ) {
                     Icon(
                         imageVector = Icons.Default.PlayArrow,
                         contentDescription = "Play Video",
-                        tint = Color.White,
+                        tint = MediaNestColors.TextPrimary,
                         modifier = Modifier.size(40.dp)
                     )
                 }
@@ -244,13 +248,13 @@ fun VideoDetailScreen(
                     val watchedSeconds = positionMillis / 1000L
                     Text(
                         text = UiUtils.formatDuration(watchedSeconds),
-                        color = Color.White,
+                        color = MediaNestColors.TextPrimary,
                         style = MaterialTheme.typography.labelSmall,
                         modifier = Modifier
                             .align(Alignment.BottomStart)
                             .padding(8.dp)
                             .background(
-                                color = Color.Black.copy(alpha = 0.7f),
+                                color = MediaNestColors.PlayerSurface.copy(alpha = 0.7f),
                                 shape = RoundedCornerShape(4.dp)
                             )
                             .padding(horizontal = 4.dp, vertical = 2.dp)
@@ -260,13 +264,13 @@ fun VideoDetailScreen(
                 if (videoInfo.durationSeconds > 0) {
                     Text(
                         text = UiUtils.formatDuration(videoInfo.durationSeconds),
-                        color = Color.White,
+                        color = MediaNestColors.TextPrimary,
                         style = MaterialTheme.typography.labelSmall,
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
                             .padding(8.dp)
                             .background(
-                                color = Color.Black.copy(alpha = 0.7f),
+                                color = MediaNestColors.PlayerSurface.copy(alpha = 0.7f),
                                 shape = RoundedCornerShape(4.dp)
                             )
                             .padding(horizontal = 4.dp, vertical = 2.dp)
@@ -282,13 +286,13 @@ fun VideoDetailScreen(
                             .fillMaxWidth()
                             .height(4.dp)
                             .align(Alignment.BottomCenter)
-                            .background(Color.Gray.copy(alpha = 0.3f))
+                            .background(MediaNestColors.ProgressTrack)
                     ) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth(coercedProgress)
                                 .height(4.dp)
-                                .background(Color.Red)
+                                .background(MediaNestColors.YouTubeRed)
                         )
                     }
                 }
@@ -335,7 +339,7 @@ fun VideoDetailScreen(
                 val formattedViews = if (publicViews > 0) {
                     java.text.NumberFormat.getInstance(java.util.Locale.forLanguageTag("en-IN")).format(publicViews) + " views"
                 } else {
-                    "0 views"
+                    "—"
                 }
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -343,42 +347,77 @@ fun VideoDetailScreen(
                 ) {
                     Icon(
                         imageVector = Icons.Default.Visibility,
-                        contentDescription = "Watch count",
+                        contentDescription = "Public views",
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(16.dp)
                     )
                     Text(
-                        text = formattedViews,
+                        text = "Public views: $formattedViews",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-            }
 
-            val completedDownloads = downloads.filter { it.status == DownloadStatus.COMPLETED }
-            val overallDownloadTime = if (completedDownloads.isNotEmpty()) {
-                completedDownloads.maxOfOrNull { it.downloadedAt }
-            } else {
-                localVideo?.downloadedAt
-            }
-            if (overallDownloadTime != null && overallDownloadTime > 0) {
-                val label = if (completedDownloads.size > 1) "Last Downloaded" else "Downloaded"
-                Spacer(Modifier.height(6.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "$label: ",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = UiUtils.formatAbsoluteDate(overallDownloadTime),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.primary
-                    )
+                val completedDownloads = downloads.filter { it.status == DownloadStatus.COMPLETED }
+                val overallDownloadTime = if (completedDownloads.isNotEmpty()) {
+                    completedDownloads.maxOfOrNull { it.downloadedAt }
+                } else {
+                    localVideo?.downloadedAt
+                }
+                if (overallDownloadTime != null && overallDownloadTime > 0) {
+                    val label = if (completedDownloads.size > 1) "Last Downloaded" else "Downloaded"
+                    Spacer(Modifier.height(6.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "$label: ",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = UiUtils.formatAbsoluteDate(overallDownloadTime),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+
+                if (completedDownloads.isNotEmpty()) {
+                    Spacer(Modifier.height(6.dp))
+                    Column(modifier = Modifier.fillMaxWidth().padding(top = 2.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = null,
+                                tint = MediaNestColors.Success,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = "Downloaded versions:",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MediaNestColors.Success,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                        completedDownloads.forEach { cdl ->
+                            val isAudio = cdl.format == "audio" || cdl.format == "audio_extracted"
+                            val qLabel = if (isAudio) "Audio · ${cdl.quality}" else cdl.quality
+                            val fileSizeStr = Formatter.formatShortFileSize(context, cdl.fileSizeBytes)
+                            val downloadDate = if (cdl.downloadedAt > 0) cdl.downloadedAt else (localVideo?.downloadedAt ?: 0L)
+                            val dateStr = if (downloadDate > 0) UiUtils.formatAbsoluteDate(downloadDate) else "—"
+                            Text(
+                                text = "• $qLabel ($fileSizeStr) — $dateStr",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(start = 20.dp, top = 2.dp)
+                            )
+                        }
+                    }
                 }
             }
 
-            val context = LocalContext.current
             Spacer(Modifier.height(12.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -396,10 +435,10 @@ fun VideoDetailScreen(
                         }
                     },
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color.White,
-                        contentColor = Color(0xFFFF0000)
+                        containerColor = MediaNestColors.TextPrimary,
+                        contentColor = MediaNestColors.YouTubeRed
                     ),
-                    border = BorderStroke(1.dp, Color(0xFFFF0000)),
+                    border = BorderStroke(1.dp, MediaNestColors.YouTubeRed),
                     modifier = Modifier.weight(1f)
                 ) {
                     Row(
@@ -416,7 +455,7 @@ fun VideoDetailScreen(
                         Text(
                             text = "YouTube",
                             style = MaterialTheme.typography.labelLarge,
-                            color = Color(0xFFFF0000)
+                            color = MediaNestColors.YouTubeRed
                         )
                     }
                 }
@@ -517,19 +556,38 @@ fun VideoDetailScreen(
                         val totalTimeStr = com.example.medianest.ui.screens.formatWatchTime(videoHistory?.totalWatchTimeMillis ?: 0L)
                         val dateFormat = java.text.SimpleDateFormat("MMM dd, yyyy 'at' hh:mm a", java.util.Locale.getDefault())
 
-                        // Watch Count Row
+                        // Watch Count Row (Personal)
                         val currentWatchCount = localVideo?.watchCount ?: 0
-                        if (currentWatchCount > 0) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Visibility,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text("Your watch count: ", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("$currentWatchCount ${if (currentWatchCount == 1) "view" else "views"}", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold), color = MaterialTheme.colorScheme.onSurface)
+                        }
+                        Spacer(Modifier.height(8.dp))
+
+                        // Last Watch Position Row
+                        if (videoHistory != null && videoHistory.positionMillis > 0) {
+                            val positionDuration = UiUtils.formatDuration(videoHistory.positionMillis / 1000L)
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Icon(
-                                    imageVector = Icons.Default.Visibility,
+                                    imageVector = Icons.Default.History,
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.size(18.dp)
                                 )
                                 Spacer(Modifier.width(8.dp))
-                                Text("Total Views: ", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                Text("$currentWatchCount ${if (currentWatchCount == 1) "view" else "views"}", style = MaterialTheme.typography.bodyMedium.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold), color = MaterialTheme.colorScheme.onSurface)
+                                Text("Last watch position: ", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(
+                                    text = positionDuration,
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
                             }
                             Spacer(Modifier.height(8.dp))
                         }

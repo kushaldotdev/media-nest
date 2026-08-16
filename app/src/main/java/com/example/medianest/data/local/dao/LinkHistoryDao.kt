@@ -13,6 +13,12 @@ interface LinkHistoryDao {
     @Query("SELECT * FROM link_history ORDER BY extractedAt DESC")
     fun getAllLinkHistory(): Flow<List<LinkHistoryEntity>>
 
+    @Query("SELECT * FROM link_history ORDER BY extractedAt DESC")
+    suspend fun getAllLinkHistoryOnce(): List<LinkHistoryEntity>
+
+    @Query("SELECT COUNT(*) FROM link_history")
+    suspend fun getTotalCount(): Int
+
     @Query("SELECT * FROM link_history ORDER BY extractedAt DESC LIMIT :limit")
     fun getLinkHistoryPaged(limit: Int): Flow<List<LinkHistoryEntity>>
 

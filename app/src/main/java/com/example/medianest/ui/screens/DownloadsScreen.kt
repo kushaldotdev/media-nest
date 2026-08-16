@@ -3,6 +3,9 @@ package com.example.medianest.ui.screens
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,9 +21,13 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import com.example.medianest.ui.components.GlassCard
@@ -29,7 +36,6 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Sort
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -143,29 +149,99 @@ fun resolveDownloadResolution(
 }
 
 /**
+ * Sort categories available in the Downloads screen per design-2 specification.
+ */
+enum class DownloadSortCategory(val label: String, val defaultMode: String) {
+    DATE("Date", "DATE_DESC"),
+    PROGRESS("Progress", "PROGRESS_DESC"),
+    SIZE("Size", "SIZE_DESC"),
+    STATUS("Status", "STATUS_ASC")
+}
+
+fun getSortCategory(mode: String): DownloadSortCategory = when {
+    mode.startsWith("DATE") -> DownloadSortCategory.DATE
+    mode.startsWith("PROGRESS") -> DownloadSortCategory.PROGRESS
+    mode.startsWith("SIZE") -> DownloadSortCategory.SIZE
+    mode.startsWith("STATUS") -> DownloadSortCategory.STATUS
+    else -> DownloadSortCategory.DATE
+}
+
+fun isSortAscending(mode: String): Boolean = mode.endsWith("_ASC")
+
+fun toggleSortMode(category: DownloadSortCategory, currentMode: String): String {
+    val currentCat = getSortCategory(currentMode)
+    return if (currentCat == category) {
+        val currentIsAsc = isSortAscending(currentMode)
+        val newDir = if (currentIsAsc) "DESC" else "ASC"
+        "${category.name}_$newDir"
+    } else {
+        category.defaultMode
+    }
+}
+
+/**
  * Sorts the download list according to [sortMode] preference.
  * Supported modes:
  * - DATE_DESC: Newest downloads first (default)
+ * - DATE_ASC: Oldest downloads first
  * - PROGRESS_DESC: Highest download progress percentage first
+ * - PROGRESS_ASC: Lowest download progress percentage first
  * - SIZE_DESC: Largest file size first
+ * - SIZE_ASC: Smallest file size first
  * - STATUS_ASC: Active downloading first, followed by queued, paused, failed, canceled, completed
+ * - STATUS_DESC: Completed downloads first, followed by canceled, failed, paused, queued, downloading
  */
 fun sortDownloads(
     downloads: List<DownloadEntity>,
     sortMode: String = DownloadPreferences.DEFAULT_SORT_MODE
 ): List<DownloadEntity> {
-    return when (sortMode) {
-        "PROGRESS_DESC" -> downloads.sortedWith(
-            compareByDescending<DownloadEntity> { it.progress }
-                .thenByDescending { it.downloadedAt }
-                .thenByDescending { it.id }
-        )
-        "SIZE_DESC" -> downloads.sortedWith(
-            compareByDescending<DownloadEntity> { it.fileSizeBytes }
-                .thenByDescending { it.downloadedAt }
-                .thenByDescending { it.id }
-        )
-        "STATUS_ASC" -> {
+    val category = getSortCategory(sortMode)
+    val isAsc = isSortAscending(sortMode)
+    return when (category) {
+        DownloadSortCategory.DATE -> {
+            if (isAsc) {
+                downloads.sortedWith(
+                    compareBy<DownloadEntity> { it.downloadedAt }
+                        .thenBy { it.id }
+                )
+            } else {
+                downloads.sortedWith(
+                    compareByDescending<DownloadEntity> { it.downloadedAt }
+                        .thenByDescending { it.id }
+                )
+            }
+        }
+        DownloadSortCategory.PROGRESS -> {
+            if (isAsc) {
+                downloads.sortedWith(
+                    compareBy<DownloadEntity> { it.progress }
+                        .thenBy { it.downloadedAt }
+                        .thenBy { it.id }
+                )
+            } else {
+                downloads.sortedWith(
+                    compareByDescending<DownloadEntity> { it.progress }
+                        .thenByDescending { it.downloadedAt }
+                        .thenByDescending { it.id }
+                )
+            }
+        }
+        DownloadSortCategory.SIZE -> {
+            if (isAsc) {
+                downloads.sortedWith(
+                    compareBy<DownloadEntity> { it.fileSizeBytes }
+                        .thenBy { it.downloadedAt }
+                        .thenBy { it.id }
+                )
+            } else {
+                downloads.sortedWith(
+                    compareByDescending<DownloadEntity> { it.fileSizeBytes }
+                        .thenByDescending { it.downloadedAt }
+                        .thenByDescending { it.id }
+                )
+            }
+        }
+        DownloadSortCategory.STATUS -> {
             fun statusRank(status: DownloadStatus): Int = when (status) {
                 DownloadStatus.DOWNLOADING -> 0
                 DownloadStatus.QUEUED -> 1
@@ -174,21 +250,39 @@ fun sortDownloads(
                 DownloadStatus.CANCELED -> 4
                 DownloadStatus.COMPLETED -> 5
             }
-            downloads.sortedWith(
-                compareBy<DownloadEntity> { statusRank(it.status) }
-                    .thenByDescending { it.downloadedAt }
-                    .thenByDescending { it.id }
-            )
+            if (isAsc) {
+                downloads.sortedWith(
+                    compareBy<DownloadEntity> { statusRank(it.status) }
+                        .thenByDescending { it.downloadedAt }
+                        .thenByDescending { it.id }
+                )
+            } else {
+                downloads.sortedWith(
+                    compareByDescending<DownloadEntity> { statusRank(it.status) }
+                        .thenByDescending { it.downloadedAt }
+                        .thenByDescending { it.id }
+                )
+            }
         }
-        "DATE_DESC" -> downloads.sortedWith(
-            compareByDescending<DownloadEntity> { it.downloadedAt }
-                .thenByDescending { it.id }
-        )
-        else -> downloads.sortedWith(
-            compareByDescending<DownloadEntity> { it.downloadedAt }
-                .thenByDescending { it.id }
-        )
     }
+}
+
+/**
+ * Applies in-memory custom queue order to downloads list, falling back to [sortMode] for new items.
+ */
+fun applyQueueOrder(
+    downloads: List<DownloadEntity>,
+    queueOrder: List<Long>,
+    sortMode: String
+): List<DownloadEntity> {
+    if (queueOrder.isEmpty()) {
+        return sortDownloads(downloads, sortMode)
+    }
+    val downloadMap = downloads.associateBy { it.id }
+    val ordered = queueOrder.mapNotNull { downloadMap[it] }
+    val remaining = downloads.filterNot { it.id in queueOrder.toSet() }
+    val sortedRemaining = sortDownloads(remaining, sortMode)
+    return ordered + sortedRemaining
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -206,8 +300,9 @@ fun DownloadsScreen(
     val defaultResolution by prefs.defaultResolution.collectAsStateWithLifecycle(initialValue = DownloadPreferences.DEFAULT_RESOLUTION)
 
     val downloads by viewModel.downloads.collectAsStateWithLifecycle()
-    val sortedDownloads = remember(downloads, sortMode) {
-        sortDownloads(downloads, sortMode)
+    val queueOrder by viewModel.queueOrder.collectAsStateWithLifecycle()
+    val sortedDownloads = remember(downloads, sortMode, queueOrder) {
+        applyQueueOrder(downloads, queueOrder, sortMode)
     }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val playingVideoId by viewModel.playingVideoId.collectAsStateWithLifecycle()
@@ -263,13 +358,10 @@ fun DownloadsScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         var sortExpanded by remember { mutableStateOf(false) }
-                        val sortLabel = when (sortMode) {
-                            "PROGRESS_DESC" -> "Progress"
-                            "SIZE_DESC" -> "Size"
-                            "STATUS_ASC" -> "Status"
-                            "DATE_DESC" -> "Date"
-                            else -> "Date"
-                        }
+                        val currentCategory = getSortCategory(sortMode)
+                        val isAsc = isSortAscending(sortMode)
+                        val sortLabel = currentCategory.label
+                        val sortIcon = if (isAsc) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward
                         Box {
                             OutlinedButton(
                                 onClick = { sortExpanded = true },
@@ -277,8 +369,8 @@ fun DownloadsScreen(
                                 modifier = Modifier.height(36.dp)
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.Sort,
-                                    contentDescription = "Sort queue",
+                                    imageVector = sortIcon,
+                                    contentDescription = "Sort queue: $sortLabel",
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Spacer(Modifier.width(4.dp))
@@ -288,35 +380,44 @@ fun DownloadsScreen(
                                 expanded = sortExpanded,
                                 onDismissRequest = { sortExpanded = false }
                             ) {
-                                val sortOptions = listOf(
-                                    "DATE_DESC" to "Date (Newest)",
-                                    "PROGRESS_DESC" to "Progress (Highest)",
-                                    "SIZE_DESC" to "Size (Largest)",
-                                    "STATUS_ASC" to "Status (Active First)"
-                                )
-                                sortOptions.forEach { (mode, label) ->
+                                DownloadSortCategory.values().forEach { category ->
+                                    val isActive = currentCategory == category
+                                    val categoryIcon = if (isActive) {
+                                        if (isAsc) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward
+                                    } else {
+                                        if (category == DownloadSortCategory.STATUS) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward
+                                    }
                                     DropdownMenuItem(
-                                        text = {
-                                            Row(
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.SpaceBetween,
-                                                modifier = Modifier.fillMaxWidth()
-                                            ) {
-                                                Text(label)
-                                                if (sortMode == mode) {
-                                                    Spacer(Modifier.width(8.dp))
-                                                    Icon(
-                                                        imageVector = Icons.Default.Check,
-                                                        contentDescription = "Selected",
-                                                        tint = MaterialTheme.colorScheme.primary,
-                                                        modifier = Modifier.size(16.dp)
-                                                    )
-                                                }
-                                            }
+                                        leadingIcon = {
+                                            Icon(
+                                                imageVector = categoryIcon,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(18.dp),
+                                                tint = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
                                         },
+                                        text = {
+                                            Text(
+                                                text = category.label,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                color = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                            )
+                                        },
+                                        trailingIcon = if (isActive) {
+                                            {
+                                                Icon(
+                                                    imageVector = Icons.Default.Check,
+                                                    contentDescription = "Selected",
+                                                    tint = MaterialTheme.colorScheme.primary,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                            }
+                                        } else null,
                                         onClick = {
+                                            val newMode = toggleSortMode(category, sortMode)
+                                            viewModel.clearCustomOrder()
                                             coroutineScope.launch {
-                                                prefs.setSortMode(mode)
+                                                prefs.setSortMode(newMode)
                                             }
                                             sortExpanded = false
                                         }
@@ -400,13 +501,13 @@ fun DownloadsScreen(
                                 Box(
                                     modifier = Modifier
                                         .fillMaxSize()
-                                        .background(Color.Black.copy(alpha = 0.3f)),
+                                        .background(MediaNestColors.PlayerSurface.copy(alpha = 0.3f)),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.PlayArrow,
                                         contentDescription = null,
-                                        tint = Color.White,
+                                        tint = MediaNestColors.TextPrimary,
                                         modifier = Modifier.size(28.dp)
                                     )
                                 }
@@ -416,13 +517,13 @@ fun DownloadsScreen(
                                             .fillMaxWidth()
                                             .height(4.dp)
                                             .align(Alignment.BottomCenter)
-                                            .background(Color.Gray.copy(alpha = 0.5f))
+                                            .background(MediaNestColors.ProgressTrack)
                                     ) {
                                         Box(
                                             modifier = Modifier
                                                 .fillMaxWidth(lastWatchedProgress)
                                                 .height(4.dp)
-                                                .background(Color.Red)
+                                                .background(MediaNestColors.YouTubeRed)
                                         )
                                     }
                                 }
@@ -484,9 +585,14 @@ fun DownloadsScreen(
                     }
                 }
             } else {
-                items(sortedDownloads, key = { it.id }) { download ->
+                itemsIndexed(sortedDownloads, key = { _, download -> download.id }) { index, download ->
                     DownloadItem(
                         download = download,
+                        index = index,
+                        totalCount = sortedDownloads.size,
+                        onDragMove = { targetIndex ->
+                            viewModel.reorderDownloads(index, targetIndex, sortedDownloads)
+                        },
                         hasExtractedAudio = sortedDownloads.any {
                             it.videoId == download.videoId && it.format == "audio_extracted"
                         },
@@ -649,6 +755,9 @@ fun DownloadsScreen(
 @Composable
 private fun DownloadItem(
     download: DownloadEntity,
+    index: Int,
+    totalCount: Int,
+    onDragMove: (targetIndex: Int) -> Unit,
     hasExtractedAudio: Boolean,
     videosMap: Map<String, VideoEntity>,
     onPlayDownload: (DownloadEntity) -> Unit,
@@ -661,6 +770,8 @@ private fun DownloadItem(
     isPlaying: Boolean,
     defaultResolution: String = DownloadPreferences.DEFAULT_RESOLUTION
 ) {
+    var dragAccumulator by remember { mutableStateOf(0f) }
+    val dragThresholdPx = 120f
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val playbackHistory by viewModel.playbackHistory.collectAsStateWithLifecycle()
 
@@ -696,124 +807,163 @@ private fun DownloadItem(
         )
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
-            // Clickable Metadata Row (navigates to Video Details Screen)
+            // Header Row with Drag Handle and Clickable Metadata Row (navigates to Video Details Screen)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { onVideoClick(download.videoId) }
                     .padding(bottom = 8.dp),
-                verticalAlignment = Alignment.Top
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // 16:9 Thumbnail
+                // Drag handle with draggable modifier
                 Box(
                     modifier = Modifier
-                        .size(110.dp, 62.dp)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(MaterialTheme.colorScheme.surfaceColorAtElevation(1.dp))
+                        .size(28.dp)
+                        .draggable(
+                            orientation = Orientation.Vertical,
+                            state = rememberDraggableState { delta ->
+                                dragAccumulator += delta
+                                if (dragAccumulator > dragThresholdPx && index < totalCount - 1) {
+                                    onDragMove(index + 1)
+                                    dragAccumulator = 0f
+                                } else if (dragAccumulator < -dragThresholdPx && index > 0) {
+                                    onDragMove(index - 1)
+                                    dragAccumulator = 0f
+                                }
+                            },
+                            onDragStopped = {
+                                dragAccumulator = 0f
+                            }
+                        ),
+                    contentAlignment = Alignment.Center
                 ) {
-                    AsyncImage(
-                        model = download.thumbnailUrl,
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
+                    Icon(
+                        imageVector = Icons.Default.DragHandle,
+                        contentDescription = "Reorder Drag Handle",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                        modifier = Modifier.size(18.dp)
                     )
-                    if (download.status == DownloadStatus.COMPLETED && download.errorMessage != "file_missing") {
-                        Row(
-                            modifier = Modifier
-                                .align(Alignment.TopStart)
-                                .padding(4.dp)
-                                .background(
-                                    color = Color.Black.copy(alpha = 0.7f),
-                                    shape = RoundedCornerShape(4.dp)
+                }
+
+                Spacer(Modifier.width(6.dp))
+
+                // Clickable Metadata Row (navigates to Video Details Screen)
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable { onVideoClick(download.videoId) },
+                    verticalAlignment = Alignment.Top
+                ) {
+                    // 16:9 Thumbnail
+                    Box(
+                        modifier = Modifier
+                            .size(110.dp, 62.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.surfaceColorAtElevation(1.dp))
+                    ) {
+                        AsyncImage(
+                            model = download.thumbnailUrl,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                        if (download.status == DownloadStatus.COMPLETED && download.errorMessage != "file_missing") {
+                            Row(
+                                modifier = Modifier
+                                    .align(Alignment.TopStart)
+                                    .padding(4.dp)
+                                    .background(
+                                        color = MediaNestColors.PlayerSurface.copy(alpha = 0.7f),
+                                        shape = RoundedCornerShape(4.dp)
+                                    )
+                                    .padding(horizontal = 4.dp, vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.CheckCircle,
+                                    contentDescription = "Downloaded",
+                                    tint = MediaNestSemanticColors.Completed,
+                                    modifier = Modifier.size(12.dp)
                                 )
-                                .padding(horizontal = 4.dp, vertical = 2.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.CheckCircle,
-                                contentDescription = "Downloaded",
-                                tint = MediaNestSemanticColors.Completed,
-                                modifier = Modifier.size(12.dp)
+                                if (download.fileSizeBytes > 0L) {
+                                    Text(
+                                        text = "%.1f MB".format(download.fileSizeBytes / (1024f * 1024f)),
+                                        color = MediaNestColors.TextPrimary,
+                                        style = MaterialTheme.typography.labelSmall
+                                    )
+                                }
+                            }
+                        }
+                        if (durationSeconds > 0) {
+                            Text(
+                                text = com.example.medianest.ui.utils.UiUtils.formatDuration(durationSeconds),
+                                color = MediaNestColors.TextPrimary,
+                                style = MaterialTheme.typography.labelSmall,
+                                modifier = Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .padding(4.dp)
+                                    .background(
+                                        color = MediaNestColors.PlayerSurface.copy(alpha = 0.7f),
+                                        shape = RoundedCornerShape(4.dp)
+                                    )
+                                    .padding(horizontal = 4.dp, vertical = 2.dp)
                             )
-                            if (download.fileSizeBytes > 0L) {
-                                Text(
-                                    text = "%.1f MB".format(download.fileSizeBytes / (1024f * 1024f)),
-                                    color = Color.White,
-                                    style = MaterialTheme.typography.labelSmall
+                        }
+                        if (download.status == DownloadStatus.COMPLETED && durationSeconds > 0 && positionMillis > 0) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(3.dp)
+                                    .align(Alignment.BottomCenter)
+                                    .background(MediaNestColors.ProgressTrack)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth(progressFraction)
+                                        .height(3.dp)
+                                        .background(MediaNestColors.YouTubeRed)
                                 )
                             }
                         }
                     }
-                    if (durationSeconds > 0) {
+
+                    Spacer(Modifier.width(12.dp))
+
+                    // Title, Format Badge, and Quality text
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = com.example.medianest.ui.utils.UiUtils.formatDuration(durationSeconds),
-                            color = Color.White,
-                            style = MaterialTheme.typography.labelSmall,
-                            modifier = Modifier
-                                .align(Alignment.BottomEnd)
-                                .padding(4.dp)
-                                .background(
-                                    color = Color.Black.copy(alpha = 0.7f),
-                                    shape = RoundedCornerShape(4.dp)
+                            text = download.title.ifEmpty { effectiveQuality },
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = MaterialTheme.colorScheme.secondaryContainer,
+                            ) {
+                                Text(
+                                    text = formatLabel.uppercase(),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                 )
-                                .padding(horizontal = 4.dp, vertical = 2.dp)
-                        )
-                    }
-                    if (download.status == DownloadStatus.COMPLETED && durationSeconds > 0 && positionMillis > 0) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(3.dp)
-                                .align(Alignment.BottomCenter)
-                                .background(Color.Gray.copy(alpha = 0.5f))
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth(progressFraction)
-                                    .height(3.dp)
-                                    .background(Color.Red)
-                            )
-                        }
-                    }
-                }
-
-                Spacer(Modifier.width(12.dp))
-
-                // Title, Format Badge, and Quality text
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = download.title.ifEmpty { effectiveQuality },
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Surface(
-                            shape = RoundedCornerShape(4.dp),
-                            color = MaterialTheme.colorScheme.secondaryContainer,
-                        ) {
+                            }
                             Text(
-                                text = formatLabel.uppercase(),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                            )
-                        }
-                        Text(
-                            text = effectiveQuality,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        if (download.status == DownloadStatus.COMPLETED && positionMillis > 0) {
-                            Text(
-                                text = "Left off at ${com.example.medianest.ui.utils.UiUtils.formatDuration(positionMillis / 1000L)}",
+                                text = effectiveQuality,
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.primary
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
+                            if (download.status == DownloadStatus.COMPLETED && positionMillis > 0) {
+                                Text(
+                                    text = "Left off at ${com.example.medianest.ui.utils.UiUtils.formatDuration(positionMillis / 1000L)}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
                         }
                     }
                 }

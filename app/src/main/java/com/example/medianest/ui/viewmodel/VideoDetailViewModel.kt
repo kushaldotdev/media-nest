@@ -52,6 +52,7 @@ class VideoDetailViewModel @Inject constructor(
     private var downloadsJob: kotlinx.coroutines.Job? = null
     private var localVideoJob: kotlinx.coroutines.Job? = null
     private var historyJob: kotlinx.coroutines.Job? = null
+    private var watchSessionsJob: kotlinx.coroutines.Job? = null
     private var currentVideoId: String = ""
 
     private val _videoInfo = MutableStateFlow<ExtractedVideoInfo?>(null)
@@ -113,7 +114,8 @@ class VideoDetailViewModel @Inject constructor(
                     _videoHistory.value = historyList.find { it.videoId == videoId }
                 }
             }
-            viewModelScope.launch {
+            watchSessionsJob?.cancel()
+            watchSessionsJob = viewModelScope.launch {
                 historyDao.getWatchSessions(videoId).collect {
                     _watchSessions.value = it
                 }

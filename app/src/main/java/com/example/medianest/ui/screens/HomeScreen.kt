@@ -86,6 +86,7 @@ import com.example.medianest.ui.components.UnifiedVideoRow
 import com.example.medianest.ui.components.VideoCardConfig
 import com.example.medianest.ui.components.WatchCountDialog
 import com.example.medianest.ui.components.YoutubeSubscribeButton
+import com.example.medianest.ui.theme.MediaNestColors
 import com.example.medianest.ui.utils.UiUtils
 import com.example.medianest.ui.viewmodel.HomeUiState
 import com.example.medianest.ui.viewmodel.HomeViewModel
@@ -120,6 +121,7 @@ fun HomeScreen(
     val context = LocalContext.current
 
     var showMoveToFolderDialog by remember { mutableStateOf(false) }
+    var showClearHistoryDialog by remember { mutableStateOf(false) }
     var videoToMove by remember { mutableStateOf<ExtractedVideoInfo?>(null) }
     var expandedDownloadVideoId by remember { mutableStateOf<String?>(null) }
 
@@ -569,11 +571,34 @@ fun HomeScreen(
             if (uiState !is HomeUiState.Loading && linkHistory.isNotEmpty()) {
                 item {
                     Spacer(Modifier.height(16.dp))
-                    Text(
-                        text = "History",
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "History",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        TextButton(
+                            onClick = { showClearHistoryDialog = true }
+                        ) {
+                            Icon(
+                                Icons.Default.Delete,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = MediaNestColors.Destructive
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                text = "Clear all",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MediaNestColors.Destructive
+                            )
+                        }
+                    }
                 }
                 items(linkHistory, key = { it.url }) { item ->
                     HistoryItemRow(
@@ -609,6 +634,32 @@ fun HomeScreen(
                 Spacer(Modifier.height(72.dp))
             }
         }
+    }
+
+    if (showClearHistoryDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearHistoryDialog = false },
+            title = { Text("Clear link history") },
+            text = { Text("Remove all link history entries? This cannot be undone.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.clearAllLinkHistory()
+                        showClearHistoryDialog = false
+                        coroutineScope.launch {
+                            snackbarHostState.showSnackbar("Link history cleared")
+                        }
+                    }
+                ) {
+                    Text("Clear all", color = MediaNestColors.Destructive)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearHistoryDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
     }
 
     if (showMoveToFolderDialog && videoToMove != null) {

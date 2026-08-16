@@ -33,6 +33,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -67,6 +68,21 @@ class DownloadsViewModel @Inject constructor(
 
     private val _playingUri = MutableStateFlow<String?>(null)
     val playingUri: StateFlow<String?> = _playingUri
+
+    private val _queueOrder = MutableStateFlow<List<Long>>(emptyList())
+    val queueOrder: StateFlow<List<Long>> = _queueOrder.asStateFlow()
+
+    fun reorderDownloads(fromIndex: Int, toIndex: Int, currentList: List<DownloadEntity>) {
+        if (fromIndex !in currentList.indices || toIndex !in currentList.indices || fromIndex == toIndex) return
+        val mutable = currentList.toMutableList()
+        val item = mutable.removeAt(fromIndex)
+        mutable.add(toIndex, item)
+        _queueOrder.value = mutable.map { it.id }
+    }
+
+    fun clearCustomOrder() {
+        _queueOrder.value = emptyList()
+    }
 
     val downloads: StateFlow<List<DownloadEntity>> = downloadRepository.getAllDownloads()
         .map { list ->

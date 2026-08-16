@@ -99,11 +99,13 @@ import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.DragHandle
-import androidx.compose.material.icons.filled.PlaylistPlay
-import androidx.compose.material.icons.filled.QueueMusic
+import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
+import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material3.Switch
@@ -266,7 +268,7 @@ fun PlayerScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black)
+                .background(MediaNestColors.PlayerSurface)
         ) {
             AndroidView(
                 factory = { ctx ->
@@ -322,14 +324,14 @@ fun PlayerScreen(
                 ) {
                     Surface(
                         shape = androidx.compose.foundation.shape.CircleShape,
-                        color = Color.Black.copy(alpha = 0.6f),
+                        color = MediaNestColors.PlayerSurface.copy(alpha = 0.6f),
                         modifier = Modifier.size(72.dp)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
                                 imageVector = if (playing) Icons.Default.PlayArrow else Icons.Default.Pause,
                                 contentDescription = null,
-                                tint = Color.White,
+                                tint = MediaNestColors.TextPrimary,
                                 modifier = Modifier.size(40.dp)
                             )
                         }
@@ -362,13 +364,13 @@ fun PlayerScreen(
                             Icon(
                                 imageVector = Icons.Default.Replay10,
                                 contentDescription = null,
-                                tint = Color.White,
+                                tint = MediaNestColors.TextPrimary,
                                 modifier = Modifier.size(36.dp)
                             )
                             Spacer(Modifier.height(6.dp))
                             Text(
                                 text = "-10s",
-                                color = Color.White,
+                                color = MediaNestColors.TextPrimary,
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
@@ -402,13 +404,13 @@ fun PlayerScreen(
                             Icon(
                                 imageVector = Icons.Default.Forward10,
                                 contentDescription = null,
-                                tint = Color.White,
+                                tint = MediaNestColors.TextPrimary,
                                 modifier = Modifier.size(36.dp)
                             )
                             Spacer(Modifier.height(6.dp))
                             Text(
                                 text = "+10s",
-                                color = Color.White,
+                                color = MediaNestColors.TextPrimary,
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
@@ -420,7 +422,7 @@ fun PlayerScreen(
             if (state.isBuffering) {
                 CircularProgressIndicator(
                     modifier = Modifier.align(Alignment.Center),
-                    color = Color.White
+                    color = MediaNestColors.TextPrimary
                 )
             }
 
@@ -428,7 +430,7 @@ fun PlayerScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.5f))
+                        .background(MediaNestColors.PlayerSurface.copy(alpha = 0.5f))
                 ) {
                     Row(
                         modifier = Modifier
@@ -440,12 +442,12 @@ fun PlayerScreen(
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f, fill = false)) {
                             IconButton(onClick = { isFullScreen = false }) {
-                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.White)
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MediaNestColors.TextPrimary)
                             }
                             Spacer(Modifier.width(8.dp))
                             Text(
                                 text = state.title,
-                                color = Color.White,
+                                color = MediaNestColors.TextPrimary,
                                 style = MaterialTheme.typography.titleMedium,
                                 maxLines = if (isTitleExpanded) Int.MAX_VALUE else 1,
                                 overflow = TextOverflow.Ellipsis,
@@ -462,13 +464,13 @@ fun PlayerScreen(
                             if (qualityText.isNotEmpty()) {
                                 Spacer(Modifier.width(8.dp))
                                 Surface(
-                                    color = Color.White.copy(alpha = 0.2f),
+                                    color = MediaNestColors.TextPrimary.copy(alpha = 0.2f),
                                     shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp)
                                 ) {
                                     Text(
                                         text = qualityText,
                                         style = MaterialTheme.typography.labelSmall,
-                                        color = Color.White,
+                                        color = MediaNestColors.TextPrimary,
                                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                     )
                                 }
@@ -483,12 +485,12 @@ fun PlayerScreen(
                                     Icon(
                                         imageVector = Icons.Default.Visibility,
                                         contentDescription = null,
-                                        tint = Color.White,
+                                        tint = MediaNestColors.TextPrimary,
                                         modifier = Modifier.size(14.dp)
                                     )
                                     Text(
                                         text = "$watchCount",
-                                        color = Color.White,
+                                        color = MediaNestColors.TextPrimary,
                                         style = MaterialTheme.typography.bodyMedium
                                     )
                                 }
@@ -498,7 +500,7 @@ fun PlayerScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             IconButton(onClick = { isFullScreen = false }) {
-                                Icon(Icons.Default.FullscreenExit, contentDescription = "Exit Fullscreen", tint = Color.White)
+                                Icon(Icons.Default.FullscreenExit, contentDescription = "Exit Fullscreen", tint = MediaNestColors.TextPrimary)
                             }
                         }
                     }
@@ -511,10 +513,10 @@ fun PlayerScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         IconButton(onClick = { viewModel.seekRelative(-30_000L) }) {
-                            Icon(Icons.Default.Replay30, contentDescription = "Rewind 30s", tint = Color.White, modifier = Modifier.size(36.dp))
+                            Icon(Icons.Default.Replay30, contentDescription = "Rewind 30s", tint = MediaNestColors.TextPrimary, modifier = Modifier.size(36.dp))
                         }
                         IconButton(onClick = { viewModel.seekRelative(-5_000L) }) {
-                            Icon(Icons.Default.Replay5, contentDescription = "Rewind 5s", tint = Color.White, modifier = Modifier.size(36.dp))
+                            Icon(Icons.Default.Replay5, contentDescription = "Rewind 5s", tint = MediaNestColors.TextPrimary, modifier = Modifier.size(36.dp))
                         }
                         IconButton(
                             onClick = { viewModel.togglePlayPause() },
@@ -523,15 +525,15 @@ fun PlayerScreen(
                             Icon(
                                 imageVector = if (state.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                                 contentDescription = if (state.isPlaying) "Pause" else "Play",
-                                tint = Color.White,
+                                tint = MediaNestColors.TextPrimary,
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
                         IconButton(onClick = { viewModel.seekRelative(5_000L) }) {
-                            Icon(Icons.Default.Forward5, contentDescription = "Forward 5s", tint = Color.White, modifier = Modifier.size(36.dp))
+                            Icon(Icons.Default.Forward5, contentDescription = "Forward 5s", tint = MediaNestColors.TextPrimary, modifier = Modifier.size(36.dp))
                         }
                         IconButton(onClick = { viewModel.seekRelative(30_000L) }) {
-                            Icon(Icons.Default.Forward30, contentDescription = "Forward 30s", tint = Color.White, modifier = Modifier.size(36.dp))
+                            Icon(Icons.Default.Forward30, contentDescription = "Forward 30s", tint = MediaNestColors.TextPrimary, modifier = Modifier.size(36.dp))
                         }
                     }
 
@@ -551,7 +553,7 @@ fun PlayerScreen(
                                     .fillMaxWidth()
                                     .padding(horizontal = 6.dp)
                                     .height(4.dp),
-                                color = Color.White.copy(alpha = 0.3f),
+                                color = MediaNestColors.ProgressTrack,
                                 trackColor = Color.Transparent
                             )
                             Slider(
@@ -565,8 +567,8 @@ fun PlayerScreen(
                                 },
                                 valueRange = 0f..maxOf(state.durationMs, 1L).toFloat(),
                                 colors = SliderDefaults.colors(
-                                    activeTrackColor = Color.White,
-                                    inactiveTrackColor = Color.White.copy(alpha = 0.1f)
+                                    activeTrackColor = MediaNestColors.TextPrimary,
+                                    inactiveTrackColor = MediaNestColors.ProgressTrack
                                 ),
                                 modifier = Modifier.fillMaxWidth()
                             )
@@ -591,14 +593,14 @@ fun PlayerScreen(
                             }
                             Text(
                                 text = displayTime,
-                                color = Color.White,
+                                color = MediaNestColors.TextPrimary,
                                 modifier = Modifier.clickable { timeDisplayMode = (timeDisplayMode + 1) % 3 }
                             )
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(formatDuration(state.durationMs), color = Color.White)
+                                Text(formatDuration(state.durationMs), color = MediaNestColors.TextPrimary)
                                 Spacer(Modifier.width(8.dp))
                                 IconButton(onClick = { isFullScreen = false }) {
-                                    Icon(Icons.Default.FullscreenExit, contentDescription = "Exit Fullscreen", tint = Color.White)
+                                    Icon(Icons.Default.FullscreenExit, contentDescription = "Exit Fullscreen", tint = MediaNestColors.TextPrimary)
                                 }
                             }
                         }
@@ -793,14 +795,14 @@ fun PlayerScreen(
                                 ) {
                                     Surface(
                                         shape = androidx.compose.foundation.shape.CircleShape,
-                                        color = Color.Black.copy(alpha = 0.6f),
+                                        color = MediaNestColors.PlayerSurface.copy(alpha = 0.6f),
                                         modifier = Modifier.size(72.dp)
                                     ) {
                                         Box(contentAlignment = Alignment.Center) {
                                             Icon(
                                                 imageVector = if (playing) Icons.Default.PlayArrow else Icons.Default.Pause,
                                                 contentDescription = null,
-                                                tint = Color.White,
+                                                tint = MediaNestColors.TextPrimary,
                                                 modifier = Modifier.size(40.dp)
                                             )
                                         }
@@ -833,13 +835,13 @@ fun PlayerScreen(
                                             Icon(
                                                 imageVector = Icons.Default.Replay10,
                                                 contentDescription = null,
-                                                tint = Color.White,
+                                                tint = MediaNestColors.TextPrimary,
                                                 modifier = Modifier.size(36.dp)
                                             )
                                             Spacer(Modifier.height(6.dp))
                                             Text(
                                                 text = "-10s",
-                                                color = Color.White,
+                                                color = MediaNestColors.TextPrimary,
                                                 style = MaterialTheme.typography.titleMedium,
                                                 fontWeight = FontWeight.Bold
                                             )
@@ -873,13 +875,13 @@ fun PlayerScreen(
                                             Icon(
                                                 imageVector = Icons.Default.Forward10,
                                                 contentDescription = null,
-                                                tint = Color.White,
+                                                tint = MediaNestColors.TextPrimary,
                                                 modifier = Modifier.size(36.dp)
                                             )
                                             Spacer(Modifier.height(6.dp))
                                             Text(
                                                 text = "+10s",
-                                                color = Color.White,
+                                                color = MediaNestColors.TextPrimary,
                                                 style = MaterialTheme.typography.titleMedium,
                                                 fontWeight = FontWeight.Bold
                                             )
@@ -1067,7 +1069,7 @@ fun PlayerScreen(
 
                         Spacer(Modifier.height(8.dp))
 
-                        // Combined Speed & Quality Row
+                        // Segmented Options Row (Speed / Quality / Queue)
                         Card(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(12.dp),
@@ -1097,16 +1099,18 @@ fun PlayerScreen(
                                         ),
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
                                         Icon(
-                                            imageVector = Icons.Default.PlayArrow,
+                                            imageVector = Icons.Default.Speed,
                                             contentDescription = "Playback Speed",
                                             tint = MaterialTheme.colorScheme.primary,
                                             modifier = Modifier.size(18.dp)
                                         )
-                                        Spacer(Modifier.width(6.dp))
                                         Text(
-                                            text = "Speed: ${state.currentSpeed}x",
+                                            text = "${state.currentSpeed}x",
                                             style = MaterialTheme.typography.bodyMedium,
                                             fontWeight = FontWeight.SemiBold
                                         )
@@ -1128,135 +1132,176 @@ fun PlayerScreen(
                                     }
                                 }
 
-                                // Divider
+                                if (!state.isAudioOnly) {
+                                    // Divider between Speed and Quality
+                                    androidx.compose.material3.VerticalDivider(
+                                        modifier = Modifier.height(24.dp),
+                                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                                    )
+
+                                    // Quality Selector
+                                    var showQualityMenu by remember { mutableStateOf(false) }
+                                    val videoStreams = remember(state.availableStreams) {
+                                        val recommendedQualities = listOf("1080p", "720p", "480p", "360p", "240p", "144p")
+                                        state.availableStreams
+                                            .filter { it.format == "video" || it.format == "video_only" }
+                                            .groupBy { stream ->
+                                                recommendedQualities.firstOrNull { req -> stream.quality.startsWith(req) }
+                                                    ?: stream.quality.takeWhile { it.isDigit() }.let { if (it.isEmpty()) "Unknown" else "${it}p" }
+                                            }
+                                            .mapNotNull { (resName, streams) ->
+                                                if (resName == "Unknown") null else {
+                                                    streams.maxByOrNull { (it.contentLength ?: 0L) + (if (it.format == "video") 1_000_000_000L else 0L) }
+                                                }
+                                            }
+                                            .sortedByDescending { stream ->
+                                                stream.quality.takeWhile { it.isDigit() }.toIntOrNull() ?: 0
+                                            }
+                                    }
+                                    val currentQualityRes = state.videoQuality?.takeWhile { it.isDigit() } ?: ""
+                                    val currentIdxInVideo = videoStreams.indexOfFirst { it.quality.startsWith(currentQualityRes) }
+
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .fillMaxSize()
+                                            .combinedClickable(
+                                                enabled = videoStreams.isNotEmpty(),
+                                                onClick = {
+                                                    if (videoStreams.isNotEmpty()) {
+                                                        var nextIdx = (currentIdxInVideo - 1 + videoStreams.size) % videoStreams.size
+                                                        var attempts = 0
+                                                        while (attempts < videoStreams.size) {
+                                                            val candidateStream = videoStreams[nextIdx]
+                                                            val candRes = candidateStream.quality.takeWhile { it.isDigit() }
+                                                            val isCandDownloaded = state.completedDownloadQualities.any { it.takeWhile { c -> c.isDigit() } == candRes }
+                                                            val isOnline = state.availableStreams.any { it.url.startsWith("http") }
+                                                            if (isOnline || isCandDownloaded) {
+                                                                val nextStreamIndex = state.availableStreams.indexOf(candidateStream)
+                                                                if (nextStreamIndex != -1) {
+                                                                    viewModel.changeStreamQuality(nextStreamIndex)
+                                                                }
+                                                                break
+                                                            }
+                                                            nextIdx = (nextIdx - 1 + videoStreams.size) % videoStreams.size
+                                                            attempts++
+                                                        }
+                                                    }
+                                                },
+                                                onLongClick = { showQualityMenu = true }
+                                            ),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Tune,
+                                                contentDescription = "Video Quality",
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                            Text(
+                                                text = state.videoQuality ?: "Auto",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = MaterialTheme.colorScheme.onSurface,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+
+                                        if (videoStreams.isNotEmpty()) {
+                                            DropdownMenu(
+                                                expanded = showQualityMenu,
+                                                onDismissRequest = { showQualityMenu = false }
+                                            ) {
+                                                videoStreams.forEach { streamSource ->
+                                                    val streamRes = streamSource.quality.takeWhile { it.isDigit() }
+                                                    val isDownloaded = state.completedDownloadQualities.any { it.takeWhile { c -> c.isDigit() } == streamRes }
+                                                    val isSelected = remember(state.videoQuality, streamSource) {
+                                                        val currentRes = state.videoQuality?.takeWhile { it.isDigit() } ?: ""
+                                                        streamSource.quality.startsWith(currentRes)
+                                                    }
+
+                                                    val qualityLabel = if (!streamSource.codec.isNullOrEmpty()) {
+                                                        "${streamSource.quality} (${streamSource.codec})"
+                                                    } else {
+                                                        streamSource.quality
+                                                    }
+                                                    DropdownMenuItem(
+                                                        modifier = if (isSelected) {
+                                                            Modifier.background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f))
+                                                        } else {
+                                                            Modifier
+                                                        },
+                                                        text = {
+                                                            Row(
+                                                                verticalAlignment = Alignment.CenterVertically,
+                                                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                                            ) {
+                                                                Text(
+                                                                    text = qualityLabel,
+                                                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
+                                                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                                                )
+                                                                if (isDownloaded) {
+                                                                    Icon(
+                                                                        imageVector = Icons.Default.CheckCircle,
+                                                                        contentDescription = "Downloaded",
+                                                                        tint = MediaNestColors.Success,
+                                                                        modifier = Modifier.size(16.dp)
+                                                                    )
+                                                                }
+                                                            }
+                                                        },
+                                                        onClick = {
+                                                            val targetIndex = state.availableStreams.indexOf(streamSource)
+                                                            if (targetIndex != -1) {
+                                                                viewModel.changeStreamQuality(targetIndex)
+                                                            }
+                                                            showQualityMenu = false
+                                                        }
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // Divider between Quality (or Speed) and Queue
                                 androidx.compose.material3.VerticalDivider(
                                     modifier = Modifier.height(24.dp),
                                     color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
                                 )
 
-                                // Quality Selector
-                                var showQualityMenu by remember { mutableStateOf(false) }
-                                val videoStreams = remember(state.availableStreams) {
-                                    val recommendedQualities = listOf("1080p", "720p", "480p", "360p", "240p", "144p")
-                                    state.availableStreams
-                                        .filter { it.format == "video" || it.format == "video_only" }
-                                        .groupBy { stream ->
-                                            recommendedQualities.firstOrNull { req -> stream.quality.startsWith(req) }
-                                                ?: stream.quality.takeWhile { it.isDigit() }.let { if (it.isEmpty()) "Unknown" else "${it}p" }
-                                        }
-                                        .mapNotNull { (resName, streams) ->
-                                            if (resName == "Unknown") null else {
-                                                streams.maxByOrNull { (it.contentLength ?: 0L) + (if (it.format == "video") 1_000_000_000L else 0L) }
-                                            }
-                                        }
-                                        .sortedByDescending { stream ->
-                                            stream.quality.takeWhile { it.isDigit() }.toIntOrNull() ?: 0
-                                        }
-                                }
-                                val currentQualityRes = state.videoQuality?.takeWhile { it.isDigit() } ?: ""
-                                val currentIdxInVideo = videoStreams.indexOfFirst { it.quality.startsWith(currentQualityRes) }
-
+                                // Queue Selector
                                 Box(
                                     modifier = Modifier
                                         .weight(1f)
                                         .fillMaxSize()
-                                        .combinedClickable(
-                                            enabled = videoStreams.isNotEmpty(),
-                                            onClick = {
-                                                if (videoStreams.isNotEmpty()) {
-                                                    var nextIdx = (currentIdxInVideo - 1 + videoStreams.size) % videoStreams.size
-                                                    var attempts = 0
-                                                    while (attempts < videoStreams.size) {
-                                                        val candidateStream = videoStreams[nextIdx]
-                                                        val candRes = candidateStream.quality.takeWhile { it.isDigit() }
-                                                        val isCandDownloaded = state.completedDownloadQualities.any { it.takeWhile { c -> c.isDigit() } == candRes }
-                                                        val isOnline = state.availableStreams.any { it.url.startsWith("http") }
-                                                        if (isOnline || isCandDownloaded) {
-                                                            val nextStreamIndex = state.availableStreams.indexOf(candidateStream)
-                                                            if (nextStreamIndex != -1) {
-                                                                viewModel.changeStreamQuality(nextStreamIndex)
-                                                            }
-                                                            break
-                                                        }
-                                                        nextIdx = (nextIdx - 1 + videoStreams.size) % videoStreams.size
-                                                        attempts++
-                                                    }
-                                                }
-                                            },
-                                            onLongClick = { showQualityMenu = true }
-                                        ),
+                                        .clickable {
+                                            isQueueExpanded = !isQueueExpanded
+                                        },
                                     contentAlignment = Alignment.Center
                                 ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
                                         Icon(
-                                            imageVector = Icons.Default.Fullscreen,
-                                            contentDescription = "Video Quality",
-                                            tint = MaterialTheme.colorScheme.primary,
+                                            imageVector = Icons.AutoMirrored.Filled.QueueMusic,
+                                            contentDescription = "Up Next queue",
+                                            tint = if (hasQueueContext && isQueueExpanded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                                             modifier = Modifier.size(18.dp)
                                         )
-                                        Spacer(Modifier.width(6.dp))
                                         Text(
-                                            text = "Quality: ${state.videoQuality ?: "Auto"}",
+                                            text = if (currentQueue.isNotEmpty()) "Queue (${currentQueue.size})" else "Queue",
                                             style = MaterialTheme.typography.bodyMedium,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = MaterialTheme.colorScheme.onSurface
+                                            fontWeight = if (hasQueueContext && isQueueExpanded) FontWeight.SemiBold else FontWeight.Normal,
+                                            color = if (hasQueueContext && isQueueExpanded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                                         )
-                                    }
-
-                                    if (videoStreams.isNotEmpty()) {
-                                        DropdownMenu(
-                                            expanded = showQualityMenu,
-                                            onDismissRequest = { showQualityMenu = false }
-                                        ) {
-                                            videoStreams.forEach { streamSource ->
-                                                val streamRes = streamSource.quality.takeWhile { it.isDigit() }
-                                                val isDownloaded = state.completedDownloadQualities.any { it.takeWhile { c -> c.isDigit() } == streamRes }
-                                                val isSelected = remember(state.videoQuality, streamSource) {
-                                                    val currentRes = state.videoQuality?.takeWhile { it.isDigit() } ?: ""
-                                                    streamSource.quality.startsWith(currentRes)
-                                                }
-
-                                                val qualityLabel = if (!streamSource.codec.isNullOrEmpty()) {
-                                                    "${streamSource.quality} (${streamSource.codec})"
-                                                } else {
-                                                    streamSource.quality
-                                                }
-                                                DropdownMenuItem(
-                                                    modifier = if (isSelected) {
-                                                        Modifier.background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f))
-                                                    } else {
-                                                        Modifier
-                                                    },
-                                                    text = {
-                                                        Row(
-                                                            verticalAlignment = Alignment.CenterVertically,
-                                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                                        ) {
-                                                            Text(
-                                                                text = qualityLabel,
-                                                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                                                            )
-                                                            if (isDownloaded) {
-                                                                Icon(
-                                                                    imageVector = Icons.Default.CheckCircle,
-                                                                    contentDescription = "Downloaded",
-                                                                    tint = MediaNestColors.Success,
-                                                                    modifier = Modifier.size(16.dp)
-                                                                )
-                                                            }
-                                                        }
-                                                    },
-                                                    onClick = {
-                                                        val targetIndex = state.availableStreams.indexOf(streamSource)
-                                                        if (targetIndex != -1) {
-                                                            viewModel.changeStreamQuality(targetIndex)
-                                                        }
-                                                        showQualityMenu = false
-                                                    }
-                                                )
-                                            }
-                                        }
                                     }
                                 }
                             }
@@ -1297,7 +1342,7 @@ fun PlayerScreen(
                                     ) {
                                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                             Icon(
-                                                imageVector = Icons.Default.QueueMusic,
+                                                imageVector = Icons.AutoMirrored.Filled.QueueMusic,
                                                 contentDescription = null,
                                                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                                                 modifier = Modifier.size(36.dp)
@@ -1357,18 +1402,18 @@ fun PlayerScreen(
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .background(Color.Black.copy(alpha = 0.7f))
+                            .background(MediaNestColors.PlayerSurface.copy(alpha = 0.7f))
                             .clickable { viewModel.resetError() },
                         contentAlignment = Alignment.Center
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(errorMsg, color = Color.White)
+                            Text(errorMsg, color = MediaNestColors.TextPrimary)
                             Spacer(Modifier.height(8.dp))
                             Button(onClick = { viewModel.retry() }) {
                                 Text("Retry")
                             }
                             Spacer(Modifier.height(4.dp))
-                            Text("Tap to dismiss", color = Color.White.copy(alpha = 0.7f))
+                            Text("Tap to dismiss", color = MediaNestColors.TextSecondary)
                         }
                     }
                 }
@@ -1474,10 +1519,10 @@ fun AutoplayQueueHeader(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             val contextIcon = when (contextType?.lowercase()) {
-                "playlist" -> Icons.Default.PlaylistPlay
+                "playlist" -> Icons.AutoMirrored.Filled.PlaylistPlay
                 "folder" -> Icons.Default.Folder
                 "favorites" -> Icons.Default.Favorite
-                else -> Icons.Default.QueueMusic
+                else -> Icons.AutoMirrored.Filled.QueueMusic
             }
             val defaultTitle = when (contextType?.lowercase()) {
                 "playlist" -> "Playlist"
@@ -1649,7 +1694,7 @@ fun PlayerQueueItemRow(
                 }
                 if (item.durationSeconds > 0L) {
                     Surface(
-                        color = Color.Black.copy(alpha = 0.75f),
+                        color = MediaNestColors.PlayerSurface.copy(alpha = 0.75f),
                         shape = RoundedCornerShape(2.dp),
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
@@ -1658,7 +1703,7 @@ fun PlayerQueueItemRow(
                         Text(
                             text = UiUtils.formatDuration(item.durationSeconds),
                             style = MaterialTheme.typography.labelSmall,
-                            color = Color.White,
+                            color = MediaNestColors.TextPrimary,
                             modifier = Modifier.padding(horizontal = 3.dp, vertical = 1.dp)
                         )
                     }

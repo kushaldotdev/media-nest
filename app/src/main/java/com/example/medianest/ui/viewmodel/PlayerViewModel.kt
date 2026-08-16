@@ -393,7 +393,7 @@ class PlayerViewModel @Inject constructor(
 
     private fun checkAndMarkWatched(pos: Long, duration: Long) {
         val videoId = currentVideoId ?: return
-        if (!countedThisSession && duration > 0 && pos >= duration * 0.9) {
+        if (!countedThisSession && duration > 0 && (duration - pos) <= 60000L) {
             countedThisSession = true
             viewModelScope.launch {
                 ensureVideoExists(videoId)

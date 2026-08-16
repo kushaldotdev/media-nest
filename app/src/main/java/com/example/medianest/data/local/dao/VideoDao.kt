@@ -89,6 +89,12 @@ interface VideoDao {
     @Query("SELECT COALESCE(SUM(watchCount), 0) FROM videos")
     suspend fun getTotalWatchCountSum(): Int
 
+    @Query("SELECT * FROM videos")
+    suspend fun getAllVideosList(): List<VideoEntity>
+
+    @Query("SELECT COUNT(*) FROM videos WHERE favorite = 1")
+    suspend fun getFavoriteCount(): Int
+
     @Query("DELETE FROM videos WHERE favorite = 0 AND lastPlayedAt IS NULL AND (localFilePath = '' OR localFilePath IS NULL) AND id NOT IN (SELECT videoId FROM video_folder_join)")
     suspend fun deleteSearchedOrphans()
 }

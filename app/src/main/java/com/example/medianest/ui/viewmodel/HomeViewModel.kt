@@ -539,6 +539,12 @@ class HomeViewModel @Inject constructor(
         }
     }
 
+    fun clearAllLinkHistory() {
+        viewModelScope.launch {
+            linkHistoryDao.clearAll()
+        }
+    }
+
     fun subscribe(sourceType: String, sourceId: String, name: String, thumbnailUrl: String?) {
         viewModelScope.launch {
             subscriptionRepository.subscribe(sourceType, sourceId, name, thumbnailUrl)
