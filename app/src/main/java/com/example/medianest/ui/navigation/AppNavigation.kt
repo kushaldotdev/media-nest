@@ -308,33 +308,9 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
                     onVideoClick = { videoId ->
                         navController.navigate("videoDetail/$videoId")
                     },
-                    onSubscriptionClick = { type, id ->
-                        var url = if (id.startsWith("http")) {
-                            id
-                        } else if (id.contains("youtube.com")) {
-                            if (id.startsWith("//")) "https:$id" else "https://$id"
-                        } else if (type == "playlist") {
-                            val cleanId = id.substringAfter("list=")
-                            "https://www.youtube.com/playlist?list=$cleanId"
-                        } else if (id.startsWith("@")) {
-                            "https://www.youtube.com/$id"
-                        } else {
-                            val cleanId = id.removePrefix("/").removePrefix("channel/").removePrefix("c/")
-                            "https://www.youtube.com/channel/$cleanId"
-                        }
-                        if (type != "playlist") {
-                            val cleanUrl = url.trim().removeSuffix("/")
-                            if (!cleanUrl.endsWith("/videos")) {
-                                url = "$cleanUrl/videos"
-                            }
-                        }
-                        navController.navigate(BottomNavItem.Home.route + "?url=${java.net.URLEncoder.encode(url, "UTF-8")}") {
-                            popUpTo(navController.graph.startDestinationId) {
-                                saveState = false
-                            }
-                            launchSingleTop = true
-                            restoreState = false
-                        }
+                    onSubscriptionClick = { _, _ -> },
+                    onNavigateToStatistics = {
+                        navController.navigate(NavigationRoutes.STATISTICS)
                     }
                 )
             }

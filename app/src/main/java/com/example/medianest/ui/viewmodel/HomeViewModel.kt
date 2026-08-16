@@ -90,7 +90,7 @@ class HomeViewModel @Inject constructor(
     private val _uiState = MutableStateFlow<HomeUiState>(HomeUiState.Idle)
     val uiState: StateFlow<HomeUiState> = _uiState
 
-    private val _showShorts = MutableStateFlow(true)
+    private val _showShorts = MutableStateFlow(false)
     val showShorts: StateFlow<Boolean> = _showShorts
 
     val watchCounts: StateFlow<Map<String, Int>> = videoDao.getAllVideos()

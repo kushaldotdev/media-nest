@@ -9,6 +9,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -41,6 +42,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.example.medianest.data.local.entity.FolderEntity
 import com.example.medianest.data.local.entity.VideoEntity
+import com.example.medianest.ui.theme.MediaNestColors
 import com.example.medianest.ui.utils.UiUtils
 import com.example.medianest.ui.viewmodel.LibraryTab
 import com.example.medianest.ui.viewmodel.LibraryViewModel
@@ -58,9 +60,22 @@ import kotlinx.coroutines.launch
 @Composable
 fun LibraryScreen(
     onVideoClick: (String) -> Unit,
-    onSubscriptionClick: (String, String) -> Unit,
+    onSubscriptionClick: (String, String) -> Unit = { _, _ -> },
+    onNavigateToStatistics: () -> Unit = {},
     viewModel: LibraryViewModel = hiltViewModel()
 ) {
+    var selectedSubscription by remember { mutableStateOf<Pair<String, String>?>(null) }
+
+    if (selectedSubscription != null) {
+        InlineSubscriptionScreen(
+            sourceType = selectedSubscription!!.first,
+            sourceId = selectedSubscription!!.second,
+            onBack = { selectedSubscription = null },
+            onVideoClick = onVideoClick
+        )
+        return
+    }
+
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val videos by viewModel.videos.collectAsStateWithLifecycle()
     val favoriteVideos by viewModel.favoriteVideos.collectAsStateWithLifecycle()
@@ -103,8 +118,14 @@ fun LibraryScreen(
             snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
-                title = { Text(if (uiState.isSelectionMode) "${uiState.selectedVideoIds.size} Selected" else "Library") },
+                title = { Text(if (uiState.isSelectionMode) "${uiState.selectedVideoIds.size} Selected" else "Collections") },
                 actions = {
+                    IconButton(onClick = onNavigateToStatistics) {
+                        Icon(
+                            Icons.Default.BarChart,
+                            contentDescription = "Statistics"
+                        )
+                    }
                     if (uiState.currentTab != LibraryTab.FOLDERS || uiState.selectedFolder != null) {
                         IconButton(onClick = { viewModel.toggleViewMode() }) {
                             Icon(
@@ -218,6 +239,7 @@ fun LibraryScreen(
                             fetchedStreams = fetchedStreams,
                             allDownloads = allDownloads,
                             playbackHistory = playbackHistory,
+                            showContinueWatching = true,
                             onVideoClick = onVideoClick,
                             onVideoLongClick = { viewModel.toggleSelectionMode(); viewModel.toggleVideoSelection(it) },
                             onToggleSelection = { viewModel.toggleVideoSelection(it) },
@@ -399,7 +421,10 @@ fun LibraryScreen(
                         sourceType = "playlist",
                         searchQuery = uiState.searchQuery,
                         viewMode = uiState.viewMode,
-                        onSubscriptionClick = onSubscriptionClick
+                        onSubscriptionClick = { type, id ->
+                            selectedSubscription = Pair(type, id)
+                            onSubscriptionClick(type, id)
+                        }
                     )
                 }
                 LibraryTab.SUBSCRIPTIONS -> {
@@ -407,7 +432,10 @@ fun LibraryScreen(
                         sourceType = "channel",
                         searchQuery = uiState.searchQuery,
                         viewMode = uiState.viewMode,
-                        onSubscriptionClick = onSubscriptionClick
+                        onSubscriptionClick = { type, id ->
+                            selectedSubscription = Pair(type, id)
+                            onSubscriptionClick(type, id)
+                        }
                     )
                 }
                 }
@@ -540,6 +568,159 @@ fun LibraryScreen(
     }
 }
 
+private data class ContinueWatchingItem(
+    val video: VideoEntity,
+    val positionMillis: Long,
+    val progressFraction: Float
+)
+
+@Composable
+private fun ContinueWatchingRow(
+    items: List<ContinueWatchingItem>,
+    onVideoClick: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+    ) {
+        Text(
+            text = "Continue watching",
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
+        )
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
+        ) {
+            items(items, key = { "cw_${it.video.id}" }) { item ->
+                ContinueWatchingCard(
+                    video = item.video,
+                    positionMillis = item.positionMillis,
+                    progressFraction = item.progressFraction,
+                    onClick = { onVideoClick(item.video.id) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ContinueWatchingCard(
+    video: VideoEntity,
+    positionMillis: Long,
+    progressFraction: Float,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val posSeconds = positionMillis / 1000
+    val posLabel = if (posSeconds > 0) "Left off at ${UiUtils.formatDuration(posSeconds)}" else ""
+    val isAudio = video.mediaType.equals("AUDIO", ignoreCase = true)
+
+    GlassCard(
+        onClick = onClick,
+        modifier = modifier
+            .width(200.dp)
+            .clip(RoundedCornerShape(12.dp))
+    ) {
+        Column {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(110.dp)
+            ) {
+                AsyncImage(
+                    model = video.thumbnailUrl,
+                    contentDescription = video.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+
+                // Media type badge - bottom start
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(6.dp)
+                        .background(
+                            color = if (isAudio) MediaNestColors.AccentDeep.copy(alpha = 0.85f) else MediaNestColors.PlayerSurface.copy(alpha = 0.7f),
+                            shape = RoundedCornerShape(4.dp)
+                        )
+                        .padding(horizontal = 4.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    Icon(
+                        imageVector = if (isAudio) Icons.Default.AudioFile else Icons.Default.Videocam,
+                        contentDescription = if (isAudio) "AUDIO" else "VIDEO",
+                        tint = MediaNestColors.TextPrimary,
+                        modifier = Modifier.size(12.dp)
+                    )
+                }
+
+                // Play icon in center
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .size(36.dp)
+                        .background(
+                            color = MediaNestColors.PlayerSurface.copy(alpha = 0.6f),
+                            shape = RoundedCornerShape(50)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PlayArrow,
+                        contentDescription = "Play",
+                        tint = MediaNestColors.TextPrimary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+
+                // Playback progress bar at bottom edge
+                if (progressFraction > 0f) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(2.dp)
+                            .align(Alignment.BottomCenter)
+                            .background(MediaNestColors.ProgressTrack.copy(alpha = 0.3f))
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(progressFraction.coerceIn(0f, 1f))
+                                .height(2.dp)
+                                .background(MediaNestColors.YouTubeRed)
+                        )
+                    }
+                }
+            }
+
+            Column(
+                modifier = Modifier
+                    .padding(8.dp)
+            ) {
+                Text(
+                    text = video.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (posLabel.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = posLabel,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun VideoListLayout(
     videos: List<VideoEntity>,
@@ -562,13 +743,34 @@ private fun VideoListLayout(
     onDeleteDownload: (com.example.medianest.data.local.entity.DownloadEntity) -> Unit,
     onExtractAudio: (com.example.medianest.data.local.entity.DownloadEntity) -> Unit,
     onLoadMore: (() -> Unit)? = null,
-    onMarkWatched: (String) -> Unit = {}
+    onMarkWatched: (String) -> Unit = {},
+    showContinueWatching: Boolean = false
 ) {
     val onMoveToFolderClick = LocalMoveToFolder.current
     val context = LocalContext.current
 
     val gridState = rememberLazyGridState()
     val listState = rememberLazyListState()
+
+    val continueWatchingList = remember(videos, playbackHistory, showContinueWatching) {
+        if (!showContinueWatching) {
+            emptyList()
+        } else {
+            videos.mapNotNull { video ->
+                val history = playbackHistory.find { it.videoId == video.id }
+                val positionMillis = history?.positionMillis ?: 0L
+                val progressFraction = if (video.durationSeconds > 0 && positionMillis > 0) {
+                    ((positionMillis.toFloat() / 1000f) / video.durationSeconds.toFloat()).coerceIn(0f, 1f)
+                } else 0f
+
+                if (progressFraction > 0f && progressFraction < 0.95f) {
+                    ContinueWatchingItem(video, positionMillis, progressFraction)
+                } else {
+                    null
+                }
+            }
+        }
+    }
 
     if (onLoadMore != null) {
         val shouldLoadMoreGrid = remember {
@@ -607,6 +809,21 @@ private fun VideoListLayout(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            if (continueWatchingList.isNotEmpty()) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    ContinueWatchingRow(
+                        items = continueWatchingList,
+                        onVideoClick = onVideoClick
+                    )
+                }
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Text(
+                        text = "All videos",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
+                    )
+                }
+            }
             items(videos, key = { it.id }) { video ->
                 val history = playbackHistory.find { it.videoId == video.id }
                 val positionMillis = history?.positionMillis ?: 0L
@@ -665,6 +882,21 @@ private fun VideoListLayout(
             modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            if (continueWatchingList.isNotEmpty()) {
+                item {
+                    ContinueWatchingRow(
+                        items = continueWatchingList,
+                        onVideoClick = onVideoClick
+                    )
+                }
+                item {
+                    Text(
+                        text = "All videos",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
+                    )
+                }
+            }
             items(videos, key = { it.id }) { video ->
                 val history = playbackHistory.find { it.videoId == video.id }
                 val positionMillis = history?.positionMillis ?: 0L
