@@ -277,6 +277,10 @@
      Rendering entry
      ------------------------------------------------------------------------- */
 	function mount(el) {
+		var storeMode = MN.store.get().collectionsViewMode;
+		if (storeMode) {
+			state.view = storeMode.toLowerCase() === "grid" ? "grid" : "list";
+		}
 		render(el);
 
 		function onScroll() {
@@ -850,14 +854,25 @@
 		// subfolder rows
 		var visibleLimit = getVisibleCount();
 		if (folders.length) {
-			html += '<div class="mn-list" style="margin-bottom:10px">';
-			folders.slice(0, visibleLimit).forEach((f) => {
-				var count = DATA.videos.filter((v) =>
-					foldersFor(v.id).some((x) => x.id === f.id),
-				).length;
-				html += folderRowHtml(f, count);
-			});
-			html += "</div>";
+			if (state.view === "grid") {
+				html += '<div class="mn-grid" style="margin-bottom:12px">';
+				folders.slice(0, visibleLimit).forEach((f) => {
+					var count = DATA.videos.filter((v) =>
+						foldersFor(v.id).some((x) => x.id === f.id),
+					).length;
+					html += folderGridCardHtml(f, count);
+				});
+				html += "</div>";
+			} else {
+				html += '<div class="mn-list" style="margin-bottom:10px">';
+				folders.slice(0, visibleLimit).forEach((f) => {
+					var count = DATA.videos.filter((v) =>
+						foldersFor(v.id).some((x) => x.id === f.id),
+					).length;
+					html += folderRowHtml(f, count);
+				});
+				html += "</div>";
+			}
 		}
 
 		// videos
@@ -885,17 +900,24 @@
 		return html;
 	}
 
-	function folderRowHtml(f, count) {
+	function folderGridCardHtml(f, count) {
 		return (
-			'<div class="mn-card mn-card--interactive" style="padding:0;margin-bottom:8px">' +
-			'<div class="mn-setting-row" data-folder="' +
+			'<div class="mn-media-card" data-folder="' +
 			f.id +
 			'">' +
-			'<div class="mn-setting-row__icon">' +
+			'<div class="mn-card mn-card--interactive mn-card--pad" style="height:100%;display:flex;flex-direction:column;gap:8px;padding:12px">' +
+			'<div class="mn-row mn-between">' +
+			'<div style="width:40px;height:40px;border-radius:var(--mn-r-md);background:var(--mn-accent-subtle);color:var(--mn-accent);display:flex;align-items:center;justify-content:center">' +
 			MN.icon("folder") +
 			"</div>" +
-			'<div class="mn-setting-row__body">' +
-			'<div class="mn-setting-row__title">' +
+			'<button class="mn-icon-btn mn-icon-btn--sm" data-more="folder:' +
+			f.id +
+			'" aria-label="Folder options" title="Folder options">' +
+			MN.icon("more", "mn-icon--sm") +
+			"</button>" +
+			"</div>" +
+			'<div style="margin-top:auto">' +
+			'<div class="mn-setting-row__title" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' +
 			MN.esc(f.name) +
 			"</div>" +
 			'<div class="mn-setting-row__desc">' +
@@ -904,11 +926,36 @@
 			(count === 1 ? "" : "s") +
 			"</div>" +
 			"</div>" +
+			"</div></div>"
+		);
+	}
+
+	function folderRowHtml(f, count) {
+		return (
+			'<div class="mn-card mn-card--interactive" style="padding:10px 14px;margin-bottom:8px" data-folder="' +
+			f.id +
+			'">' +
+			'<div class="mn-row mn-gap-3" style="align-items:flex-start">' +
+			'<div style="width:38px;height:38px;border-radius:var(--mn-r-md);background:var(--mn-accent-subtle);color:var(--mn-accent);display:flex;align-items:center;justify-content:center;flex:0 0 auto">' +
+			MN.icon("folder") +
+			"</div>" +
+			'<div class="mn-fill" style="min-width:0">' +
+			'<div class="mn-setting-row__title" style="white-space:normal;word-break:break-word">' +
+			MN.esc(f.name) +
+			"</div>" +
+			'<div class="mn-row mn-between" style="align-items:center;margin-top:2px">' +
+			'<div class="mn-setting-row__desc">' +
+			count +
+			" video" +
+			(count === 1 ? "" : "s") +
+			"</div>" +
 			'<button class="mn-icon-btn mn-icon-btn--sm" data-more="folder:' +
 			f.id +
 			'" aria-label="Folder options" title="Folder options">' +
 			MN.icon("more", "mn-icon--sm") +
 			"</button>" +
+			"</div>" +
+			"</div>" +
 			"</div>" +
 			"</div>"
 		);
@@ -1154,11 +1201,19 @@
 			type === "playlist" ? "Playlists" : "Channels",
 			true,
 		);
-		html += '<div class="mn-list">';
-		sortedSubs.slice(0, getVisibleCount()).forEach((s) => {
-			html += subscriptionCardHtml(s);
-		});
-		html += "</div>";
+		if (state.view === "grid") {
+			html += '<div class="mn-grid">';
+			sortedSubs.slice(0, getVisibleCount()).forEach((s) => {
+				html += subscriptionGridCardHtml(s);
+			});
+			html += "</div>";
+		} else {
+			html += '<div class="mn-list">';
+			sortedSubs.slice(0, getVisibleCount()).forEach((s) => {
+				html += subscriptionCardHtml(s);
+			});
+			html += "</div>";
+		}
 
 		if (totalLength > 0) {
 			if (getVisibleCount() >= totalLength) {
@@ -1175,6 +1230,71 @@
 		return html;
 	}
 
+	function subscriptionGridCardHtml(s) {
+		var isPlaylist = s.sourceType === "playlist";
+		var typeLabel = isPlaylist ? "Playlist" : "Channel";
+		return (
+			'<div class="mn-media-card" data-sub="' +
+			s.id +
+			'">' +
+			'<div class="mn-card mn-card--interactive" style="padding:10px;height:100%;display:flex;flex-direction:column">' +
+			'<div style="position:relative;width:100%;aspect-ratio:16/9;background:var(--mn-surface);border-radius:var(--mn-r-sm);overflow:hidden;display:flex;align-items:center;justify-content:center">' +
+			(isPlaylist
+				? '<img src="' +
+					MN.esc(s.thumbnailUrl) +
+					'" alt="" style="width:100%;height:100%;object-fit:cover" />' +
+					'<span class="mn-thumb__badge mn-thumb__badge--br">' +
+					MN.icon("playlist", "mn-icon--sm") +
+					"</span>"
+				: '<div style="display:flex;align-items:center;justify-content:center;width:100%;height:100%">' +
+					'<img src="' +
+					MN.esc(s.thumbnailUrl) +
+					'" alt="" style="width:64px;height:64px;border-radius:50%;object-fit:cover" />' +
+					"</div>") +
+			"</div>" +
+			'<div class="mn-media-card__body" style="flex:1;display:flex;flex-direction:column;gap:4px">' +
+			'<p class="mn-media-card__title" style="width:100%">' +
+			MN.esc(s.name) +
+			"</p>" +
+			'<div class="mn-row mn-between" style="align-items:center;min-height:24px">' +
+			'<div class="mn-media-card__meta" style="display:flex;align-items:center;gap:4px">' +
+			MN.icon(isPlaylist ? "playlist" : "channel", "mn-icon--sm") +
+			" " +
+			typeLabel +
+			"</div>" +
+			'<button class="mn-icon-btn mn-icon-btn--sm" data-more="sub:' +
+			s.id +
+			'" aria-label="Subscription options" title="Subscription options">' +
+			MN.icon("more", "mn-icon--sm") +
+			"</button>" +
+			"</div>" +
+			'<div class="mn-stack mn-gap-1" style="margin-top:auto;padding-top:8px;border-top:1px solid rgba(255,255,255,0.06)">' +
+			'<div class="mn-row mn-between">' +
+			'<span class="mn-key" style="font-size:11px">Auto-dl</span>' +
+			'<button class="mn-switch' +
+			(s.autoDownload ? " mn-switch--on" : "") +
+			'" data-autodl="' +
+			s.id +
+			'" role="switch" aria-checked="' +
+			(s.autoDownload ? "true" : "false") +
+			'" title="Toggle auto-download"></button>' +
+			"</div>" +
+			'<div class="mn-row mn-between">' +
+			'<span class="mn-key" style="font-size:11px">Audio</span>' +
+			'<button class="mn-switch' +
+			(s.audioOnly ? " mn-switch--on" : "") +
+			'" data-audioonly="' +
+			s.id +
+			'" role="switch" aria-checked="' +
+			(s.audioOnly ? "true" : "false") +
+			'" title="Toggle audio-only auto-download"></button>' +
+			"</div>" +
+			"</div>" +
+			"</div>" +
+			"</div></div>"
+		);
+	}
+
 	function subscriptionCardHtml(s) {
 		var isPlaylist = s.sourceType === "playlist";
 		var radius = isPlaylist ? "var(--mn-r-sm)" : "50%";
@@ -1183,27 +1303,29 @@
 			'<div class="mn-card mn-card--interactive mn-card--pad" data-sub="' +
 			s.id +
 			'">' +
-			'<div class="mn-row mn-gap-3">' +
+			'<div class="mn-row mn-gap-3" style="align-items:flex-start">' +
 			'<img src="' +
 			MN.esc(s.thumbnailUrl) +
 			'" alt="" style="width:52px;height:52px;border-radius:' +
 			radius +
-			';object-fit:cover" />' +
-			'<div class="mn-fill">' +
-			'<div class="mn-setting-row__title">' +
+			';object-fit:cover;flex:0 0 auto" />' +
+			'<div class="mn-fill" style="min-width:0">' +
+			'<div class="mn-setting-row__title" style="white-space:normal;word-break:break-word">' +
 			MN.esc(s.name) +
 			"</div>" +
-			'<div class="mn-setting-row__desc">' +
+			'<div class="mn-row mn-between" style="align-items:center;margin-top:4px">' +
+			'<div class="mn-setting-row__desc" style="display:flex;align-items:center;gap:4px">' +
 			MN.icon(isPlaylist ? "playlist" : "channel", "mn-icon--sm") +
 			" " +
 			typeLabel +
-			"</div>" +
 			"</div>" +
 			'<button class="mn-icon-btn mn-icon-btn--sm" data-more="sub:' +
 			s.id +
 			'" aria-label="Subscription options" title="Subscription options">' +
 			MN.icon("more", "mn-icon--sm") +
 			"</button>" +
+			"</div>" +
+			"</div>" +
 			"</div>" +
 			'<div class="mn-row mn-between" style="margin-top:10px">' +
 			'<div class="mn-row mn-gap-2">' +
