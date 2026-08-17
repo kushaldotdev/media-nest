@@ -97,6 +97,22 @@ class HomeViewModel @Inject constructor(
         .map { list -> list.associate { it.id to it.watchCount } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
+    val continueWatchingVideos: StateFlow<List<Pair<VideoEntity, HistoryEntity>>> = combine(
+        videoDao.getAllVideos(),
+        historyDao.getAllHistory()
+    ) { videos, histories ->
+        val videoMap = videos.associateBy { it.id }
+        histories.mapNotNull { history ->
+            val video = videoMap[history.videoId]
+            if (video != null && history.positionMillis > 0 && video.durationSeconds > 0) {
+                val progress = history.positionMillis.toFloat() / (video.durationSeconds * 1000f)
+                if (progress > 0.01f && progress < 0.98f) {
+                    video to history
+                } else null
+            } else null
+        }.sortedByDescending { it.second.playedAt }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     fun toggleShorts(show: Boolean) {
         _showShorts.value = show
     }
