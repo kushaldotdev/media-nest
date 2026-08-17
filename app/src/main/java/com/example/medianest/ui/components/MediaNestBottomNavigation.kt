@@ -23,16 +23,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.VideoLibrary
-import androidx.compose.material.icons.outlined.Download
-import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.VideoLibrary
-import androidx.compose.material.ripple.rememberRipple
+import androidx.annotation.DrawableRes
+import androidx.compose.ui.res.painterResource
+import com.example.medianest.R
+import androidx.compose.material3.ripple
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -61,8 +55,7 @@ import com.example.medianest.ui.theme.MediaNestTheme
 data class MediaNestNavigationItem(
     val route: String,
     val label: String,
-    val icon: ImageVector,
-    val selectedIcon: ImageVector = icon,
+    @DrawableRes val iconRes: Int,
     val badgeCount: Int? = null
 )
 
@@ -74,26 +67,22 @@ object MediaNestBottomNavDefaults {
         MediaNestNavigationItem(
             route = "home",
             label = "Home",
-            icon = Icons.Outlined.Home,
-            selectedIcon = Icons.Filled.Home
+            iconRes = R.drawable.ic_mn_home
         ),
         MediaNestNavigationItem(
-            route = "library",
+            route = "collections",
             label = "Library",
-            icon = Icons.Outlined.VideoLibrary,
-            selectedIcon = Icons.Filled.VideoLibrary
+            iconRes = R.drawable.ic_mn_library
         ),
         MediaNestNavigationItem(
             route = "downloads",
             label = "Downloads",
-            icon = Icons.Outlined.Download,
-            selectedIcon = Icons.Filled.Download
+            iconRes = R.drawable.ic_mn_download
         ),
         MediaNestNavigationItem(
             route = "settings",
             label = "Settings",
-            icon = Icons.Outlined.Settings,
-            selectedIcon = Icons.Filled.Settings
+            iconRes = R.drawable.ic_mn_settings
         )
     )
 }
@@ -211,7 +200,7 @@ fun MediaNestBottomNavigationItemView(
             .clip(RoundedCornerShape(12.dp))
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
-                indication = rememberRipple(bounded = true, radius = 28.dp),
+                indication = ripple(bounded = true, radius = 28.dp),
                 onClick = onClick
             ),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -238,7 +227,7 @@ fun MediaNestBottomNavigationItemView(
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                imageVector = if (selected) item.selectedIcon else item.icon,
+                painter = painterResource(item.iconRes),
                 contentDescription = item.label,
                 tint = iconColor,
                 modifier = Modifier

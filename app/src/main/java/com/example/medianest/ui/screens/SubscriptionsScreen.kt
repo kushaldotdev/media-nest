@@ -20,8 +20,9 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
+import androidx.compose.ui.res.painterResource
+import com.example.medianest.R
+import com.example.medianest.ui.theme.MediaNestColors
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -320,9 +321,9 @@ private fun SubscriptionCard(
                 }
                 IconButton(onClick = onUnsubscribe) {
                     Icon(
-                        imageVector = Icons.Default.Delete,
+                        painter = painterResource(R.drawable.ic_mn_trash),
                         contentDescription = if (subscription.sourceType == "playlist") "Delete playlist" else "Unsubscribe",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        tint = MediaNestColors.Destructive
                     )
                 }
             }

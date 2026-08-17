@@ -818,7 +818,7 @@ fun QuickDownloadMenu(
                                     val codecLabel = if (stream.codec.isNotEmpty()) " (${stream.codec.uppercase()})" else ""
                                     Text("$typeLabel$codecLabel$sizeStr")
                                 },
-                                leadingIcon = { Icon(Icons.Default.Download, "Download") },
+                                leadingIcon = { Icon(painter = painterResource(R.drawable.ic_mn_download), contentDescription = "Download") },
                                 onClick = { onEnqueueDownload(fetchedStreams, stream); onDismiss() }
                             )
                         }

@@ -18,21 +18,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Forward10
-import androidx.compose.material.icons.filled.Replay10
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Fullscreen
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.FullscreenExit
-import androidx.compose.material.icons.filled.Replay5
-import androidx.compose.material.icons.filled.Replay30
-import androidx.compose.material.icons.filled.Forward5
-import androidx.compose.material.icons.filled.Forward30
-import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.ui.res.painterResource
+import com.example.medianest.R
 import android.content.Context
 import android.content.ContextWrapper
 import android.app.Activity
@@ -329,7 +316,7 @@ fun PlayerScreen(
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
-                                imageVector = if (playing) Icons.Default.PlayArrow else Icons.Default.Pause,
+                                painter = painterResource(if (playing) R.drawable.ic_mn_play else R.drawable.ic_mn_pause),
                                 contentDescription = null,
                                 tint = MediaNestColors.TextPrimary,
                                 modifier = Modifier.size(40.dp)
@@ -362,7 +349,7 @@ fun PlayerScreen(
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Icon(
-                                imageVector = Icons.Default.Replay10,
+                                painter = painterResource(R.drawable.ic_mn_rewind10),
                                 contentDescription = null,
                                 tint = MediaNestColors.TextPrimary,
                                 modifier = Modifier.size(36.dp)
@@ -402,7 +389,7 @@ fun PlayerScreen(
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Icon(
-                                imageVector = Icons.Default.Forward10,
+                                painter = painterResource(R.drawable.ic_mn_forward10),
                                 contentDescription = null,
                                 tint = MediaNestColors.TextPrimary,
                                 modifier = Modifier.size(36.dp)
@@ -442,7 +429,7 @@ fun PlayerScreen(
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f, fill = false)) {
                             IconButton(onClick = { isFullScreen = false }) {
-                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = MediaNestColors.TextPrimary)
+                                Icon(painter = painterResource(R.drawable.ic_mn_back), contentDescription = "Back", tint = MediaNestColors.TextPrimary)
                             }
                             Spacer(Modifier.width(8.dp))
                             Text(
@@ -483,7 +470,7 @@ fun PlayerScreen(
                                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
                                     Icon(
-                                        imageVector = Icons.Default.Visibility,
+                                        painter = painterResource(R.drawable.ic_mn_eye),
                                         contentDescription = null,
                                         tint = MediaNestColors.TextPrimary,
                                         modifier = Modifier.size(14.dp)
@@ -500,7 +487,7 @@ fun PlayerScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             IconButton(onClick = { isFullScreen = false }) {
-                                Icon(Icons.Default.FullscreenExit, contentDescription = "Exit Fullscreen", tint = MediaNestColors.TextPrimary)
+                                Icon(painter = painterResource(R.drawable.ic_mn_fullscreen), contentDescription = "Exit Fullscreen", tint = MediaNestColors.TextPrimary)
                             }
                         }
                     }
@@ -513,27 +500,27 @@ fun PlayerScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         IconButton(onClick = { viewModel.seekRelative(-30_000L) }) {
-                            Icon(Icons.Default.Replay30, contentDescription = "Rewind 30s", tint = MediaNestColors.TextPrimary, modifier = Modifier.size(36.dp))
+                            Icon(painter = painterResource(R.drawable.ic_mn_rewind30), contentDescription = "Rewind 30s", tint = MediaNestColors.TextPrimary, modifier = Modifier.size(36.dp))
                         }
                         IconButton(onClick = { viewModel.seekRelative(-5_000L) }) {
-                            Icon(Icons.Default.Replay5, contentDescription = "Rewind 5s", tint = MediaNestColors.TextPrimary, modifier = Modifier.size(36.dp))
+                            Icon(painter = painterResource(R.drawable.ic_mn_rewind5), contentDescription = "Rewind 5s", tint = MediaNestColors.TextPrimary, modifier = Modifier.size(36.dp))
                         }
                         IconButton(
                             onClick = { viewModel.togglePlayPause() },
                             modifier = Modifier.size(64.dp)
                         ) {
                             Icon(
-                                imageVector = if (state.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                painter = painterResource(if (state.isPlaying) R.drawable.ic_mn_pause else R.drawable.ic_mn_play),
                                 contentDescription = if (state.isPlaying) "Pause" else "Play",
                                 tint = MediaNestColors.TextPrimary,
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
                         IconButton(onClick = { viewModel.seekRelative(5_000L) }) {
-                            Icon(Icons.Default.Forward5, contentDescription = "Forward 5s", tint = MediaNestColors.TextPrimary, modifier = Modifier.size(36.dp))
+                            Icon(painter = painterResource(R.drawable.ic_mn_forward5), contentDescription = "Forward 5s", tint = MediaNestColors.TextPrimary, modifier = Modifier.size(36.dp))
                         }
                         IconButton(onClick = { viewModel.seekRelative(30_000L) }) {
-                            Icon(Icons.Default.Forward30, contentDescription = "Forward 30s", tint = MediaNestColors.TextPrimary, modifier = Modifier.size(36.dp))
+                            Icon(painter = painterResource(R.drawable.ic_mn_forward30), contentDescription = "Forward 30s", tint = MediaNestColors.TextPrimary, modifier = Modifier.size(36.dp))
                         }
                     }
 
@@ -600,7 +587,7 @@ fun PlayerScreen(
                                 Text(formatDuration(state.durationMs), color = MediaNestColors.TextPrimary)
                                 Spacer(Modifier.width(8.dp))
                                 IconButton(onClick = { isFullScreen = false }) {
-                                    Icon(Icons.Default.FullscreenExit, contentDescription = "Exit Fullscreen", tint = MediaNestColors.TextPrimary)
+                                    Icon(painter = painterResource(R.drawable.ic_mn_fullscreen), contentDescription = "Exit Fullscreen", tint = MediaNestColors.TextPrimary)
                                 }
                             }
                         }
@@ -682,9 +669,9 @@ fun PlayerScreen(
                                                 horizontalArrangement = Arrangement.spacedBy(4.dp)
                                             ) {
                                                 Icon(
-                                                    imageVector = Icons.Default.Visibility,
+                                                    painter = painterResource(R.drawable.ic_mn_eye),
                                                     contentDescription = null,
-                                                    tint = MaterialTheme.colorScheme.primary,
+                                                    tint = MediaNestColors.Accent,
                                                     modifier = Modifier.size(12.dp)
                                                 )
                                                 Text(
@@ -702,7 +689,7 @@ fun PlayerScreen(
                     },
                     navigationIcon = {
                         IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                            Icon(painter = painterResource(R.drawable.ic_mn_back), contentDescription = "Back", tint = MediaNestColors.TextPrimary)
                         }
                     },
                     actions = {}
@@ -800,7 +787,7 @@ fun PlayerScreen(
                                     ) {
                                         Box(contentAlignment = Alignment.Center) {
                                             Icon(
-                                                imageVector = if (playing) Icons.Default.PlayArrow else Icons.Default.Pause,
+                                                painter = painterResource(if (playing) R.drawable.ic_mn_play else R.drawable.ic_mn_pause),
                                                 contentDescription = null,
                                                 tint = MediaNestColors.TextPrimary,
                                                 modifier = Modifier.size(40.dp)
@@ -833,7 +820,7 @@ fun PlayerScreen(
                                     ) {
                                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                             Icon(
-                                                imageVector = Icons.Default.Replay10,
+                                                painter = painterResource(R.drawable.ic_mn_rewind10),
                                                 contentDescription = null,
                                                 tint = MediaNestColors.TextPrimary,
                                                 modifier = Modifier.size(36.dp)
@@ -873,7 +860,7 @@ fun PlayerScreen(
                                     ) {
                                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                             Icon(
-                                                imageVector = Icons.Default.Forward10,
+                                                painter = painterResource(R.drawable.ic_mn_forward10),
                                                 contentDescription = null,
                                                 tint = MediaNestColors.TextPrimary,
                                                 modifier = Modifier.size(36.dp)
@@ -951,9 +938,9 @@ fun PlayerScreen(
                                                 viewModel.clearHistoryPosition()
                                             }) {
                                                 Icon(
-                                                    imageVector = Icons.Default.Close,
+                                                    painter = painterResource(R.drawable.ic_mn_close),
                                                     contentDescription = "Dismiss",
-                                                    tint = MaterialTheme.colorScheme.onSecondaryContainer
+                                                    tint = MediaNestColors.TextSecondary
                                                 )
                                             }
                                         }
@@ -1028,9 +1015,9 @@ fun PlayerScreen(
                                 Spacer(Modifier.width(8.dp))
                                 IconButton(onClick = { isFullScreen = true }) {
                                     Icon(
-                                        imageVector = Icons.Default.Fullscreen,
+                                        painter = painterResource(R.drawable.ic_mn_fullscreen),
                                         contentDescription = "Fullscreen",
-                                        tint = MaterialTheme.colorScheme.onSurface
+                                        tint = MediaNestColors.TextPrimary
                                     )
                                 }
                             }
@@ -1044,26 +1031,27 @@ fun PlayerScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             IconButton(onClick = { viewModel.seekRelative(-30_000L) }) {
-                                Icon(Icons.Default.Replay30, contentDescription = "Rewind 30s")
+                                Icon(painter = painterResource(R.drawable.ic_mn_rewind30), contentDescription = "Rewind 30s", tint = MediaNestColors.TextPrimary)
                             }
                             IconButton(onClick = { viewModel.seekRelative(-5_000L) }) {
-                                Icon(Icons.Default.Replay5, contentDescription = "Rewind 5s")
+                                Icon(painter = painterResource(R.drawable.ic_mn_rewind5), contentDescription = "Rewind 5s", tint = MediaNestColors.TextPrimary)
                             }
                             IconButton(
                                 onClick = { viewModel.togglePlayPause() },
                                 modifier = Modifier.size(56.dp)
                             ) {
                                 Icon(
-                                    if (state.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                    painter = painterResource(if (state.isPlaying) R.drawable.ic_mn_pause else R.drawable.ic_mn_play),
                                     contentDescription = if (state.isPlaying) "Pause" else "Play",
+                                    tint = MediaNestColors.Accent,
                                     modifier = Modifier.fillMaxSize()
                                 )
                             }
                             IconButton(onClick = { viewModel.seekRelative(5_000L) }) {
-                                Icon(Icons.Default.Forward5, contentDescription = "Forward 5s")
+                                Icon(painter = painterResource(R.drawable.ic_mn_forward5), contentDescription = "Forward 5s", tint = MediaNestColors.TextPrimary)
                             }
                             IconButton(onClick = { viewModel.seekRelative(30_000L) }) {
-                                Icon(Icons.Default.Forward30, contentDescription = "Forward 30s")
+                                Icon(painter = painterResource(R.drawable.ic_mn_forward30), contentDescription = "Forward 30s", tint = MediaNestColors.TextPrimary)
                             }
                         }
 
@@ -1104,9 +1092,9 @@ fun PlayerScreen(
                                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                                     ) {
                                         Icon(
-                                            imageVector = Icons.Default.Speed,
+                                            painter = painterResource(R.drawable.ic_mn_speed),
                                             contentDescription = "Playback Speed",
-                                            tint = MaterialTheme.colorScheme.primary,
+                                            tint = MediaNestColors.Accent,
                                             modifier = Modifier.size(18.dp)
                                         )
                                         Text(
@@ -1197,9 +1185,9 @@ fun PlayerScreen(
                                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                                         ) {
                                             Icon(
-                                                imageVector = Icons.Default.Tune,
+                                                painter = painterResource(R.drawable.ic_mn_sliders),
                                                 contentDescription = "Video Quality",
-                                                tint = MaterialTheme.colorScheme.primary,
+                                                tint = MediaNestColors.Accent,
                                                 modifier = Modifier.size(18.dp)
                                             )
                                             Text(
@@ -1248,7 +1236,7 @@ fun PlayerScreen(
                                                                 )
                                                                 if (isDownloaded) {
                                                                     Icon(
-                                                                        imageVector = Icons.Default.CheckCircle,
+                                                                        painter = painterResource(R.drawable.ic_mn_check_circle),
                                                                         contentDescription = "Downloaded",
                                                                         tint = MediaNestColors.Success,
                                                                         modifier = Modifier.size(16.dp)
@@ -1291,9 +1279,9 @@ fun PlayerScreen(
                                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                                     ) {
                                         Icon(
-                                            imageVector = Icons.AutoMirrored.Filled.QueueMusic,
+                                            painter = painterResource(R.drawable.ic_mn_playlist),
                                             contentDescription = "Up Next queue",
-                                            tint = if (hasQueueContext && isQueueExpanded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            tint = if (hasQueueContext && isQueueExpanded) MediaNestColors.Accent else MediaNestColors.TextSecondary,
                                             modifier = Modifier.size(18.dp)
                                         )
                                         Text(
@@ -1342,9 +1330,9 @@ fun PlayerScreen(
                                     ) {
                                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                                             Icon(
-                                                imageVector = Icons.AutoMirrored.Filled.QueueMusic,
+                                                painter = painterResource(R.drawable.ic_mn_playlist),
                                                 contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                                                tint = MediaNestColors.TextSecondary.copy(alpha = 0.5f),
                                                 modifier = Modifier.size(36.dp)
                                             )
                                             Spacer(Modifier.height(6.dp))
@@ -1458,7 +1446,7 @@ fun WatchCountDisplay(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
-            imageVector = Icons.Default.Visibility,
+            painter = painterResource(R.drawable.ic_mn_eye),
             contentDescription = "Watch Count",
             tint = iconColor,
             modifier = Modifier
@@ -1518,11 +1506,11 @@ fun AutoplayQueueHeader(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            val contextIcon = when (contextType?.lowercase()) {
-                "playlist" -> Icons.AutoMirrored.Filled.PlaylistPlay
-                "folder" -> Icons.Default.Folder
-                "favorites" -> Icons.Default.Favorite
-                else -> Icons.AutoMirrored.Filled.QueueMusic
+            val contextIconRes = when (contextType?.lowercase()) {
+                "playlist" -> R.drawable.ic_mn_playlist
+                "folder" -> R.drawable.ic_mn_folder
+                "favorites" -> R.drawable.ic_mn_heart
+                else -> R.drawable.ic_mn_playlist
             }
             val defaultTitle = when (contextType?.lowercase()) {
                 "playlist" -> "Playlist"
@@ -1539,9 +1527,9 @@ fun AutoplayQueueHeader(
                     .clickable { onExpandToggle() }
             ) {
                 Icon(
-                    imageVector = contextIcon,
+                    painter = painterResource(contextIconRes),
                     contentDescription = null,
-                    tint = if (contextType?.lowercase() == "favorites") MediaNestColors.Destructive else MaterialTheme.colorScheme.primary,
+                    tint = if (contextType?.lowercase() == "favorites") MediaNestColors.Destructive else MediaNestColors.Accent,
                     modifier = Modifier.size(20.dp)
                 )
                 Spacer(Modifier.width(8.dp))
@@ -1590,9 +1578,9 @@ fun AutoplayQueueHeader(
                     modifier = Modifier.size(32.dp)
                 ) {
                     Icon(
-                        imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                        painter = painterResource(if (isExpanded) R.drawable.ic_mn_chevron_up else R.drawable.ic_mn_chevron_down),
                         contentDescription = if (isExpanded) "Collapse Queue" else "Expand Queue",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = MediaNestColors.TextSecondary,
                         modifier = Modifier.size(20.dp)
                     )
                 }
@@ -1667,9 +1655,9 @@ fun PlayerQueueItemRow(
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    imageVector = Icons.Default.DragHandle,
+                    painter = painterResource(R.drawable.ic_mn_grip),
                     contentDescription = "Reorder Drag Handle",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    tint = MediaNestColors.TextSecondary.copy(alpha = 0.7f),
                     modifier = Modifier.size(18.dp)
                 )
             }
@@ -1725,9 +1713,9 @@ fun PlayerQueueItemRow(
                         modifier = Modifier.padding(bottom = 2.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.PlayArrow,
+                            painter = painterResource(R.drawable.ic_mn_play),
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
+                            tint = MediaNestColors.Accent,
                             modifier = Modifier.size(12.dp)
                         )
                         Text(
@@ -1769,9 +1757,9 @@ fun PlayerQueueItemRow(
                     modifier = Modifier.size(28.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.KeyboardArrowUp,
+                        painter = painterResource(R.drawable.ic_mn_chevron_up),
                         contentDescription = "Move Up",
-                        tint = if (index > 0) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f),
+                        tint = if (index > 0) MediaNestColors.TextPrimary else MediaNestColors.TextSecondary.copy(alpha = 0.25f),
                         modifier = Modifier.size(18.dp)
                     )
                 }
@@ -1781,9 +1769,9 @@ fun PlayerQueueItemRow(
                     modifier = Modifier.size(28.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.KeyboardArrowDown,
+                        painter = painterResource(R.drawable.ic_mn_chevron_down),
                         contentDescription = "Move Down",
-                        tint = if (index < totalCount - 1) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.25f),
+                        tint = if (index < totalCount - 1) MediaNestColors.TextPrimary else MediaNestColors.TextSecondary.copy(alpha = 0.25f),
                         modifier = Modifier.size(18.dp)
                     )
                 }
@@ -1792,9 +1780,9 @@ fun PlayerQueueItemRow(
                     modifier = Modifier.size(28.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Close,
+                        painter = painterResource(R.drawable.ic_mn_close),
                         contentDescription = "Remove from Queue",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        tint = MediaNestColors.TextSecondary,
                         modifier = Modifier.size(16.dp)
                     )
                 }

@@ -152,7 +152,7 @@ private fun appendTiming(items: MutableList<String>, parts: List<String>, offset
     if (remainingMs > 0L) items.add("${compactDuration(remainingMs)} left")
 }
 
-fun formatBytes(bytes: Long): String {
+private fun formatBytes(bytes: Long): String {
     if (bytes <= 0L) return "0 B"
     val kb = bytes / 1024f
     val mb = kb / 1024f

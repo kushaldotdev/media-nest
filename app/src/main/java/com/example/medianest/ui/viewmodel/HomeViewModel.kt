@@ -15,6 +15,7 @@ import com.example.medianest.data.local.dao.FolderDao
 import com.example.medianest.data.local.dao.VideoFolderDao
 import com.example.medianest.data.local.entity.FolderEntity
 import com.example.medianest.data.local.entity.VideoFolderJoin
+import com.example.medianest.data.local.entity.VideoEntity
 import com.example.medianest.data.mapper.toVideoEntity
 import com.example.medianest.data.local.dao.VideoDao
 import com.example.medianest.data.local.dao.HistoryDao

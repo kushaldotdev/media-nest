@@ -33,8 +33,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
+import androidx.compose.ui.res.painterResource
+import com.example.medianest.R
+import com.example.medianest.ui.components.MediaNestBottomNavigation
+import com.example.medianest.ui.theme.MediaNestColors
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -176,30 +178,18 @@ fun MainScreen() {
                         exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
                         modifier = Modifier.align(Alignment.BottomCenter)
                     ) {
-                        NavigationBar {
-                            listOf(
-                                BottomNavItem.Home,
-                                BottomNavItem.Downloads,
-                                BottomNavItem.Collections,
-                                BottomNavItem.Settings
-                            ).forEach { item ->
-                                NavigationBarItem(
-                                    icon = { Icon(item.icon, contentDescription = item.label) },
-                                    label = { Text(item.label, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, softWrap = false) },
-                                    alwaysShowLabel = false,
-                                    selected = currentDestination?.hierarchy?.any { it.route?.substringBefore("?") == item.route } == true,
-                                    onClick = {
-                                        navController.navigate(item.route) {
-                                            popUpTo(navController.graph.findStartDestination().id) {
-                                                saveState = false
-                                            }
-                                            launchSingleTop = true
-                                            restoreState = false
-                                        }
+                        MediaNestBottomNavigation(
+                            currentRoute = currentDestination?.route,
+                            onNavigate = { route ->
+                                navController.navigate(route) {
+                                    popUpTo(navController.graph.findStartDestination().id) {
+                                        saveState = false
                                     }
-                                )
+                                    launchSingleTop = true
+                                    restoreState = false
+                                }
                             }
-                        }
+                        )
                     }
                 }
             }
@@ -281,10 +271,10 @@ fun MiniPlayer(
             .clickable { onClick() },
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.95f),
-            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+            containerColor = MediaNestColors.Card,
+            contentColor = MediaNestColors.TextPrimary
         ),
-        border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)),
+        border = BorderStroke(1.dp, MediaNestColors.Border),
         elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
     ) {
         Box(modifier = Modifier.height(72.dp)) {
@@ -313,6 +303,7 @@ fun MiniPlayer(
                     Text(
                         text = title,
                         style = MaterialTheme.typography.titleSmall,
+                        color = MediaNestColors.TextPrimary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -320,7 +311,7 @@ fun MiniPlayer(
                     Text(
                         text = channelName,
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f),
+                        color = MediaNestColors.TextSecondary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -328,15 +319,19 @@ fun MiniPlayer(
 
                 IconButton(onClick = onTogglePlay) {
                     Icon(
-                        imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = if (isPlaying) "Pause" else "Play"
+                        painter = painterResource(if (isPlaying) R.drawable.ic_mn_pause else R.drawable.ic_mn_play),
+                        contentDescription = if (isPlaying) "Pause" else "Play",
+                        tint = MediaNestColors.Accent,
+                        modifier = Modifier.size(20.dp)
                     )
                 }
 
                 IconButton(onClick = onClose) {
                     Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Close"
+                        painter = painterResource(R.drawable.ic_mn_close),
+                        contentDescription = "Close",
+                        tint = MediaNestColors.TextSecondary,
+                        modifier = Modifier.size(18.dp)
                     )
                 }
             }
@@ -353,13 +348,13 @@ fun MiniPlayer(
                 LinearProgressIndicator(
                     progress = { bufferProgress.coerceIn(0f, 1f) },
                     modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                    color = MediaNestColors.ProgressTrack,
                     trackColor = Color.Transparent
                 )
                 LinearProgressIndicator(
                     progress = { progress.coerceIn(0f, 1f) },
                     modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.primary,
+                    color = MediaNestColors.YouTubeRed,
                     trackColor = Color.Transparent
                 )
             }

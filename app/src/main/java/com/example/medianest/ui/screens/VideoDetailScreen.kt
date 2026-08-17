@@ -215,7 +215,7 @@ fun VideoDetailScreen(
                                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                                     ) {
                                         Icon(
-                                            imageVector = Icons.Default.Visibility,
+                                            painter = painterResource(R.drawable.ic_mn_eye),
                                             contentDescription = null,
                                             tint = MediaNestColors.TextPrimary,
                                             modifier = Modifier.size(14.dp)
@@ -260,7 +260,7 @@ fun VideoDetailScreen(
                                     .background(MediaNestColors.PlayerSurface.copy(alpha = 0.5f), shape = androidx.compose.foundation.shape.CircleShape)
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.PlayArrow,
+                                    painter = painterResource(R.drawable.ic_mn_play),
                                     contentDescription = "Play Video",
                                     tint = MediaNestColors.TextPrimary,
                                     modifier = Modifier.size(40.dp)
@@ -378,9 +378,9 @@ fun VideoDetailScreen(
                                 horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
                                 Icon(
-                                    imageVector = Icons.Default.Visibility,
+                                    painter = painterResource(R.drawable.ic_mn_eye),
                                     contentDescription = "Public views",
-                                    tint = MaterialTheme.colorScheme.primary,
+                                    tint = MediaNestColors.Accent,
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Text(
@@ -610,9 +610,9 @@ fun VideoDetailScreen(
                                     val currentWatchCount = localVideo?.watchCount ?: 0
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Icon(
-                                            imageVector = Icons.Default.Visibility,
+                                            painter = painterResource(R.drawable.ic_mn_eye),
                                             contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary,
+                                            tint = MediaNestColors.Accent,
                                             modifier = Modifier.size(18.dp)
                                         )
                                         Spacer(Modifier.width(8.dp))
@@ -626,9 +626,9 @@ fun VideoDetailScreen(
                                         val positionDuration = UiUtils.formatDuration(videoHistory.positionMillis / 1000L)
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Icon(
-                                                imageVector = Icons.Default.History,
+                                                painter = painterResource(R.drawable.ic_mn_history),
                                                 contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.primary,
+                                                tint = MediaNestColors.Accent,
                                                 modifier = Modifier.size(18.dp)
                                             )
                                             Spacer(Modifier.width(8.dp))
@@ -645,9 +645,9 @@ fun VideoDetailScreen(
                                     // Total Watch Time Row
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Icon(
-                                            imageVector = Icons.Default.PlayArrow,
+                                            painter = painterResource(R.drawable.ic_mn_play),
                                             contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary,
+                                            tint = MediaNestColors.Accent,
                                             modifier = Modifier.size(18.dp)
                                         )
                                         Spacer(Modifier.width(8.dp))
@@ -660,9 +660,9 @@ fun VideoDetailScreen(
                                         Spacer(Modifier.height(8.dp))
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Icon(
-                                                imageVector = Icons.Default.Check,
+                                                painter = painterResource(R.drawable.ic_mn_check),
                                                 contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.primary,
+                                                tint = MediaNestColors.Accent,
                                                 modifier = Modifier.size(18.dp)
                                             )
                                             Spacer(Modifier.width(8.dp))
@@ -693,9 +693,9 @@ fun VideoDetailScreen(
                                     Spacer(Modifier.height(8.dp))
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         Icon(
-                                            imageVector = Icons.Default.MusicNote,
+                                            painter = painterResource(R.drawable.ic_mn_music),
                                             contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary,
+                                            tint = MediaNestColors.Accent,
                                             modifier = Modifier.size(18.dp)
                                         )
                                         Spacer(Modifier.width(8.dp))
@@ -710,9 +710,9 @@ fun VideoDetailScreen(
                                             Spacer(Modifier.height(8.dp))
                                             Row(verticalAlignment = Alignment.CenterVertically) {
                                                 Icon(
-                                                    imageVector = Icons.Default.CheckCircle,
+                                                    painter = painterResource(R.drawable.ic_mn_check_circle),
                                                     contentDescription = null,
-                                                    tint = MaterialTheme.colorScheme.primary,
+                                                    tint = MediaNestColors.Success,
                                                     modifier = Modifier.size(18.dp)
                                                 )
                                                 Spacer(Modifier.width(8.dp))
@@ -732,9 +732,9 @@ fun VideoDetailScreen(
                                         ) {
                                             Text("View Watch History Log (${watchSessions.size})", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
                                             Icon(
-                                                imageVector = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                                painter = painterResource(if (expanded) R.drawable.ic_mn_chevron_up else R.drawable.ic_mn_chevron_down),
                                                 contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.primary,
+                                                tint = MediaNestColors.Accent,
                                                 modifier = Modifier.size(16.dp)
                                             )
                                         }

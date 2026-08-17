@@ -140,7 +140,15 @@ fun EmptyState(
                 text = actionText,
                 onClick = onActionClick,
                 variant = actionVariant,
-                icon = actionIcon
+                leadingIcon = if (actionIcon != null) {
+                    {
+                        Icon(
+                            imageVector = actionIcon,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                } else null
             )
         }
     }

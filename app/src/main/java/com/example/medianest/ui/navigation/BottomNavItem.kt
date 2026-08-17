@@ -1,19 +1,15 @@
 package com.example.medianest.ui.navigation
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Collections
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.annotation.DrawableRes
+import com.example.medianest.R
 
 sealed class BottomNavItem(
     val route: String,
     val label: String,
-    val icon: ImageVector
+    @DrawableRes val iconRes: Int
 ) {
-    data object Home : BottomNavItem("home", "Home", Icons.Default.Home)
-    data object Downloads : BottomNavItem("downloads", "Downloads", Icons.Default.Download)
-    data object Collections : BottomNavItem("collections", "Collections", Icons.Default.Collections)
-    data object Settings : BottomNavItem("settings", "Settings", Icons.Default.Settings)
+    data object Home : BottomNavItem("home", "Home", R.drawable.ic_mn_home)
+    data object Downloads : BottomNavItem("downloads", "Downloads", R.drawable.ic_mn_download)
+    data object Collections : BottomNavItem("collections", "Library", R.drawable.ic_mn_library)
+    data object Settings : BottomNavItem("settings", "Settings", R.drawable.ic_mn_settings)
 }

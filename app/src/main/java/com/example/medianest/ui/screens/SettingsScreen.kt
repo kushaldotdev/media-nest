@@ -56,6 +56,7 @@ import com.example.medianest.ui.viewmodel.ExportImportViewModel
 import com.example.medianest.ui.viewmodel.ImportInspectionState
 import com.example.medianest.ui.viewmodel.LocalBackupInfo
 import com.example.medianest.ui.viewmodel.MigrationState
+import com.example.medianest.ui.viewmodel.OrphanFile
 import com.example.medianest.updates.UpdateState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -83,6 +84,10 @@ fun SettingsScreen(
 
     val downloadFolder by viewModel.downloadFolder.collectAsStateWithLifecycle()
     val migrationState by viewModel.migrationState.collectAsStateWithLifecycle()
+    val orphanFiles by viewModel.orphanFiles.collectAsStateWithLifecycle()
+    val isScanningOrphans by viewModel.isScanningOrphans.collectAsStateWithLifecycle()
+    var hasScannedOrphans by remember { mutableStateOf(false) }
+    var showBrokenFilesDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(migrationState) {
         when (val s = migrationState) {
@@ -670,11 +675,6 @@ fun SettingsScreen(
             }
 
             // Broken Media Cleaner Card
-            val orphanFiles by viewModel.orphanFiles.collectAsStateWithLifecycle()
-            val isScanningOrphans by viewModel.isScanningOrphans.collectAsStateWithLifecycle()
-            var hasScannedOrphans by remember { mutableStateOf(false) }
-            var showBrokenFilesDialog by remember { mutableStateOf(false) }
-
             GlassCard(modifier = Modifier.fillMaxWidth()) {
                 Column(
                     modifier = Modifier.padding(16.dp),

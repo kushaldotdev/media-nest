@@ -21,11 +21,8 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Download
+import androidx.compose.ui.res.painterResource
+import com.example.medianest.R
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -171,7 +168,7 @@ fun InlineSubscriptionScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            painter = painterResource(R.drawable.ic_mn_back),
                             contentDescription = "Back"
                         )
                     }
@@ -879,7 +876,7 @@ fun PlaylistHeader(
                         onClick = onToggleSave,
                         modifier = Modifier.weight(1f)
                     ) {
-                        Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Icon(painter = painterResource(R.drawable.ic_mn_check), contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(6.dp))
                         Text("Saved to Playlist", maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
@@ -888,7 +885,7 @@ fun PlaylistHeader(
                         onClick = onToggleSave,
                         modifier = Modifier.weight(1f)
                     ) {
-                        Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Icon(painter = painterResource(R.drawable.ic_mn_playlist), contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(6.dp))
                         Text("Add to Playlist", maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
@@ -897,7 +894,7 @@ fun PlaylistHeader(
                     onClick = onDownloadAll,
                     modifier = Modifier.weight(1f)
                 ) {
-                    Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Icon(painter = painterResource(R.drawable.ic_mn_download), contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(6.dp))
                     Text("Download All", maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
@@ -1005,7 +1002,7 @@ fun ChannelHeader(
                     onClick = onDownloadAll,
                     modifier = Modifier.weight(1f)
                 ) {
-                    Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Icon(painter = painterResource(R.drawable.ic_mn_download), contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(6.dp))
                     Text("Download All", maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
