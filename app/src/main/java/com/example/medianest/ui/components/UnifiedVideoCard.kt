@@ -7,19 +7,17 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.DriveFileMove
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.example.medianest.R
 import com.example.medianest.data.local.entity.FolderEntity
 import com.example.medianest.ui.utils.UiUtils
 import androidx.compose.ui.platform.LocalContext
@@ -69,7 +67,7 @@ private fun FolderBadges(folders: List<FolderEntity>) {
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Folder,
+                        painter = painterResource(R.drawable.ic_mn_folder),
                         contentDescription = null,
                         modifier = Modifier.size(12.dp)
                     )
@@ -111,7 +109,7 @@ private fun FolderBadges(folders: List<FolderEntity>) {
                             DropdownMenuItem(
                                 leadingIcon = {
                                     Icon(
-                                        imageVector = Icons.Default.Folder,
+                                        painter = painterResource(R.drawable.ic_mn_folder),
                                         contentDescription = null,
                                         modifier = Modifier.size(16.dp),
                                         tint = MaterialTheme.colorScheme.primary
@@ -193,7 +191,7 @@ fun UnifiedVideoCard(
                 // Green Downloaded badge - TOP RIGHT corner on thumbnail
                 if (config.showDownloadedBadge && isDownloaded) {
                     Icon(
-                        imageVector = Icons.Default.CheckCircle,
+                        painter = painterResource(R.drawable.ic_mn_check_circle),
                         contentDescription = "Downloaded",
                         tint = MediaNestColors.Success,
                         modifier = Modifier
@@ -219,7 +217,7 @@ fun UnifiedVideoCard(
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            imageVector = if (isAudio) Icons.Default.AudioFile else Icons.Default.Videocam,
+                            painter = painterResource(if (isAudio) R.drawable.ic_mn_music else R.drawable.ic_mn_video),
                             contentDescription = if (isAudio) "Audio" else "Video",
                             tint = MediaNestColors.TextPrimary,
                             modifier = Modifier.size(14.dp)
@@ -242,7 +240,7 @@ fun UnifiedVideoCard(
                         horizontalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Visibility,
+                            painter = painterResource(R.drawable.ic_mn_eye),
                             contentDescription = "Watch count",
                             tint = MediaNestColors.TextPrimary,
                             modifier = Modifier.size(12.dp)
@@ -365,7 +363,7 @@ fun UnifiedVideoCard(
                                 onCheckedChange = { onFavoriteToggle() }
                             ) {
                                 Icon(
-                                    imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Outlined.FavoriteBorder,
+                                    painter = painterResource(R.drawable.ic_mn_heart),
                                     contentDescription = "Favorite",
                                     tint = if (isFavorite) MediaNestColors.Accent else MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -375,7 +373,7 @@ fun UnifiedVideoCard(
                         if (config.showMoveToFolderButton) {
                             IconButton(onClick = onMoveToFolder) {
                                 Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.DriveFileMove,
+                                    painter = painterResource(R.drawable.ic_mn_move),
                                     contentDescription = "Move to folder",
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -386,7 +384,7 @@ fun UnifiedVideoCard(
                             Box {
                                 IconButton(onClick = onDownloadClick) {
                                     Icon(
-                                        imageVector = if (!isDownloaded) Icons.Default.Download else Icons.Default.DownloadDone,
+                                        painter = painterResource(if (!isDownloaded) R.drawable.ic_mn_download else R.drawable.ic_mn_download_done),
                                         contentDescription = "Download",
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -398,7 +396,7 @@ fun UnifiedVideoCard(
                         if (config.showMarkWatchedButton) {
                             IconButton(onClick = onMarkWatched) {
                                 Icon(
-                                    imageVector = Icons.Default.Visibility,
+                                    painter = painterResource(R.drawable.ic_mn_eye),
                                     contentDescription = "Set as watched",
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -408,7 +406,7 @@ fun UnifiedVideoCard(
                         if (config.showRemoveFromFolderButton) {
                             IconButton(onClick = onRemoveFromFolder) {
                                 Icon(
-                                    imageVector = Icons.Default.Close,
+                                    painter = painterResource(R.drawable.ic_mn_close),
                                     contentDescription = "Remove from folder",
                                     tint = MaterialTheme.colorScheme.error
                                 )
@@ -492,7 +490,7 @@ fun UnifiedVideoRow(
                     // Green Downloaded badge - TOP RIGHT corner on thumbnail
                     if (config.showDownloadedBadge && isDownloaded) {
                         Icon(
-                            imageVector = Icons.Default.CheckCircle,
+                            painter = painterResource(R.drawable.ic_mn_check_circle),
                             contentDescription = "Downloaded",
                             tint = MediaNestColors.Success,
                             modifier = Modifier
@@ -518,7 +516,7 @@ fun UnifiedVideoRow(
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = if (isAudio) Icons.Default.AudioFile else Icons.Default.Videocam,
+                                painter = painterResource(if (isAudio) R.drawable.ic_mn_music else R.drawable.ic_mn_video),
                                 contentDescription = if (isAudio) "Audio" else "Video",
                                 tint = MediaNestColors.TextPrimary,
                                 modifier = Modifier.size(12.dp)
@@ -541,7 +539,7 @@ fun UnifiedVideoRow(
                             horizontalArrangement = Arrangement.spacedBy(2.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Visibility,
+                                painter = painterResource(R.drawable.ic_mn_eye),
                                 contentDescription = "Watch count",
                                 tint = MediaNestColors.TextPrimary,
                                 modifier = Modifier.size(10.dp)
@@ -668,7 +666,7 @@ fun UnifiedVideoRow(
                                 onCheckedChange = { onFavoriteToggle() }
                             ) {
                                 Icon(
-                                    imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Outlined.FavoriteBorder,
+                                    painter = painterResource(R.drawable.ic_mn_heart),
                                     contentDescription = "Favorite",
                                     tint = if (isFavorite) MediaNestColors.Accent else MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(20.dp)
@@ -679,7 +677,7 @@ fun UnifiedVideoRow(
                         if (config.showMoveToFolderButton) {
                             IconButton(onClick = onMoveToFolder, modifier = Modifier.size(32.dp)) {
                                 Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.DriveFileMove,
+                                    painter = painterResource(R.drawable.ic_mn_move),
                                     contentDescription = "Move to folder",
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(20.dp)
@@ -691,7 +689,7 @@ fun UnifiedVideoRow(
                             Box {
                                 IconButton(onClick = onDownloadClick, modifier = Modifier.size(32.dp)) {
                                     Icon(
-                                        imageVector = if (!isDownloaded) Icons.Default.Download else Icons.Default.DownloadDone,
+                                        painter = painterResource(if (!isDownloaded) R.drawable.ic_mn_download else R.drawable.ic_mn_download_done),
                                         contentDescription = "Download",
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                         modifier = Modifier.size(20.dp)
@@ -704,7 +702,7 @@ fun UnifiedVideoRow(
                         if (config.showMarkWatchedButton) {
                             IconButton(onClick = onMarkWatched, modifier = Modifier.size(32.dp)) {
                                 Icon(
-                                    imageVector = Icons.Default.Visibility,
+                                    painter = painterResource(R.drawable.ic_mn_eye),
                                     contentDescription = "Set as watched",
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.size(20.dp)
@@ -715,7 +713,7 @@ fun UnifiedVideoRow(
                         if (config.showRemoveFromFolderButton) {
                             IconButton(onClick = onRemoveFromFolder, modifier = Modifier.size(32.dp)) {
                                 Icon(
-                                    imageVector = Icons.Default.Close,
+                                    painter = painterResource(R.drawable.ic_mn_close),
                                     contentDescription = "Remove from folder",
                                     tint = MaterialTheme.colorScheme.error,
                                     modifier = Modifier.size(20.dp)
@@ -765,14 +763,14 @@ fun QuickDownloadMenu(
                 downloadedEntities.forEach { entity ->
                     DropdownMenuItem(
                         text = { Text("Delete ${if (entity.format == "audio" || entity.format == "audio_extracted") "Audio" else entity.quality}") },
-                        leadingIcon = { Icon(Icons.Default.Delete, "Delete") },
+                        leadingIcon = { Icon(painter = painterResource(R.drawable.ic_mn_trash), contentDescription = "Delete") },
                         onClick = { onDeleteDownload(entity); onDismiss() }
                     )
                     if ((entity.format == "video" || entity.format == "video_only") &&
                         !downloadedEntities.any { it.format == "audio_extracted" }) {
                         DropdownMenuItem(
                             text = { Text("Extract Audio from ${entity.quality}") },
-                            leadingIcon = { Icon(Icons.Default.AudioFile, "Extract") },
+                            leadingIcon = { Icon(painter = painterResource(R.drawable.ic_mn_extract), contentDescription = "Extract") },
                             onClick = { onExtractAudio(entity); onDismiss() }
                         )
                     }

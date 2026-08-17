@@ -1,47 +1,82 @@
 package com.example.medianest.ui.viewmodel
 
+import android.content.Context
+import android.content.Intent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.medianest.data.local.dao.FolderDao
+import com.example.medianest.data.local.dao.HistoryDao
+import com.example.medianest.data.local.dao.SubscriptionDao
 import com.example.medianest.data.local.dao.VideoDao
 import com.example.medianest.data.local.dao.VideoFolderDao
-import com.example.medianest.data.local.dao.HistoryDao
 import com.example.medianest.data.local.entity.DownloadEntity
 import com.example.medianest.data.local.entity.FolderEntity
+import com.example.medianest.data.local.entity.HistoryEntity
+import com.example.medianest.data.local.entity.SubscriptionEntity
 import com.example.medianest.data.local.entity.VideoEntity
 import com.example.medianest.data.local.entity.VideoFolderJoin
+import com.example.medianest.data.mapper.toVideoEntity
 import com.example.medianest.data.model.ExtractedVideoInfo
 import com.example.medianest.data.model.StreamSource
 import com.example.medianest.data.preferences.CollectionsPreferences
 import com.example.medianest.data.preferences.DownloadPreferences
 import com.example.medianest.data.repository.DownloadRepository
 import com.example.medianest.data.repository.VideoRepository
-import dagger.hilt.android.lifecycle.HiltViewModel
-import android.content.Context
 import com.example.medianest.service.AudioExtractor
+import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
-import com.example.medianest.data.mapper.toVideoEntity
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import java.io.File
 import javax.inject.Inject
 
-enum class LibraryTab { HISTORY, WATCHED, FOLDERS, FAVORITES, PLAYLISTS, SUBSCRIPTIONS }
+enum class LibraryTab(val label: String) {
+    HISTORY("History"),
+    WATCHED("Watched"),
+    FOLDERS("Folders"),
+    FAVORITES("Favorites"),
+    PLAYLISTS("Playlists"),
+    SUBSCRIPTIONS("Channels")
+}
+
+enum class SortCategory(val label: String) {
+    DATE("Date"),
+    NAME("Name"),
+    DURATION("Duration"),
+    SIZE("Size")
+}
+
+enum class SortDirection {
+    ASC, DESC
+}
+
+enum class MediaTypeFilter(val label: String) {
+    ALL("All"),
+    VIDEO("Videos"),
+    AUDIO("Audio")
+}
 
 enum class ViewMode { GRID, LIST }
 
 data class LibraryUiState(
     val searchQuery: String = "",
     val currentTab: LibraryTab = LibraryTab.HISTORY,
+    val mediaTypeFilter: MediaTypeFilter = MediaTypeFilter.ALL,
+    val sortCategory: SortCategory = SortCategory.DATE,
+    val sortDirection: SortDirection = SortDirection.DESC,
     val selectedFolder: FolderEntity? = null,
+    val folderStack: List<FolderEntity> = emptyList(),
     val viewMode: ViewMode = ViewMode.GRID,
     val isSelectionMode: Boolean = false,
     val selectedVideoIds: Set<String> = emptySet()
@@ -59,6 +94,7 @@ class LibraryViewModel @Inject constructor(
     private val folderDao: FolderDao,
     private val videoFolderDao: VideoFolderDao,
     private val historyDao: HistoryDao,
+    private val subscriptionDao: SubscriptionDao,
     private val downloadRepository: DownloadRepository,
     private val videoRepository: VideoRepository,
     private val audioExtractor: AudioExtractor,
@@ -96,87 +132,156 @@ class LibraryViewModel @Inject constructor(
         _watchedLimit.value += 10
     }
 
-    @OptIn(ExperimentalCoroutinesApi::class)
-    val videos: StateFlow<List<VideoEntity>> = combine(_searchQuery, _historyLimit) { query, limit ->
-        query to limit
-    }.flatMapLatest { (query, limit) ->
-        if (query.isBlank()) {
-            videoDao.getWatchHistoryVideosPaged(limit)
-        } else {
-            videoDao.searchHistoryVideos(query)
+    private fun sortAndFilterVideos(
+        list: List<VideoEntity>,
+        query: String,
+        mediaType: MediaTypeFilter,
+        sortCat: SortCategory,
+        sortDir: SortDirection
+    ): List<VideoEntity> {
+        var filtered = list
+        if (query.isNotBlank()) {
+            val q = query.trim().lowercase()
+            filtered = filtered.filter {
+                it.title.lowercase().contains(q) ||
+                it.channelName.lowercase().contains(q)
+            }
         }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+        if (mediaType == MediaTypeFilter.VIDEO) {
+            filtered = filtered.filter { !it.mediaType.equals("AUDIO", ignoreCase = true) }
+        } else if (mediaType == MediaTypeFilter.AUDIO) {
+            filtered = filtered.filter { it.mediaType.equals("AUDIO", ignoreCase = true) }
+        }
 
-    val playbackHistory: StateFlow<List<com.example.medianest.data.local.entity.HistoryEntity>> = historyDao.getAllHistory()
+        val comparator: Comparator<VideoEntity> = when (sortCat) {
+            SortCategory.NAME -> compareBy(String.CASE_INSENSITIVE_ORDER) { it.title }
+            SortCategory.DURATION -> compareBy { it.durationSeconds }
+            SortCategory.SIZE -> compareBy { video ->
+                if (video.localFilePath.isNotEmpty()) {
+                    try {
+                        val f = File(video.localFilePath)
+                        if (f.exists()) f.length() else (video.durationSeconds * 2500000L) / 8L
+                    } catch (e: Exception) {
+                        (video.durationSeconds * 2500000L) / 8L
+                    }
+                } else {
+                    (video.durationSeconds * 2500000L) / 8L
+                }
+            }
+            SortCategory.DATE -> compareBy { maxOf(it.addedAt, it.lastPlayedAt ?: 0L, it.downloadedAt ?: 0L) }
+        }
+
+        return if (sortDir == SortDirection.ASC) {
+            filtered.sortedWith(comparator)
+        } else {
+            filtered.sortedWith(comparator.reversed())
+        }
+    }
+
+    val playbackHistory: StateFlow<List<HistoryEntity>> = historyDao.getAllHistory()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    val favoriteVideos: StateFlow<List<VideoEntity>> = combine(_uiState, _searchQuery, _favoritesLimit) { state, query, limit ->
-        Triple(state.currentTab, query, limit)
-    }.flatMapLatest { (tab, query, limit) ->
-        if (tab == LibraryTab.FAVORITES) {
-            videoDao.getFavoriteVideosPaged(limit).map { list ->
-                if (query.isBlank()) list
-                else list.filter { it.title.contains(query, ignoreCase = true) || it.channelName.contains(query, ignoreCase = true) }
-            }
-        } else {
-            flowOf(emptyList())
-        }
+    val videos: StateFlow<List<VideoEntity>> = combine(
+        videoDao.getWatchHistoryVideos(),
+        _searchQuery,
+        _uiState.map { Triple(it.mediaTypeFilter, it.sortCategory, it.sortDirection) }.distinctUntilChanged(),
+        _historyLimit
+    ) { rawVideos, query, (mediaType, sortCat, sortDir), limit ->
+        val sorted = sortAndFilterVideos(rawVideos, query, mediaType, sortCat, sortDir)
+        sorted.take(limit)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    val watchedVideos: StateFlow<List<VideoEntity>> = combine(_uiState, _searchQuery, _watchedLimit) { state, query, limit ->
-        Triple(state.currentTab, query, limit)
-    }.flatMapLatest { (tab, query, limit) ->
-        if (tab == LibraryTab.WATCHED) {
-            videoDao.getWatchedVideosPaged(limit).map { list ->
-                if (query.isBlank()) list
-                else list.filter { it.title.contains(query, ignoreCase = true) || it.channelName.contains(query, ignoreCase = true) }
-            }
-        } else {
-            flowOf(emptyList())
-        }
+    val favoriteVideos: StateFlow<List<VideoEntity>> = combine(
+        videoDao.getFavoriteVideos(),
+        _searchQuery,
+        _uiState.map { Triple(it.mediaTypeFilter, it.sortCategory, it.sortDirection) }.distinctUntilChanged(),
+        _favoritesLimit
+    ) { rawVideos, query, (mediaType, sortCat, sortDir), limit ->
+        val sorted = sortAndFilterVideos(rawVideos, query, mediaType, sortCat, sortDir)
+        sorted.take(limit)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    val folderVideos: StateFlow<List<VideoEntity>> = combine(_uiState, _searchQuery, _folderVideosLimit) { state, query, limit ->
-        Triple(state.selectedFolder, query, limit)
-    }.flatMapLatest { (selectedFolder, query, limit) ->
+    val watchedVideos: StateFlow<List<VideoEntity>> = combine(
+        videoDao.getWatchedVideos(),
+        _searchQuery,
+        _uiState.map { Triple(it.mediaTypeFilter, it.sortCategory, it.sortDirection) }.distinctUntilChanged(),
+        _watchedLimit
+    ) { rawVideos, query, (mediaType, sortCat, sortDir), limit ->
+        val sorted = sortAndFilterVideos(rawVideos, query, mediaType, sortCat, sortDir)
+        sorted.take(limit)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val folderVideos: StateFlow<List<VideoEntity>> = combine(
+        _uiState.map { it.selectedFolder }.distinctUntilChanged(),
+        _searchQuery,
+        _uiState.map { Triple(it.mediaTypeFilter, it.sortCategory, it.sortDirection) }.distinctUntilChanged(),
+        _folderVideosLimit
+    ) { selectedFolder, query, (mediaType, sortCat, sortDir), limit ->
+        selectedFolder to Triple(query, Triple(mediaType, sortCat, sortDir), limit)
+    }.flatMapLatest { (selectedFolder, params) ->
+        val (query, filters, limit) = params
+        val (mediaType, sortCat, sortDir) = filters
         if (selectedFolder != null) {
-            if (query.isBlank()) {
-                videoFolderDao.getVideosInFolderPaged(selectedFolder.id, limit)
-            } else {
-                videoFolderDao.searchVideosInFolder(selectedFolder.id, query)
+            videoFolderDao.getVideosInFolder(selectedFolder.id).map { raw ->
+                val sorted = sortAndFilterVideos(raw, query, mediaType, sortCat, sortDir)
+                sorted.take(limit)
             }
         } else {
             if (query.isBlank()) {
                 flowOf(emptyList())
             } else {
-                videoFolderDao.searchVideosInAnyFolder(query)
+                videoFolderDao.searchVideosInAnyFolder(query).map { raw ->
+                    val sorted = sortAndFilterVideos(raw, query, mediaType, sortCat, sortDir)
+                    sorted.take(limit)
+                }
             }
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    val rootFolders: StateFlow<List<FolderEntity>> = combine(_uiState, _searchQuery) { state, query ->
-        state.currentTab to query
-    }.flatMapLatest { (tab, query) ->
-        if (query.isBlank()) {
-            folderDao.getRootFolders()
-        } else {
-            folderDao.searchAllFolders(query)
+    val rootFolders: StateFlow<List<FolderEntity>> = combine(
+        folderDao.getRootFolders(),
+        _searchQuery,
+        _uiState.map { it.sortCategory to it.sortDirection }.distinctUntilChanged()
+    ) { folders, query, (sortCat, sortDir) ->
+        var list = folders
+        if (query.isNotBlank()) {
+            list = list.filter { it.name.contains(query, ignoreCase = true) }
         }
+        val comparator: Comparator<FolderEntity> = when (sortCat) {
+            SortCategory.NAME -> compareBy(String.CASE_INSENSITIVE_ORDER) { it.name }
+            SortCategory.DATE -> compareBy { it.createdAt }
+            else -> compareBy(String.CASE_INSENSITIVE_ORDER) { it.name }
+        }
+        if (sortDir == SortDirection.ASC) list.sortedWith(comparator) else list.sortedWith(comparator.reversed())
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    val childFolders: StateFlow<List<FolderEntity>> = combine(_uiState, _searchQuery) { state, query ->
-        state.selectedFolder to query
-    }.flatMapLatest { (selectedFolder, query) ->
+    val childFolders: StateFlow<List<FolderEntity>> = combine(
+        _uiState.map { it.selectedFolder }.distinctUntilChanged(),
+        _searchQuery,
+        _uiState.map { it.sortCategory to it.sortDirection }.distinctUntilChanged()
+    ) { selectedFolder, query, (sortCat, sortDir) ->
+        selectedFolder to Pair(query, sortCat to sortDir)
+    }.flatMapLatest { (selectedFolder, params) ->
+        val (query, sortParams) = params
+        val (sortCat, sortDir) = sortParams
         if (selectedFolder != null) {
-            if (query.isBlank()) {
-                folderDao.getChildFolders(selectedFolder.id)
-            } else {
-                folderDao.searchChildFolders(selectedFolder.id, query)
+            folderDao.getChildFolders(selectedFolder.id).map { raw ->
+                var list = raw
+                if (query.isNotBlank()) {
+                    list = list.filter { it.name.contains(query, ignoreCase = true) }
+                }
+                val comparator: Comparator<FolderEntity> = when (sortCat) {
+                    SortCategory.NAME -> compareBy(String.CASE_INSENSITIVE_ORDER) { it.name }
+                    SortCategory.DATE -> compareBy { it.createdAt }
+                    else -> compareBy(String.CASE_INSENSITIVE_ORDER) { it.name }
+                }
+                if (sortDir == SortDirection.ASC) list.sortedWith(comparator) else list.sortedWith(comparator.reversed())
             }
         } else {
             flowOf(emptyList())
@@ -216,7 +321,7 @@ class LibraryViewModel @Inject constructor(
                     count++
                     if (video.localFilePath.isNotEmpty()) {
                         try {
-                            val file = java.io.File(video.localFilePath)
+                            val file = File(video.localFilePath)
                             if (file.exists()) {
                                 size += file.length()
                             }
@@ -246,6 +351,31 @@ class LibraryViewModel @Inject constructor(
 
     val allDownloads: StateFlow<List<DownloadEntity>> = downloadRepository.getAllDownloads()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // Statistics summary metadata flows
+    val historyStats: StateFlow<Pair<Int, Long>> = historyDao.getAllHistory()
+        .map { list ->
+            val count = list.size
+            val totalTime = list.sumOf { it.totalWatchTimeMillis }
+            count to totalTime
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0 to 0L)
+
+    val watchedCount: StateFlow<Int> = videoDao.getWatchedVideos()
+        .map { it.size }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    val favoritesCount: StateFlow<Int> = videoDao.getFavoriteVideos()
+        .map { it.size }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    val playlistsCount: StateFlow<Int> = subscriptionDao.getByType("playlist")
+        .map { it.size }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    val channelsCount: StateFlow<Int> = subscriptionDao.getByType("channel")
+        .map { it.size }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
     private val _fetchingStreamsFor = MutableStateFlow<String?>(null)
     val fetchingStreamsFor: StateFlow<String?> = _fetchingStreamsFor
@@ -329,7 +459,7 @@ class LibraryViewModel @Inject constructor(
 
     fun extractAudio(download: DownloadEntity) {
         if (download.filePath.isEmpty() || download.status != com.example.medianest.data.local.entity.DownloadStatus.COMPLETED) return
-        viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.IO) {
             val existing = downloadRepository.getAudioExtraction(download.videoId)
             if (existing != null) return@launch
 
@@ -357,19 +487,45 @@ class LibraryViewModel @Inject constructor(
         _uiState.value = _uiState.value.copy(searchQuery = query)
     }
 
+    fun setMediaTypeFilter(filter: MediaTypeFilter) {
+        _uiState.value = _uiState.value.copy(mediaTypeFilter = filter)
+    }
+
+    fun setSort(category: SortCategory, direction: SortDirection) {
+        _uiState.value = _uiState.value.copy(sortCategory = category, sortDirection = direction)
+    }
+
+    fun toggleSort(category: SortCategory) {
+        val currentCat = _uiState.value.sortCategory
+        val currentDir = _uiState.value.sortDirection
+        if (currentCat == category) {
+            val newDir = if (currentDir == SortDirection.DESC) SortDirection.ASC else SortDirection.DESC
+            _uiState.value = _uiState.value.copy(sortDirection = newDir)
+        } else {
+            val defaultDir = if (category == SortCategory.NAME) SortDirection.ASC else SortDirection.DESC
+            _uiState.value = _uiState.value.copy(sortCategory = category, sortDirection = defaultDir)
+        }
+    }
+
     fun setTab(tab: LibraryTab) {
         _historyLimit.value = 10
         _favoritesLimit.value = 10
         _folderVideosLimit.value = 10
         _watchedLimit.value = 10
-        _uiState.value = _uiState.value.copy(currentTab = tab, selectedFolder = null)
+        _uiState.value = _uiState.value.copy(
+            currentTab = tab,
+            selectedFolder = null,
+            folderStack = emptyList(),
+            isSelectionMode = false,
+            selectedVideoIds = emptySet()
+        )
     }
 
     fun updateWatchCount(videoId: String, newCount: Int) {
         viewModelScope.launch {
             var existing = videoDao.getVideoById(videoId)
             if (existing == null) {
-                val fallback = com.example.medianest.data.local.entity.VideoEntity(
+                val fallback = VideoEntity(
                     id = videoId,
                     title = "Video ($videoId)",
                     channelName = "Unknown Channel",
@@ -397,19 +553,34 @@ class LibraryViewModel @Inject constructor(
 
     fun selectFolder(folder: FolderEntity) {
         _folderVideosLimit.value = 10
-        _uiState.value = _uiState.value.copy(currentTab = LibraryTab.FOLDERS, selectedFolder = folder)
+        val newStack = _uiState.value.folderStack + folder
+        _uiState.value = _uiState.value.copy(
+            currentTab = LibraryTab.FOLDERS,
+            selectedFolder = folder,
+            folderStack = newStack
+        )
     }
 
     fun navigateBackFromFolder() {
         _folderVideosLimit.value = 10
-        val currentFolder = _uiState.value.selectedFolder
-        if (currentFolder?.parentId != null) {
-            viewModelScope.launch {
-                val parent = folderDao.getFolderById(currentFolder.parentId)
-                _uiState.value = _uiState.value.copy(selectedFolder = parent)
-            }
+        val currentStack = _uiState.value.folderStack
+        if (currentStack.isNotEmpty()) {
+            val newStack = currentStack.dropLast(1)
+            val parent = newStack.lastOrNull()
+            _uiState.value = _uiState.value.copy(selectedFolder = parent, folderStack = newStack)
         } else {
-            _uiState.value = _uiState.value.copy(selectedFolder = null)
+            _uiState.value = _uiState.value.copy(selectedFolder = null, folderStack = emptyList())
+        }
+    }
+
+    fun navigateToFolderCrumb(index: Int) {
+        _folderVideosLimit.value = 10
+        val currentStack = _uiState.value.folderStack
+        if (index < 0 || index >= currentStack.size) {
+            _uiState.value = _uiState.value.copy(selectedFolder = null, folderStack = emptyList())
+        } else {
+            val newStack = currentStack.take(index + 1)
+            _uiState.value = _uiState.value.copy(selectedFolder = newStack.last(), folderStack = newStack)
         }
     }
 
@@ -447,7 +618,7 @@ class LibraryViewModel @Inject constructor(
                     videosInFolder.forEach { video ->
                         if (video.localFilePath.isNotEmpty()) {
                             try {
-                                val file = java.io.File(video.localFilePath)
+                                val file = File(video.localFilePath)
                                 if (file.exists()) file.delete()
                             } catch (e: Exception) {}
                             videoDao.update(video.copy(localFilePath = ""))
@@ -460,15 +631,23 @@ class LibraryViewModel @Inject constructor(
                 } catch (e: Exception) {}
             }
             folderDao.delete(folder)
-            if (_uiState.value.selectedFolder?.id == folder.id) {
-                _uiState.value = _uiState.value.copy(selectedFolder = null)
+            val currentStack = _uiState.value.folderStack.filter { it.id != folder.id }
+            val currentSelected = if (_uiState.value.selectedFolder?.id == folder.id) {
+                currentStack.lastOrNull()
+            } else {
+                _uiState.value.selectedFolder
             }
+            _uiState.value = _uiState.value.copy(selectedFolder = currentSelected, folderStack = currentStack)
         }
     }
 
     fun renameFolder(id: Long, name: String) {
         viewModelScope.launch {
             folderDao.rename(id, name.trim())
+            // Update in stack if present
+            val updatedStack = _uiState.value.folderStack.map { if (it.id == id) it.copy(name = name.trim()) else it }
+            val updatedSelected = if (_uiState.value.selectedFolder?.id == id) _uiState.value.selectedFolder?.copy(name = name.trim()) else _uiState.value.selectedFolder
+            _uiState.value = _uiState.value.copy(selectedFolder = updatedSelected, folderStack = updatedStack)
         }
     }
 
@@ -508,7 +687,18 @@ class LibraryViewModel @Inject constructor(
         } else {
             currentSelected.add(videoId)
         }
-        _uiState.value = _uiState.value.copy(selectedVideoIds = currentSelected)
+        val isNowSelection = currentSelected.isNotEmpty()
+        _uiState.value = _uiState.value.copy(
+            selectedVideoIds = currentSelected,
+            isSelectionMode = if (currentSelected.isEmpty()) false else _uiState.value.isSelectionMode || isNowSelection
+        )
+    }
+
+    fun selectAll(videoIds: List<String>) {
+        _uiState.value = _uiState.value.copy(
+            isSelectionMode = true,
+            selectedVideoIds = videoIds.toSet()
+        )
     }
 
     fun clearSelection() {
@@ -520,7 +710,7 @@ class LibraryViewModel @Inject constructor(
         if (videoIds.isEmpty()) return
         viewModelScope.launch {
             videoIds.forEach { videoId ->
-                videoFolderDao.addVideoToFolder(com.example.medianest.data.local.entity.VideoFolderJoin(videoId, folderId))
+                videoFolderDao.addVideoToFolder(VideoFolderJoin(videoId, folderId))
             }
             _uiState.value = _uiState.value.copy(selectedVideoIds = emptySet(), isSelectionMode = false)
         }
@@ -528,7 +718,62 @@ class LibraryViewModel @Inject constructor(
 
     fun moveVideoToFolder(videoId: String, folderId: Long) {
         viewModelScope.launch {
-            videoFolderDao.addVideoToFolder(com.example.medianest.data.local.entity.VideoFolderJoin(videoId, folderId))
+            videoFolderDao.addVideoToFolder(VideoFolderJoin(videoId, folderId))
+        }
+    }
+
+    fun deleteSelectedVideos(deleteDownloads: Boolean) {
+        val videoIds = _uiState.value.selectedVideoIds.toList()
+        if (videoIds.isEmpty()) return
+        viewModelScope.launch {
+            videoIds.forEach { vid ->
+                deleteSingleVideo(vid, deleteDownloads)
+            }
+            _uiState.value = _uiState.value.copy(selectedVideoIds = emptySet(), isSelectionMode = false)
+        }
+    }
+
+    fun deleteSingleVideo(videoId: String, deleteDownload: Boolean) {
+        viewModelScope.launch {
+            if (deleteDownload) {
+                try {
+                    val video = videoDao.getVideoById(videoId)
+                    if (video?.localFilePath?.isNotEmpty() == true) {
+                        val file = File(video.localFilePath)
+                        if (file.exists()) file.delete()
+                    }
+                    val downloads = downloadRepository.getLocalDownloadsForVideo(videoId)
+                    downloads.forEach { download ->
+                        downloadRepository.delete(download)
+                    }
+                } catch (e: Exception) {}
+            }
+            videoDao.deleteById(videoId)
+        }
+    }
+
+    fun shareSelectedVideos(context: Context) {
+        val videoIds = _uiState.value.selectedVideoIds.toList()
+        if (videoIds.isEmpty()) return
+        viewModelScope.launch {
+            val shareLines = videoIds.map { id ->
+                val video = videoDao.getVideoById(id)
+                if (video != null) {
+                    "${video.title}\nhttps://www.youtube.com/watch?v=$id"
+                } else {
+                    "https://www.youtube.com/watch?v=$id"
+                }
+            }
+            val shareText = shareLines.joinToString("\n\n")
+            val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                putExtra(Intent.EXTRA_TEXT, shareText)
+                type = "text/plain"
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            val chooser = Intent.createChooser(sendIntent, "Share Videos").apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(chooser)
         }
     }
 
