@@ -2,60 +2,68 @@ package com.example.medianest.ui.screens
 
 import android.text.format.Formatter
 import java.io.File
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
-import androidx.compose.material.icons.automirrored.filled.ViewList
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
+import com.example.medianest.R
+import com.example.medianest.data.local.entity.DownloadEntity
 import com.example.medianest.data.local.entity.FolderEntity
+import com.example.medianest.data.local.entity.HistoryEntity
 import com.example.medianest.data.local.entity.VideoEntity
+import com.example.medianest.data.model.ExtractedVideoInfo
+import com.example.medianest.data.model.StreamSource
+import com.example.medianest.ui.components.*
 import com.example.medianest.ui.theme.MediaNestColors
+import com.example.medianest.ui.theme.MediaNestShapes
 import com.example.medianest.ui.utils.UiUtils
+import com.example.medianest.ui.viewmodel.FolderStats
 import com.example.medianest.ui.viewmodel.LibraryTab
 import com.example.medianest.ui.viewmodel.LibraryViewModel
-import com.example.medianest.ui.components.WatchCountDialog
+import com.example.medianest.ui.viewmodel.MediaTypeFilter
+import com.example.medianest.ui.viewmodel.SortCategory
+import com.example.medianest.ui.viewmodel.SortDirection
 import com.example.medianest.ui.viewmodel.ViewMode
-import com.example.medianest.ui.viewmodel.FolderStats
-import com.example.medianest.ui.components.UnifiedVideoCard
-import com.example.medianest.ui.components.UnifiedVideoRow
-import com.example.medianest.ui.components.VideoCardConfig
-import com.example.medianest.ui.components.GlassCard
-import com.example.medianest.ui.components.QuickDownloadMenu
-import com.example.medianest.ui.components.EndOfListIndicator
 import kotlinx.coroutines.launch
+
+val LocalMoveToFolder = androidx.compose.runtime.staticCompositionLocalOf<(String) -> Unit> { {} }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -91,10 +99,23 @@ fun LibraryScreen(
     val favoritesLimit by viewModel.favoritesLimit.collectAsStateWithLifecycle()
     val watchedLimit by viewModel.watchedLimit.collectAsStateWithLifecycle()
     val folderVideosLimit by viewModel.folderVideosLimit.collectAsStateWithLifecycle()
-    val focusManager = LocalFocusManager.current
 
+    // Live counts for tabs
+    val historyStats by viewModel.historyStats.collectAsStateWithLifecycle()
+    val favoritesCount by viewModel.favoritesCount.collectAsStateWithLifecycle()
+    val watchedCount by viewModel.watchedCount.collectAsStateWithLifecycle()
+    val playlistsCount by viewModel.playlistsCount.collectAsStateWithLifecycle()
+    val channelsCount by viewModel.channelsCount.collectAsStateWithLifecycle()
+
+    val allDownloads by viewModel.allDownloads.collectAsStateWithLifecycle()
+    val fetchingStreamsFor by viewModel.fetchingStreamsFor.collectAsStateWithLifecycle()
+    val fetchedStreams by viewModel.fetchedStreams.collectAsStateWithLifecycle()
+    var expandedDownloadVideoId by remember { mutableStateOf<String?>(null) }
+
+    val focusManager = LocalFocusManager.current
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     var showMoveToFolderDialog by remember { mutableStateOf(false) }
     var singleVideoToMove by remember { mutableStateOf<String?>(null) }
@@ -102,16 +123,36 @@ fun LibraryScreen(
     var deleteDownloadsWithFolder by remember { mutableStateOf(false) }
     var folderToRename by remember { mutableStateOf<FolderEntity?>(null) }
     var renameFolderName by remember { mutableStateOf("") }
-
-    val allDownloads by viewModel.allDownloads.collectAsStateWithLifecycle()
-    val fetchingStreamsFor by viewModel.fetchingStreamsFor.collectAsStateWithLifecycle()
-    val fetchedStreams by viewModel.fetchedStreams.collectAsStateWithLifecycle()
-    var expandedDownloadVideoId by remember { mutableStateOf<String?>(null) }
+    var showCreateFolderDialog by remember { mutableStateOf(false) }
+    var newFolderName by remember { mutableStateOf("") }
+    var showBatchDeleteDialog by remember { mutableStateOf(false) }
+    var deleteDownloadsWithBatch by remember { mutableStateOf(false) }
+    var showSortBottomSheet by remember { mutableStateOf(false) }
 
     var showWatchCountDialog by remember { mutableStateOf(false) }
     var watchCountTargetVideoId by remember { mutableStateOf<String?>(null) }
     var watchCountTargetTitle by remember { mutableStateOf("") }
     var watchCountTargetInitialCount by remember { mutableStateOf(0) }
+
+    // Intercept back navigation
+    BackHandler(enabled = uiState.isSelectionMode || uiState.selectedFolder != null || uiState.searchQuery.isNotEmpty()) {
+        when {
+            uiState.isSelectionMode -> viewModel.clearSelection()
+            uiState.selectedFolder != null -> viewModel.navigateBackFromFolder()
+            uiState.searchQuery.isNotEmpty() -> viewModel.setSearchQuery("")
+        }
+    }
+
+    // Determine current video items for selection actions
+    val currentVideosList = remember(uiState.currentTab, videos, favoriteVideos, watchedVideos, folderVideos) {
+        when (uiState.currentTab) {
+            LibraryTab.HISTORY -> videos
+            LibraryTab.FAVORITES -> favoriteVideos
+            LibraryTab.WATCHED -> watchedVideos
+            LibraryTab.FOLDERS -> folderVideos
+            else -> emptyList()
+        }
+    }
 
     androidx.compose.runtime.CompositionLocalProvider(
         LocalMoveToFolder provides { videoId ->
@@ -120,447 +161,1054 @@ fun LibraryScreen(
         }
     ) {
         Scaffold(
-            snackbarHost = { SnackbarHost(snackbarHostState) },
-        topBar = {
-            TopAppBar(
-                title = { Text(if (uiState.isSelectionMode) "${uiState.selectedVideoIds.size} Selected" else "Collections") },
-                actions = {
-                    IconButton(onClick = onNavigateToStatistics) {
-                        Icon(
-                            Icons.Default.BarChart,
-                            contentDescription = "Statistics"
+            snackbarHost = {
+                SnackbarHost(
+                    hostState = snackbarHostState,
+                    snackbar = { data ->
+                        Snackbar(
+                            snackbarData = data,
+                            containerColor = MediaNestColors.Raised,
+                            contentColor = MediaNestColors.TextPrimary,
+                            actionColor = MediaNestColors.Accent,
+                            shape = RoundedCornerShape(12.dp)
                         )
                     }
-                    if (uiState.currentTab != LibraryTab.FOLDERS || uiState.selectedFolder != null) {
-                        IconButton(onClick = { viewModel.toggleViewMode() }) {
-                            Icon(
-                                if (uiState.viewMode == ViewMode.GRID) Icons.AutoMirrored.Filled.ViewList else Icons.Default.GridView,
-                                contentDescription = "Toggle View"
-                            )
+                )
+            },
+            containerColor = MediaNestColors.Background,
+            topBar = {
+                MediaNestTopAppBar(
+                    title = when {
+                        uiState.isSelectionMode -> "${uiState.selectedVideoIds.size} Selected"
+                        uiState.currentTab == LibraryTab.FOLDERS && uiState.selectedFolder != null -> uiState.selectedFolder!!.name
+                        else -> "Collections"
+                    },
+                    subtitle = when {
+                        uiState.isSelectionMode -> "Batch selection active"
+                        uiState.currentTab == LibraryTab.FOLDERS && uiState.selectedFolder != null -> "Folder collection"
+                        else -> null
+                    },
+                    navigationIcon = when {
+                        uiState.isSelectionMode -> {
+                            {
+                                MediaNestIconButton(
+                                    onClick = { viewModel.clearSelection() },
+                                    contentDescription = "Cancel selection"
+                                ) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_mn_close),
+                                        contentDescription = "Cancel selection",
+                                        tint = MediaNestColors.TextPrimary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                        }
+                        uiState.currentTab == LibraryTab.FOLDERS && uiState.selectedFolder != null -> {
+                            {
+                                MediaNestIconButton(
+                                    onClick = { viewModel.navigateBackFromFolder() },
+                                    contentDescription = "Back to folders"
+                                ) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_mn_back),
+                                        contentDescription = "Back",
+                                        tint = MediaNestColors.TextPrimary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                        }
+                        else -> null
+                    },
+                    actions = {
+                        if (!uiState.isSelectionMode) {
+                            MediaNestIconButton(
+                                onClick = onNavigateToStatistics,
+                                contentDescription = "Statistics"
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_mn_chart),
+                                    contentDescription = "Statistics",
+                                    tint = MediaNestColors.TextPrimary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            if (uiState.currentTab != LibraryTab.FOLDERS || uiState.selectedFolder != null) {
+                                MediaNestIconButton(
+                                    onClick = { viewModel.toggleViewMode() },
+                                    contentDescription = if (uiState.viewMode == ViewMode.GRID) "Switch to list view" else "Switch to grid view"
+                                ) {
+                                    Icon(
+                                        painter = painterResource(
+                                            if (uiState.viewMode == ViewMode.GRID) R.drawable.ic_mn_list else R.drawable.ic_mn_grid
+                                        ),
+                                        contentDescription = null,
+                                        tint = MediaNestColors.TextPrimary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
                         }
                     }
+                )
+            },
+            bottomBar = {
+                if (uiState.isSelectionMode) {
+                    BatchSelectionBar(
+                        selectedCount = uiState.selectedVideoIds.size,
+                        allVideoIds = currentVideosList.map { it.id },
+                        selectedVideoIds = uiState.selectedVideoIds,
+                        onSelectAll = { viewModel.selectAll(currentVideosList.map { it.id }) },
+                        onClearSelection = { viewModel.clearSelection() },
+                        onMove = { showMoveToFolderDialog = true },
+                        onShare = { viewModel.shareSelectedVideos(context) },
+                        onDelete = { showBatchDeleteDialog = true }
+                    )
                 }
-            )
-        },
-        bottomBar = {
-            if (uiState.isSelectionMode) {
-                BottomAppBar {
+            }
+        ) { padding ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .pointerInput(Unit) {
+                        detectTapGestures(onTap = { focusManager.clearFocus() })
+                    }
+            ) {
+                // Search Bar
+                LibrarySearchBar(
+                    query = uiState.searchQuery,
+                    onQueryChange = { viewModel.setSearchQuery(it) },
+                    placeholder = "Search ${uiState.currentTab.label.lowercase()}...",
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+
+                // Collection Tabs Row with FilterChips
+                val tabs = listOf(
+                    LibraryTab.HISTORY,
+                    LibraryTab.FAVORITES,
+                    LibraryTab.WATCHED,
+                    LibraryTab.FOLDERS,
+                    LibraryTab.SUBSCRIPTIONS,
+                    LibraryTab.PLAYLISTS
+                )
+
+                MediaNestFilterRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+                    horizontalSpacing = 8.dp
+                ) {
+                    tabs.forEach { tab ->
+                        val isSelected = uiState.currentTab == tab
+                        val count = when (tab) {
+                            LibraryTab.HISTORY -> historyStats.first
+                            LibraryTab.FAVORITES -> favoritesCount
+                            LibraryTab.WATCHED -> watchedCount
+                            LibraryTab.FOLDERS -> rootFolders.size
+                            LibraryTab.SUBSCRIPTIONS -> channelsCount
+                            LibraryTab.PLAYLISTS -> playlistsCount
+                        }
+                        val iconRes = when (tab) {
+                            LibraryTab.HISTORY -> R.drawable.ic_mn_history
+                            LibraryTab.FAVORITES -> R.drawable.ic_mn_heart
+                            LibraryTab.WATCHED -> R.drawable.ic_mn_watched
+                            LibraryTab.FOLDERS -> R.drawable.ic_mn_folder
+                            LibraryTab.SUBSCRIPTIONS -> R.drawable.ic_mn_channel
+                            LibraryTab.PLAYLISTS -> R.drawable.ic_mn_playlist
+                        }
+
+                        MediaNestChip(
+                            label = tab.label,
+                            selected = isSelected,
+                            onClick = { viewModel.setTab(tab) },
+                            leadingIcon = {
+                                Icon(
+                                    painter = painterResource(iconRes),
+                                    contentDescription = null,
+                                    tint = if (isSelected) MediaNestColors.TextPrimary else MediaNestColors.TextSecondary,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                            },
+                            badgeText = if (count > 0) count.toString() else null
+                        )
+                    }
+                }
+
+                // Secondary Filter Controls Bar (Media Type & Sort for media tabs)
+                val showSecondaryFilters = uiState.currentTab in listOf(
+                    LibraryTab.HISTORY,
+                    LibraryTab.FAVORITES,
+                    LibraryTab.WATCHED
+                ) || (uiState.currentTab == LibraryTab.FOLDERS && (uiState.selectedFolder != null || folderVideos.isNotEmpty()))
+
+                if (showSecondaryFilters) {
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        TextButton(
-                            onClick = { viewModel.clearSelection() },
-                            modifier = Modifier.weight(1f)
+                        // Media Type Segmented Pills
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Cancel")
+                            listOf(
+                                MediaTypeFilter.ALL,
+                                MediaTypeFilter.VIDEO,
+                                MediaTypeFilter.AUDIO
+                            ).forEach { filter ->
+                                val isFilterSelected = uiState.mediaTypeFilter == filter
+                                MediaNestChip(
+                                    label = filter.label,
+                                    selected = isFilterSelected,
+                                    onClick = { viewModel.setMediaTypeFilter(filter) },
+                                    shape = RoundedCornerShape(12.dp),
+                                    leadingIcon = when (filter) {
+                                        MediaTypeFilter.VIDEO -> ({
+                                            Icon(
+                                                painter = painterResource(R.drawable.ic_mn_video),
+                                                contentDescription = null,
+                                                tint = if (isFilterSelected) MediaNestColors.TextPrimary else MediaNestColors.TextSecondary,
+                                                modifier = Modifier.size(13.dp)
+                                            )
+                                        })
+                                        MediaTypeFilter.AUDIO -> ({
+                                            Icon(
+                                                painter = painterResource(R.drawable.ic_mn_music),
+                                                contentDescription = null,
+                                                tint = if (isFilterSelected) MediaNestColors.TextPrimary else MediaNestColors.TextSecondary,
+                                                modifier = Modifier.size(13.dp)
+                                            )
+                                        })
+                                        else -> null
+                                    }
+                                )
+                            }
                         }
-                        Button(
-                            onClick = { showMoveToFolderDialog = true },
-                            enabled = uiState.selectedVideoIds.isNotEmpty(),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(Icons.Default.Folder, contentDescription = null)
-                            Spacer(Modifier.width(8.dp))
-                            Text("Move")
-                        }
-                    }
-                }
-            }
-        }
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .pointerInput(Unit) {
-                    detectTapGestures(onTap = { focusManager.clearFocus() })
-                }
-        ) {
-            OutlinedTextField(
-                value = uiState.searchQuery,
-                onValueChange = { viewModel.setSearchQuery(it) },
-                placeholder = { Text("Search videos...") },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                trailingIcon = {
-                    if (uiState.searchQuery.isNotEmpty()) {
-                        IconButton(onClick = { viewModel.setSearchQuery("") }) {
-                            Icon(Icons.Default.Close, contentDescription = "Clear search")
-                        }
-                    }
-                },
-                singleLine = true,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-            )
 
-            val tabs = listOf(LibraryTab.HISTORY, LibraryTab.WATCHED, LibraryTab.FOLDERS, LibraryTab.FAVORITES, LibraryTab.PLAYLISTS, LibraryTab.SUBSCRIPTIONS)
-            val tabLabels = listOf("History", "Watched", "Folders", "Favorites", "Playlists", "Channels")
-            SecondaryScrollableTabRow(
-                selectedTabIndex = tabs.indexOf(uiState.currentTab),
-                edgePadding = 8.dp,
-                divider = {},
-                indicator = {},
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                tabs.forEachIndexed { index, tab ->
-                    val isSelected = uiState.currentTab == tab
-                    Tab(
-                        selected = isSelected,
-                        onClick = { viewModel.setTab(tab) },
-                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(50))
-                                .background(if (isSelected) MediaNestColors.AccentDeep else Color.Transparent)
-                                .padding(horizontal = 16.dp, vertical = 8.dp)
-                        ) {
-                            Text(
-                                tabLabels[index],
-                                color = if (isSelected) MediaNestColors.TextPrimary else MaterialTheme.colorScheme.onSurface,
-                                style = MaterialTheme.typography.labelLarge
+                        // Sort Button
+                        val sortLabel = when (uiState.sortCategory) {
+                            SortCategory.DATE -> "Date"
+                            SortCategory.NAME -> "Name"
+                            SortCategory.DURATION -> "Duration"
+                            SortCategory.SIZE -> "Size"
+                        }
+                        val sortDirectionSymbol = if (uiState.sortDirection == SortDirection.ASC) "↑" else "↓"
+
+                        MediaNestChip(
+                            label = "$sortLabel $sortDirectionSymbol",
+                            selected = false,
+                            onClick = { showSortBottomSheet = true },
+                            shape = RoundedCornerShape(12.dp),
+                            leadingIcon = {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_mn_sort),
+                                    contentDescription = "Sort",
+                                    tint = MediaNestColors.TextSecondary,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+                        )
+                    }
+                }
+
+                // Active Folder Breadcrumb Navigation
+                if (uiState.currentTab == LibraryTab.FOLDERS && uiState.selectedFolder != null) {
+                    FolderBreadcrumbs(
+                        stack = uiState.folderStack,
+                        onCrumbClick = { index -> viewModel.navigateToFolderCrumb(index) },
+                        onNavigateBack = { viewModel.navigateBackFromFolder() },
+                        onCreateSubfolder = { showCreateFolderDialog = true }
+                    )
+                }
+
+                // Main Tab Content
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                ) {
+                    when (uiState.currentTab) {
+                        LibraryTab.HISTORY -> {
+                            if (videos.isEmpty()) {
+                                EmptyState(
+                                    title = if (uiState.searchQuery.isNotEmpty()) "No Results Found" else "No Watch History",
+                                    message = if (uiState.searchQuery.isNotEmpty()) "No history items matched \"${uiState.searchQuery}\"" else "Videos you stream or play will appear here for fast replay.",
+                                    iconContent = {
+                                        Icon(
+                                            painter = painterResource(if (uiState.searchQuery.isNotEmpty()) R.drawable.ic_mn_search else R.drawable.ic_mn_history),
+                                            contentDescription = null,
+                                            tint = MediaNestColors.TextSecondary,
+                                            modifier = Modifier.size(32.dp)
+                                        )
+                                    },
+                                    actionText = if (uiState.searchQuery.isNotEmpty()) "Clear Search" else null,
+                                    onActionClick = if (uiState.searchQuery.isNotEmpty()) { { viewModel.setSearchQuery("") } } else null
+                                )
+                            } else {
+                                VideoListLayout(
+                                    videos = videos,
+                                    videoFolderMap = videoFolderMap,
+                                    viewMode = uiState.viewMode,
+                                    isSelectionMode = uiState.isSelectionMode,
+                                    selectedIds = uiState.selectedVideoIds,
+                                    expandedDownloadVideoId = expandedDownloadVideoId,
+                                    fetchingStreamsFor = fetchingStreamsFor,
+                                    fetchedStreams = fetchedStreams,
+                                    allDownloads = allDownloads,
+                                    playbackHistory = playbackHistory,
+                                    showContinueWatching = true,
+                                    isEndReached = videos.isNotEmpty() && videos.size < historyLimit,
+                                    onVideoClick = onVideoClick,
+                                    onVideoLongClick = { videoId ->
+                                        if (!uiState.isSelectionMode) {
+                                            viewModel.toggleSelectionMode()
+                                        }
+                                        viewModel.toggleVideoSelection(videoId)
+                                    },
+                                    onToggleSelection = { viewModel.toggleVideoSelection(it) },
+                                    onFavoriteToggle = { video ->
+                                        viewModel.toggleFavorite(video.id, video.favorite)
+                                        coroutineScope.launch {
+                                            snackbarHostState.showSnackbar(if (video.favorite) "Removed from Favorites" else "Added to Favorites")
+                                        }
+                                    },
+                                    onDownloadIconClick = { videoId ->
+                                        expandedDownloadVideoId = videoId
+                                        viewModel.fetchStreamsFor(videoId)
+                                    },
+                                    onDismissDownloadMenu = { expandedDownloadVideoId = null },
+                                    onEnqueueDownload = { info, stream -> viewModel.enqueueDownload(info, stream) },
+                                    onDeleteDownload = { entity -> viewModel.deleteDownload(entity) },
+                                    onExtractAudio = { entity ->
+                                        viewModel.extractAudio(entity)
+                                        coroutineScope.launch { snackbarHostState.showSnackbar("Audio extraction queued") }
+                                    },
+                                    onLoadMore = viewModel::loadMoreHistory,
+                                    onMarkWatched = { videoId ->
+                                        val video = videos.find { it.id == videoId }
+                                        if (video != null) {
+                                            watchCountTargetVideoId = videoId
+                                            watchCountTargetTitle = video.title
+                                            watchCountTargetInitialCount = video.watchCount
+                                            showWatchCountDialog = true
+                                        }
+                                    }
+                                )
+                            }
+                        }
+
+                        LibraryTab.FAVORITES -> {
+                            if (favoriteVideos.isEmpty()) {
+                                EmptyState(
+                                    title = if (uiState.searchQuery.isNotEmpty()) "No Results Found" else "No Favorites Yet",
+                                    message = if (uiState.searchQuery.isNotEmpty()) "No favorite items matched \"${uiState.searchQuery}\"" else "Tap the heart icon on any media item to save it here.",
+                                    iconContent = {
+                                        Icon(
+                                            painter = painterResource(if (uiState.searchQuery.isNotEmpty()) R.drawable.ic_mn_search else R.drawable.ic_mn_heart),
+                                            contentDescription = null,
+                                            tint = MediaNestColors.TextSecondary,
+                                            modifier = Modifier.size(32.dp)
+                                        )
+                                    },
+                                    actionText = if (uiState.searchQuery.isNotEmpty()) "Clear Search" else null,
+                                    onActionClick = if (uiState.searchQuery.isNotEmpty()) { { viewModel.setSearchQuery("") } } else null
+                                )
+                            } else {
+                                VideoListLayout(
+                                    videos = favoriteVideos,
+                                    videoFolderMap = videoFolderMap,
+                                    viewMode = uiState.viewMode,
+                                    isSelectionMode = uiState.isSelectionMode,
+                                    selectedIds = uiState.selectedVideoIds,
+                                    expandedDownloadVideoId = expandedDownloadVideoId,
+                                    fetchingStreamsFor = fetchingStreamsFor,
+                                    fetchedStreams = fetchedStreams,
+                                    allDownloads = allDownloads,
+                                    playbackHistory = playbackHistory,
+                                    isEndReached = favoriteVideos.isNotEmpty() && favoriteVideos.size < favoritesLimit,
+                                    onVideoClick = onVideoClick,
+                                    onVideoLongClick = { videoId ->
+                                        if (!uiState.isSelectionMode) {
+                                            viewModel.toggleSelectionMode()
+                                        }
+                                        viewModel.toggleVideoSelection(videoId)
+                                    },
+                                    onToggleSelection = { viewModel.toggleVideoSelection(it) },
+                                    onFavoriteToggle = { video ->
+                                        viewModel.toggleFavorite(video.id, video.favorite)
+                                        coroutineScope.launch {
+                                            snackbarHostState.showSnackbar(if (video.favorite) "Removed from Favorites" else "Added to Favorites")
+                                        }
+                                    },
+                                    onDownloadIconClick = { videoId ->
+                                        expandedDownloadVideoId = videoId
+                                        viewModel.fetchStreamsFor(videoId)
+                                    },
+                                    onDismissDownloadMenu = { expandedDownloadVideoId = null },
+                                    onEnqueueDownload = { info, stream -> viewModel.enqueueDownload(info, stream) },
+                                    onDeleteDownload = { entity -> viewModel.deleteDownload(entity) },
+                                    onExtractAudio = { entity ->
+                                        viewModel.extractAudio(entity)
+                                        coroutineScope.launch { snackbarHostState.showSnackbar("Audio extraction queued") }
+                                    },
+                                    onLoadMore = viewModel::loadMoreFavorites,
+                                    onMarkWatched = { videoId ->
+                                        val video = favoriteVideos.find { it.id == videoId }
+                                        if (video != null) {
+                                            watchCountTargetVideoId = videoId
+                                            watchCountTargetTitle = video.title
+                                            watchCountTargetInitialCount = video.watchCount
+                                            showWatchCountDialog = true
+                                        }
+                                    }
+                                )
+                            }
+                        }
+
+                        LibraryTab.WATCHED -> {
+                            if (watchedVideos.isEmpty()) {
+                                EmptyState(
+                                    title = if (uiState.searchQuery.isNotEmpty()) "No Results Found" else "No Watched Videos",
+                                    message = if (uiState.searchQuery.isNotEmpty()) "No watched items matched \"${uiState.searchQuery}\"" else "Completed and marked videos will be archived here.",
+                                    iconContent = {
+                                        Icon(
+                                            painter = painterResource(if (uiState.searchQuery.isNotEmpty()) R.drawable.ic_mn_search else R.drawable.ic_mn_watched),
+                                            contentDescription = null,
+                                            tint = MediaNestColors.TextSecondary,
+                                            modifier = Modifier.size(32.dp)
+                                        )
+                                    },
+                                    actionText = if (uiState.searchQuery.isNotEmpty()) "Clear Search" else null,
+                                    onActionClick = if (uiState.searchQuery.isNotEmpty()) { { viewModel.setSearchQuery("") } } else null
+                                )
+                            } else {
+                                VideoListLayout(
+                                    videos = watchedVideos,
+                                    videoFolderMap = videoFolderMap,
+                                    viewMode = uiState.viewMode,
+                                    isSelectionMode = uiState.isSelectionMode,
+                                    selectedIds = uiState.selectedVideoIds,
+                                    expandedDownloadVideoId = expandedDownloadVideoId,
+                                    fetchingStreamsFor = fetchingStreamsFor,
+                                    fetchedStreams = fetchedStreams,
+                                    allDownloads = allDownloads,
+                                    playbackHistory = playbackHistory,
+                                    isEndReached = watchedVideos.isNotEmpty() && watchedVideos.size < watchedLimit,
+                                    onVideoClick = onVideoClick,
+                                    onVideoLongClick = { videoId ->
+                                        if (!uiState.isSelectionMode) {
+                                            viewModel.toggleSelectionMode()
+                                        }
+                                        viewModel.toggleVideoSelection(videoId)
+                                    },
+                                    onToggleSelection = { viewModel.toggleVideoSelection(it) },
+                                    onFavoriteToggle = { video ->
+                                        viewModel.toggleFavorite(video.id, video.favorite)
+                                        coroutineScope.launch {
+                                            snackbarHostState.showSnackbar(if (video.favorite) "Removed from Favorites" else "Added to Favorites")
+                                        }
+                                    },
+                                    onDownloadIconClick = { videoId ->
+                                        expandedDownloadVideoId = videoId
+                                        viewModel.fetchStreamsFor(videoId)
+                                    },
+                                    onDismissDownloadMenu = { expandedDownloadVideoId = null },
+                                    onEnqueueDownload = { info, stream -> viewModel.enqueueDownload(info, stream) },
+                                    onDeleteDownload = { entity -> viewModel.deleteDownload(entity) },
+                                    onExtractAudio = { entity ->
+                                        viewModel.extractAudio(entity)
+                                        coroutineScope.launch { snackbarHostState.showSnackbar("Audio extraction queued") }
+                                    },
+                                    onLoadMore = viewModel::loadMoreWatched,
+                                    onMarkWatched = { videoId ->
+                                        val video = watchedVideos.find { it.id == videoId }
+                                        if (video != null) {
+                                            watchCountTargetVideoId = videoId
+                                            watchCountTargetTitle = video.title
+                                            watchCountTargetInitialCount = video.watchCount
+                                            showWatchCountDialog = true
+                                        }
+                                    }
+                                )
+                            }
+                        }
+
+                        LibraryTab.FOLDERS -> {
+                            FolderContent(
+                                folders = rootFolders,
+                                childFolders = childFolders,
+                                folderVideos = folderVideos,
+                                videoFolderMap = videoFolderMap,
+                                folderStatsMap = folderStatsMap,
+                                selectedFolder = uiState.selectedFolder,
+                                searchQuery = uiState.searchQuery,
+                                viewMode = uiState.viewMode,
+                                isSelectionMode = uiState.isSelectionMode,
+                                selectedIds = uiState.selectedVideoIds,
+                                expandedDownloadVideoId = expandedDownloadVideoId,
+                                fetchingStreamsFor = fetchingStreamsFor,
+                                fetchedStreams = fetchedStreams,
+                                allDownloads = allDownloads,
+                                playbackHistory = playbackHistory,
+                                isEndReached = folderVideos.isNotEmpty() && folderVideos.size < folderVideosLimit,
+                                onFolderClick = { viewModel.selectFolder(it) },
+                                onCreateFolderClick = { showCreateFolderDialog = true },
+                                onRenameFolder = { folder ->
+                                    folderToRename = folder
+                                    renameFolderName = folder.name
+                                },
+                                onDeleteFolder = { folder ->
+                                    folderToDelete = folder
+                                    deleteDownloadsWithFolder = false
+                                },
+                                onNavigateBack = { viewModel.navigateBackFromFolder() },
+                                onVideoClick = onVideoClick,
+                                onVideoLongClick = { videoId ->
+                                    if (!uiState.isSelectionMode) {
+                                        viewModel.toggleSelectionMode()
+                                    }
+                                    viewModel.toggleVideoSelection(videoId)
+                                },
+                                onToggleSelection = { viewModel.toggleVideoSelection(it) },
+                                onFavoriteToggle = { video ->
+                                    viewModel.toggleFavorite(video.id, video.favorite)
+                                    coroutineScope.launch {
+                                        snackbarHostState.showSnackbar(if (video.favorite) "Removed from Favorites" else "Added to Favorites")
+                                    }
+                                },
+                                onRemoveFromFolder = { videoId, folderId ->
+                                    viewModel.removeVideoFromFolder(videoId, folderId)
+                                    coroutineScope.launch { snackbarHostState.showSnackbar("Removed from folder") }
+                                },
+                                onDownloadIconClick = { videoId ->
+                                    expandedDownloadVideoId = videoId
+                                    viewModel.fetchStreamsFor(videoId)
+                                },
+                                onDismissDownloadMenu = { expandedDownloadVideoId = null },
+                                onEnqueueDownload = { info, stream -> viewModel.enqueueDownload(info, stream) },
+                                onDeleteDownload = { entity -> viewModel.deleteDownload(entity) },
+                                onExtractAudio = { entity ->
+                                    viewModel.extractAudio(entity)
+                                    coroutineScope.launch { snackbarHostState.showSnackbar("Audio extraction queued") }
+                                },
+                                onLoadMoreVideos = viewModel::loadMoreFolderVideos,
+                                onMarkWatched = { videoId ->
+                                    val video = folderVideos.find { it.id == videoId }
+                                    if (video != null) {
+                                        watchCountTargetVideoId = videoId
+                                        watchCountTargetTitle = video.title
+                                        watchCountTargetInitialCount = video.watchCount
+                                        showWatchCountDialog = true
+                                    }
+                                }
+                            )
+                        }
+
+                        LibraryTab.PLAYLISTS -> {
+                            SubscriptionsScreen(
+                                sourceType = "playlist",
+                                searchQuery = uiState.searchQuery,
+                                viewMode = uiState.viewMode,
+                                onSubscriptionClick = { type, id ->
+                                    selectedSubscription = Pair(type, id)
+                                    onSubscriptionClick(type, id)
+                                }
+                            )
+                        }
+
+                        LibraryTab.SUBSCRIPTIONS -> {
+                            SubscriptionsScreen(
+                                sourceType = "channel",
+                                searchQuery = uiState.searchQuery,
+                                viewMode = uiState.viewMode,
+                                onSubscriptionClick = { type, id ->
+                                    selectedSubscription = Pair(type, id)
+                                    onSubscriptionClick(type, id)
+                                }
                             )
                         }
                     }
                 }
             }
 
-            when (uiState.currentTab) {
-                LibraryTab.HISTORY -> {
-                    if (videos.isEmpty()) {
-                        EmptyState("No watch history yet")
-                    } else {
-                        VideoListLayout(
-                            videos = videos,
-                            videoFolderMap = videoFolderMap,
-                            viewMode = uiState.viewMode,
-                            isSelectionMode = uiState.isSelectionMode,
-                            selectedIds = uiState.selectedVideoIds,
-                            expandedDownloadVideoId = expandedDownloadVideoId,
-                            fetchingStreamsFor = fetchingStreamsFor,
-                            fetchedStreams = fetchedStreams,
-                            allDownloads = allDownloads,
-                            playbackHistory = playbackHistory,
-                            showContinueWatching = true,
-                            isEndReached = videos.isNotEmpty() && videos.size < historyLimit,
-                            onVideoClick = onVideoClick,
-                            onVideoLongClick = { viewModel.toggleSelectionMode(); viewModel.toggleVideoSelection(it) },
-                            onToggleSelection = { viewModel.toggleVideoSelection(it) },
-                            onFavoriteToggle = { video -> 
-                                viewModel.toggleFavorite(video.id, video.favorite)
-                                coroutineScope.launch { snackbarHostState.showSnackbar(if (video.favorite) "Removed from Favorites" else "Added to Favorites") }
-                            },
-                            onDownloadIconClick = { videoId -> 
-                                expandedDownloadVideoId = videoId
-                                viewModel.fetchStreamsFor(videoId)
-                            },
-                            onDismissDownloadMenu = { expandedDownloadVideoId = null },
-                            onEnqueueDownload = { info, stream -> viewModel.enqueueDownload(info, stream) },
-                            onDeleteDownload = { entity -> viewModel.deleteDownload(entity) },
-                            onExtractAudio = { entity -> viewModel.extractAudio(entity) },
-                            onLoadMore = viewModel::loadMoreHistory,
-                            onMarkWatched = { videoId ->
-                                val video = (videos.find { it.id == videoId } ?: favoriteVideos.find { it.id == videoId } ?: watchedVideos.find { it.id == videoId } ?: folderVideos.find { it.id == videoId })
-                                if (video != null) {
-                                    watchCountTargetVideoId = videoId
-                                    watchCountTargetTitle = video.title
-                                    watchCountTargetInitialCount = video.watchCount
-                                    showWatchCountDialog = true
-                                }
-                            }
-                        )
-                    }
-                }
-                LibraryTab.WATCHED -> {
-                    if (watchedVideos.isEmpty()) {
-                        EmptyState("No watched videos yet")
-                    } else {
-                        VideoListLayout(
-                            videos = watchedVideos,
-                            videoFolderMap = videoFolderMap,
-                            viewMode = uiState.viewMode,
-                            isSelectionMode = uiState.isSelectionMode,
-                            selectedIds = uiState.selectedVideoIds,
-                            expandedDownloadVideoId = expandedDownloadVideoId,
-                            fetchingStreamsFor = fetchingStreamsFor,
-                            fetchedStreams = fetchedStreams,
-                            allDownloads = allDownloads,
-                            playbackHistory = playbackHistory,
-                            isEndReached = watchedVideos.isNotEmpty() && watchedVideos.size < watchedLimit,
-                            onVideoClick = onVideoClick,
-                            onVideoLongClick = { viewModel.toggleSelectionMode(); viewModel.toggleVideoSelection(it) },
-                            onToggleSelection = { viewModel.toggleVideoSelection(it) },
-                            onFavoriteToggle = { video -> 
-                                viewModel.toggleFavorite(video.id, video.favorite)
-                                coroutineScope.launch { snackbarHostState.showSnackbar(if (video.favorite) "Removed from Favorites" else "Added to Favorites") }
-                            },
-                            onDownloadIconClick = { videoId -> 
-                                expandedDownloadVideoId = videoId
-                                viewModel.fetchStreamsFor(videoId)
-                            },
-                            onDismissDownloadMenu = { expandedDownloadVideoId = null },
-                            onEnqueueDownload = { info, stream -> viewModel.enqueueDownload(info, stream) },
-                            onDeleteDownload = { entity -> viewModel.deleteDownload(entity) },
-                            onExtractAudio = { entity -> viewModel.extractAudio(entity) },
-                            onLoadMore = viewModel::loadMoreWatched,
-                            onMarkWatched = { videoId ->
-                                val video = (videos.find { it.id == videoId } ?: favoriteVideos.find { it.id == videoId } ?: watchedVideos.find { it.id == videoId } ?: folderVideos.find { it.id == videoId })
-                                if (video != null) {
-                                    watchCountTargetVideoId = videoId
-                                    watchCountTargetTitle = video.title
-                                    watchCountTargetInitialCount = video.watchCount
-                                    showWatchCountDialog = true
-                                }
-                            }
-                        )
-                    }
-                }
-                LibraryTab.FOLDERS -> {
-                    FolderContent(
-                        folders = rootFolders,
-                        childFolders = childFolders,
-                        folderVideos = folderVideos,
-                        videoFolderMap = videoFolderMap,
-                        folderStatsMap = folderStatsMap,
-                        selectedFolder = uiState.selectedFolder,
-                        searchQuery = uiState.searchQuery,
-                        viewMode = uiState.viewMode,
-                        isSelectionMode = uiState.isSelectionMode,
-                        selectedIds = uiState.selectedVideoIds,
-                        expandedDownloadVideoId = expandedDownloadVideoId,
-                        fetchingStreamsFor = fetchingStreamsFor,
-                        fetchedStreams = fetchedStreams,
-                        allDownloads = allDownloads,
-                        playbackHistory = playbackHistory,
-                        isEndReached = folderVideos.isNotEmpty() && folderVideos.size < folderVideosLimit,
-                        onFolderClick = { viewModel.selectFolder(it) },
-                        onCreateFolder = { name -> 
-                            viewModel.createFolder(name, uiState.selectedFolder?.id)
-                            coroutineScope.launch { snackbarHostState.showSnackbar("Folder created") }
-                        },
-                        onRenameFolder = { folder ->
-                            folderToRename = folder
-                            renameFolderName = folder.name
-                        },
-                        onDeleteFolder = { folder ->
-                            folderToDelete = folder
-                            deleteDownloadsWithFolder = false
-                        },
-                        onNavigateBack = { viewModel.navigateBackFromFolder() },
-                        onVideoClick = onVideoClick,
-                        onVideoLongClick = { viewModel.toggleSelectionMode(); viewModel.toggleVideoSelection(it) },
-                        onToggleSelection = { viewModel.toggleVideoSelection(it) },
-                        onFavoriteToggle = { video -> 
-                            viewModel.toggleFavorite(video.id, video.favorite)
-                            coroutineScope.launch { snackbarHostState.showSnackbar(if (video.favorite) "Removed from Favorites" else "Added to Favorites") }
-                        },
-                        onRemoveFromFolder = { videoId, folderId ->
-                            viewModel.removeVideoFromFolder(videoId, folderId)
-                            coroutineScope.launch { snackbarHostState.showSnackbar("Removed from folder") }
-                        },
-                        onDownloadIconClick = { videoId -> 
-                            expandedDownloadVideoId = videoId
-                            viewModel.fetchStreamsFor(videoId)
-                        },
-                        onDismissDownloadMenu = { expandedDownloadVideoId = null },
-                        onEnqueueDownload = { info, stream -> viewModel.enqueueDownload(info, stream) },
-                        onDeleteDownload = { entity -> viewModel.deleteDownload(entity) },
-                        onExtractAudio = { entity -> viewModel.extractAudio(entity) },
-                        onLoadMoreVideos = viewModel::loadMoreFolderVideos,
-                        onMarkWatched = { videoId ->
-                            val video = (videos.find { it.id == videoId } ?: favoriteVideos.find { it.id == videoId } ?: watchedVideos.find { it.id == videoId } ?: folderVideos.find { it.id == videoId })
-                            if (video != null) {
-                                watchCountTargetVideoId = videoId
-                                watchCountTargetTitle = video.title
-                                watchCountTargetInitialCount = video.watchCount
-                                showWatchCountDialog = true
-                            }
-                        }
-                    )
-                }
-                LibraryTab.FAVORITES -> {
-                    if (favoriteVideos.isEmpty()) {
-                        EmptyState("No favorite videos")
-                    } else {
-                        VideoListLayout(
-                            videos = favoriteVideos,
-                            videoFolderMap = videoFolderMap,
-                            viewMode = uiState.viewMode,
-                            isSelectionMode = uiState.isSelectionMode,
-                            selectedIds = uiState.selectedVideoIds,
-                            expandedDownloadVideoId = expandedDownloadVideoId,
-                            fetchingStreamsFor = fetchingStreamsFor,
-                            fetchedStreams = fetchedStreams,
-                            allDownloads = allDownloads,
-                            playbackHistory = playbackHistory,
-                            isEndReached = favoriteVideos.isNotEmpty() && favoriteVideos.size < favoritesLimit,
-                            onVideoClick = onVideoClick,
-                            onVideoLongClick = { viewModel.toggleSelectionMode(); viewModel.toggleVideoSelection(it) },
-                            onToggleSelection = { viewModel.toggleVideoSelection(it) },
-                            onFavoriteToggle = { video -> 
-                                viewModel.toggleFavorite(video.id, video.favorite)
-                                coroutineScope.launch { snackbarHostState.showSnackbar(if (video.favorite) "Removed from Favorites" else "Added to Favorites") }
-                            },
-                            onDownloadIconClick = { videoId -> 
-                                expandedDownloadVideoId = videoId
-                                viewModel.fetchStreamsFor(videoId)
-                            },
-                            onDismissDownloadMenu = { expandedDownloadVideoId = null },
-                            onEnqueueDownload = { info, stream -> viewModel.enqueueDownload(info, stream) },
-                            onDeleteDownload = { entity -> viewModel.deleteDownload(entity) },
-                            onExtractAudio = { entity -> viewModel.extractAudio(entity) },
-                            onLoadMore = viewModel::loadMoreFavorites,
-                            onMarkWatched = { videoId ->
-                                val video = (videos.find { it.id == videoId } ?: favoriteVideos.find { it.id == videoId } ?: watchedVideos.find { it.id == videoId } ?: folderVideos.find { it.id == videoId })
-                                if (video != null) {
-                                    watchCountTargetVideoId = videoId
-                                    watchCountTargetTitle = video.title
-                                    watchCountTargetInitialCount = video.watchCount
-                                    showWatchCountDialog = true
-                                }
-                            }
-                        )
-                    }
-                }
-                LibraryTab.PLAYLISTS -> {
-                    SubscriptionsScreen(
-                        sourceType = "playlist",
-                        searchQuery = uiState.searchQuery,
-                        viewMode = uiState.viewMode,
-                        onSubscriptionClick = { type, id ->
-                            selectedSubscription = Pair(type, id)
-                            onSubscriptionClick(type, id)
-                        }
-                    )
-                }
-                LibraryTab.SUBSCRIPTIONS -> {
-                    SubscriptionsScreen(
-                        sourceType = "channel",
-                        searchQuery = uiState.searchQuery,
-                        viewMode = uiState.viewMode,
-                        onSubscriptionClick = { type, id ->
-                            selectedSubscription = Pair(type, id)
-                            onSubscriptionClick(type, id)
-                        }
-                    )
-                }
-                }
-            }
-
-
-
+            // Move To Folder Dialog
             if (showMoveToFolderDialog) {
-            AlertDialog(
-                onDismissRequest = { 
-                    showMoveToFolderDialog = false
-                    singleVideoToMove = null
-                },
-                title = { Text("Move to Folder") },
-                text = {
-                    LazyColumn {
-                        items(rootFolders) { folder ->
-                            TextButton(
-                                onClick = {
-                                    if (singleVideoToMove != null) {
-                                        viewModel.moveVideoToFolder(singleVideoToMove!!, folder.id)
-                                        singleVideoToMove = null
-                                    } else {
-                                        viewModel.moveSelectedToFolder(folder.id)
-                                    }
-                                    showMoveToFolderDialog = false
-                                    coroutineScope.launch { snackbarHostState.showSnackbar("Moved to ${folder.name}") }
-                                },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text(folder.name)
-                            }
-                        }
-                    }
-                },
-                confirmButton = {
-                    TextButton(onClick = { 
+                AlertDialog(
+                    onDismissRequest = {
                         showMoveToFolderDialog = false
                         singleVideoToMove = null
-                    }) { Text("Cancel") }
-                }
-            )
-        }
-
-        folderToDelete?.let { folder ->
-            AlertDialog(
-                onDismissRequest = { folderToDelete = null },
-                title = { Text("Delete Folder?") },
-                text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Are you sure you want to delete folder '${folder.name}'? This cannot be undone.")
+                    },
+                    containerColor = MediaNestColors.Raised,
+                    titleContentColor = MediaNestColors.TextPrimary,
+                    textContentColor = MediaNestColors.TextSecondary,
+                    shape = RoundedCornerShape(20.dp),
+                    title = {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.clickable { deleteDownloadsWithFolder = !deleteDownloadsWithFolder }
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
-                            Checkbox(
-                                checked = deleteDownloadsWithFolder,
-                                onCheckedChange = { deleteDownloadsWithFolder = it }
+                            Icon(
+                                painter = painterResource(R.drawable.ic_mn_move),
+                                contentDescription = null,
+                                tint = MediaNestColors.Accent,
+                                modifier = Modifier.size(22.dp)
                             )
-                            Spacer(Modifier.width(8.dp))
-                            Text("Delete downloaded videos in this folder", style = MaterialTheme.typography.bodyMedium)
+                            Text(
+                                text = "Move to Folder",
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MediaNestColors.TextPrimary
+                                )
+                            )
                         }
-                    }
-                },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            viewModel.deleteFolder(folder, deleteDownloadsWithFolder)
-                            folderToDelete = null
-                            coroutineScope.launch { snackbarHostState.showSnackbar("Folder deleted") }
-                        }
-                    ) {
-                        Text("Delete", color = MaterialTheme.colorScheme.error)
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { folderToDelete = null }) {
-                        Text("Cancel")
-                    }
-                }
-            )
-        }
-
-        folderToRename?.let { folder ->
-            AlertDialog(
-                onDismissRequest = { folderToRename = null },
-                title = { Text("Rename Folder") },
-                text = {
-                    OutlinedTextField(
-                        value = renameFolderName,
-                        onValueChange = { renameFolderName = it },
-                        placeholder = { Text("New folder name") },
-                        singleLine = true
-                    )
-                },
-                confirmButton = {
-                    TextButton(
-                        onClick = {
-                            if (renameFolderName.isNotBlank()) {
-                                viewModel.renameFolder(folder.id, renameFolderName.trim())
-                                folderToRename = null
-                                coroutineScope.launch { snackbarHostState.showSnackbar("Folder renamed") }
+                    },
+                    text = {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 300.dp)
+                        ) {
+                            if (rootFolders.isEmpty()) {
+                                Text(
+                                    text = "No folders available. Create a folder first.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MediaNestColors.TextSecondary,
+                                    modifier = Modifier.padding(vertical = 12.dp)
+                                )
+                            } else {
+                                LazyColumn(
+                                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    items(rootFolders, key = { it.id }) { folder ->
+                                        val stats = folderStatsMap[folder.id]
+                                        val itemCount = stats?.itemCount ?: 0
+                                        Surface(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clip(MediaNestShapes.Card)
+                                                .clickable {
+                                                    if (singleVideoToMove != null) {
+                                                        viewModel.moveVideoToFolder(singleVideoToMove!!, folder.id)
+                                                        singleVideoToMove = null
+                                                        coroutineScope.launch {
+                                                            snackbarHostState.showSnackbar("Moved to ${folder.name}")
+                                                        }
+                                                    } else {
+                                                        val count = uiState.selectedVideoIds.size
+                                                        viewModel.moveSelectedToFolder(folder.id)
+                                                        coroutineScope.launch {
+                                                            snackbarHostState.showSnackbar("Moved $count items to ${folder.name}")
+                                                        }
+                                                    }
+                                                    showMoveToFolderDialog = false
+                                                },
+                                            shape = MediaNestShapes.Card,
+                                            color = MediaNestColors.Card,
+                                            border = BorderStroke(1.dp, MediaNestColors.Border)
+                                        ) {
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                            ) {
+                                                Icon(
+                                                    painter = painterResource(R.drawable.ic_mn_folder),
+                                                    contentDescription = null,
+                                                    tint = MediaNestColors.Accent,
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                                Text(
+                                                    text = folder.name,
+                                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                                        fontWeight = FontWeight.Medium,
+                                                        color = MediaNestColors.TextPrimary
+                                                    ),
+                                                    modifier = Modifier.weight(1f),
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                                Text(
+                                                    text = "$itemCount ${if (itemCount == 1) "item" else "items"}",
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MediaNestColors.TextSecondary
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
-                    ) {
-                        Text("Rename")
+                    },
+                    confirmButton = {
+                        MediaNestButton(
+                            text = "Cancel",
+                            onClick = {
+                                showMoveToFolderDialog = false
+                                singleVideoToMove = null
+                            },
+                            variant = MediaNestButtonVariant.Ghost,
+                            size = MediaNestButtonSize.Small
+                        )
                     }
-                },
-                dismissButton = {
-                    TextButton(onClick = { folderToRename = null }) {
-                        Text("Cancel")
+                )
+            }
+
+            // Delete Folder Dialog
+            folderToDelete?.let { folder ->
+                AlertDialog(
+                    onDismissRequest = { folderToDelete = null },
+                    containerColor = MediaNestColors.Raised,
+                    titleContentColor = MediaNestColors.TextPrimary,
+                    textContentColor = MediaNestColors.TextSecondary,
+                    shape = RoundedCornerShape(20.dp),
+                    title = {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_mn_trash),
+                                contentDescription = null,
+                                tint = MediaNestColors.Destructive,
+                                modifier = Modifier.size(22.dp)
+                            )
+                            Text(
+                                text = "Delete Folder?",
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MediaNestColors.TextPrimary
+                                )
+                            )
+                        }
+                    },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Text(
+                                text = "Are you sure you want to delete folder '${folder.name}'? This cannot be undone.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MediaNestColors.TextSecondary
+                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable { deleteDownloadsWithFolder = !deleteDownloadsWithFolder }
+                                    .padding(vertical = 4.dp)
+                            ) {
+                                Checkbox(
+                                    checked = deleteDownloadsWithFolder,
+                                    onCheckedChange = { deleteDownloadsWithFolder = it },
+                                    colors = CheckboxDefaults.colors(
+                                        checkedColor = MediaNestColors.Destructive,
+                                        uncheckedColor = MediaNestColors.Border,
+                                        checkmarkColor = MediaNestColors.TextPrimary
+                                    )
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    text = "Delete downloaded videos in this folder",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MediaNestColors.TextPrimary
+                                )
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        MediaNestButton(
+                            text = "Delete",
+                            onClick = {
+                                viewModel.deleteFolder(folder, deleteDownloadsWithFolder)
+                                folderToDelete = null
+                                coroutineScope.launch { snackbarHostState.showSnackbar("Folder deleted") }
+                            },
+                            variant = MediaNestButtonVariant.DangerSolid,
+                            size = MediaNestButtonSize.Small
+                        )
+                    },
+                    dismissButton = {
+                        MediaNestButton(
+                            text = "Cancel",
+                            onClick = { folderToDelete = null },
+                            variant = MediaNestButtonVariant.Ghost,
+                            size = MediaNestButtonSize.Small
+                        )
                     }
-                }
-            )
+                )
+            }
+
+            // Rename Folder Dialog
+            folderToRename?.let { folder ->
+                AlertDialog(
+                    onDismissRequest = { folderToRename = null },
+                    containerColor = MediaNestColors.Raised,
+                    titleContentColor = MediaNestColors.TextPrimary,
+                    textContentColor = MediaNestColors.TextSecondary,
+                    shape = RoundedCornerShape(20.dp),
+                    title = {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_mn_edit),
+                                contentDescription = null,
+                                tint = MediaNestColors.Accent,
+                                modifier = Modifier.size(22.dp)
+                            )
+                            Text(
+                                text = "Rename Folder",
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MediaNestColors.TextPrimary
+                                )
+                            )
+                        }
+                    },
+                    text = {
+                        OutlinedTextField(
+                            value = renameFolderName,
+                            onValueChange = { renameFolderName = it },
+                            placeholder = { Text("New folder name", color = MediaNestColors.TextSecondary) },
+                            singleLine = true,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = MediaNestColors.Accent,
+                                unfocusedBorderColor = MediaNestColors.Border,
+                                focusedTextColor = MediaNestColors.TextPrimary,
+                                unfocusedTextColor = MediaNestColors.TextPrimary,
+                                cursorColor = MediaNestColors.Accent,
+                                focusedContainerColor = MediaNestColors.Card,
+                                unfocusedContainerColor = MediaNestColors.Card
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    },
+                    confirmButton = {
+                        MediaNestButton(
+                            text = "Rename",
+                            onClick = {
+                                if (renameFolderName.isNotBlank()) {
+                                    viewModel.renameFolder(folder.id, renameFolderName.trim())
+                                    folderToRename = null
+                                    coroutineScope.launch { snackbarHostState.showSnackbar("Folder renamed") }
+                                }
+                            },
+                            variant = MediaNestButtonVariant.Primary,
+                            size = MediaNestButtonSize.Small,
+                            enabled = renameFolderName.isNotBlank()
+                        )
+                    },
+                    dismissButton = {
+                        MediaNestButton(
+                            text = "Cancel",
+                            onClick = { folderToRename = null },
+                            variant = MediaNestButtonVariant.Ghost,
+                            size = MediaNestButtonSize.Small
+                        )
+                    }
+                )
+            }
+
+            // Create Folder Dialog
+            if (showCreateFolderDialog) {
+                AlertDialog(
+                    onDismissRequest = {
+                        showCreateFolderDialog = false
+                        newFolderName = ""
+                    },
+                    containerColor = MediaNestColors.Raised,
+                    titleContentColor = MediaNestColors.TextPrimary,
+                    textContentColor = MediaNestColors.TextSecondary,
+                    shape = RoundedCornerShape(20.dp),
+                    title = {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_mn_folder_add),
+                                contentDescription = null,
+                                tint = MediaNestColors.Accent,
+                                modifier = Modifier.size(22.dp)
+                            )
+                            Text(
+                                text = if (uiState.selectedFolder != null) "New Subfolder" else "New Folder",
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MediaNestColors.TextPrimary
+                                )
+                            )
+                        }
+                    },
+                    text = {
+                        OutlinedTextField(
+                            value = newFolderName,
+                            onValueChange = { newFolderName = it },
+                            placeholder = { Text("Folder name", color = MediaNestColors.TextSecondary) },
+                            singleLine = true,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = MediaNestColors.Accent,
+                                unfocusedBorderColor = MediaNestColors.Border,
+                                focusedTextColor = MediaNestColors.TextPrimary,
+                                unfocusedTextColor = MediaNestColors.TextPrimary,
+                                cursorColor = MediaNestColors.Accent,
+                                focusedContainerColor = MediaNestColors.Card,
+                                unfocusedContainerColor = MediaNestColors.Card
+                            ),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    },
+                    confirmButton = {
+                        MediaNestButton(
+                            text = "Create",
+                            onClick = {
+                                if (newFolderName.isNotBlank()) {
+                                    viewModel.createFolder(newFolderName.trim(), uiState.selectedFolder?.id)
+                                    showCreateFolderDialog = false
+                                    newFolderName = ""
+                                    coroutineScope.launch { snackbarHostState.showSnackbar("Folder created") }
+                                }
+                            },
+                            variant = MediaNestButtonVariant.Primary,
+                            size = MediaNestButtonSize.Small,
+                            enabled = newFolderName.isNotBlank()
+                        )
+                    },
+                    dismissButton = {
+                        MediaNestButton(
+                            text = "Cancel",
+                            onClick = {
+                                showCreateFolderDialog = false
+                                newFolderName = ""
+                            },
+                            variant = MediaNestButtonVariant.Ghost,
+                            size = MediaNestButtonSize.Small
+                        )
+                    }
+                )
+            }
+
+            // Batch Delete Dialog
+            if (showBatchDeleteDialog) {
+                val count = uiState.selectedVideoIds.size
+                AlertDialog(
+                    onDismissRequest = { showBatchDeleteDialog = false },
+                    containerColor = MediaNestColors.Raised,
+                    titleContentColor = MediaNestColors.TextPrimary,
+                    textContentColor = MediaNestColors.TextSecondary,
+                    shape = RoundedCornerShape(20.dp),
+                    title = {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_mn_trash),
+                                contentDescription = null,
+                                tint = MediaNestColors.Destructive,
+                                modifier = Modifier.size(22.dp)
+                            )
+                            Text(
+                                text = "Delete $count ${if (count == 1) "Video" else "Videos"}?",
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MediaNestColors.TextPrimary
+                                )
+                            )
+                        }
+                    },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Text(
+                                text = "Are you sure you want to remove the selected videos from your library?",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MediaNestColors.TextSecondary
+                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable { deleteDownloadsWithBatch = !deleteDownloadsWithBatch }
+                                    .padding(vertical = 4.dp)
+                            ) {
+                                Checkbox(
+                                    checked = deleteDownloadsWithBatch,
+                                    onCheckedChange = { deleteDownloadsWithBatch = it },
+                                    colors = CheckboxDefaults.colors(
+                                        checkedColor = MediaNestColors.Destructive,
+                                        uncheckedColor = MediaNestColors.Border,
+                                        checkmarkColor = MediaNestColors.TextPrimary
+                                    )
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    text = "Delete downloaded files from storage",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MediaNestColors.TextPrimary
+                                )
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        MediaNestButton(
+                            text = "Delete",
+                            onClick = {
+                                viewModel.deleteSelectedVideos(deleteDownloadsWithBatch)
+                                showBatchDeleteDialog = false
+                                coroutineScope.launch {
+                                    snackbarHostState.showSnackbar("Deleted $count ${if (count == 1) "video" else "videos"}")
+                                }
+                            },
+                            variant = MediaNestButtonVariant.DangerSolid,
+                            size = MediaNestButtonSize.Small
+                        )
+                    },
+                    dismissButton = {
+                        MediaNestButton(
+                            text = "Cancel",
+                            onClick = { showBatchDeleteDialog = false },
+                            variant = MediaNestButtonVariant.Ghost,
+                            size = MediaNestButtonSize.Small
+                        )
+                    }
+                )
+            }
+
+            // Sort Bottom Sheet
+            if (showSortBottomSheet) {
+                MediaNestSortBottomSheet(
+                    onDismissRequest = { showSortBottomSheet = false },
+                    selectedSortBy = when (uiState.sortCategory) {
+                        SortCategory.DATE -> "DATE"
+                        SortCategory.NAME -> "TITLE"
+                        SortCategory.DURATION -> "DURATION"
+                        SortCategory.SIZE -> "SIZE"
+                    },
+                    isAscending = uiState.sortDirection == SortDirection.ASC,
+                    onSortSelected = { sortBy, isAscending ->
+                        val cat = when (sortBy.uppercase()) {
+                            "TITLE", "NAME" -> SortCategory.NAME
+                            "DURATION" -> SortCategory.DURATION
+                            "SIZE" -> SortCategory.SIZE
+                            else -> SortCategory.DATE
+                        }
+                        val dir = if (isAscending) SortDirection.ASC else SortDirection.DESC
+                        viewModel.setSort(cat, dir)
+                    },
+                    options = MediaNestSortOption.DefaultMediaOptions
+                )
+            }
         }
-    }
     }
 
     if (showWatchCountDialog) {
@@ -574,6 +1222,301 @@ fun LibraryScreen(
                 }
             }
         )
+    }
+}
+
+/**
+ * Design 2.0 Pill Search Bar for MediaNest Library.
+ */
+@Composable
+private fun LibrarySearchBar(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    placeholder: String = "Search videos, folders, channels...",
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(44.dp),
+        shape = RoundedCornerShape(22.dp),
+        color = MediaNestColors.Card,
+        border = BorderStroke(1.dp, MediaNestColors.Border)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_mn_search),
+                contentDescription = "Search",
+                tint = MediaNestColors.TextSecondary,
+                modifier = Modifier.size(18.dp)
+            )
+
+            Spacer(Modifier.width(10.dp))
+
+            Box(
+                modifier = Modifier.weight(1f),
+                contentAlignment = Alignment.CenterStart
+            ) {
+                if (query.isEmpty()) {
+                    Text(
+                        text = placeholder,
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontSize = 13.5.sp,
+                            color = MediaNestColors.TextSecondary
+                        ),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+
+                BasicTextField(
+                    value = query,
+                    onValueChange = onQueryChange,
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.bodyMedium.copy(
+                        fontSize = 13.5.sp,
+                        color = MediaNestColors.TextPrimary
+                    ),
+                    cursorBrush = SolidColor(MediaNestColors.Accent),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            if (query.isNotEmpty()) {
+                MediaNestIconButton(
+                    onClick = { onQueryChange("") },
+                    size = MediaNestIconButtonSize.ExtraSmall,
+                    contentDescription = "Clear search"
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_mn_close),
+                        contentDescription = "Clear search",
+                        tint = MediaNestColors.TextSecondary,
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Bottom Action Bar for multi-item selection actions.
+ */
+@Composable
+private fun BatchSelectionBar(
+    selectedCount: Int,
+    allVideoIds: List<String>,
+    selectedVideoIds: Set<String>,
+    onSelectAll: () -> Unit,
+    onClearSelection: () -> Unit,
+    onMove: () -> Unit,
+    onShare: () -> Unit,
+    onDelete: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val isAllSelected = allVideoIds.isNotEmpty() && selectedVideoIds.containsAll(allVideoIds)
+
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = MediaNestColors.Raised,
+        border = BorderStroke(1.dp, MediaNestColors.Border),
+        shadowElevation = 8.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Count and Select All toggle
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = "$selectedCount selected",
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        color = MediaNestColors.TextPrimary
+                    )
+                )
+
+                MediaNestChip(
+                    label = if (isAllSelected) "Deselect" else "Select All",
+                    selected = isAllSelected,
+                    onClick = {
+                        if (isAllSelected) {
+                            onClearSelection()
+                        } else {
+                            onSelectAll()
+                        }
+                    },
+                    shape = RoundedCornerShape(12.dp)
+                )
+            }
+
+            // Action Buttons
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Move Button
+                MediaNestButton(
+                    text = "Move",
+                    onClick = onMove,
+                    variant = MediaNestButtonVariant.Secondary,
+                    size = MediaNestButtonSize.Small,
+                    enabled = selectedCount > 0,
+                    leadingIcon = {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_mn_move),
+                            contentDescription = "Move",
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                )
+
+                // Share Button
+                MediaNestIconButton(
+                    onClick = onShare,
+                    size = MediaNestIconButtonSize.Small,
+                    enabled = selectedCount > 0,
+                    contentDescription = "Share selected"
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_mn_share),
+                        contentDescription = "Share",
+                        tint = if (selectedCount > 0) MediaNestColors.TextPrimary else MediaNestColors.TextSecondary.copy(alpha = 0.4f),
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+
+                // Delete Button
+                MediaNestIconButton(
+                    onClick = onDelete,
+                    size = MediaNestIconButtonSize.Small,
+                    enabled = selectedCount > 0,
+                    tint = MediaNestColors.Destructive,
+                    contentDescription = "Delete selected"
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_mn_trash),
+                        contentDescription = "Delete",
+                        tint = if (selectedCount > 0) MediaNestColors.Destructive else MediaNestColors.Destructive.copy(alpha = 0.4f),
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+
+                // Close / Cancel Button
+                MediaNestIconButton(
+                    onClick = onClearSelection,
+                    size = MediaNestIconButtonSize.Small,
+                    contentDescription = "Cancel selection"
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_mn_close),
+                        contentDescription = "Cancel",
+                        tint = MediaNestColors.TextSecondary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Breadcrumbs path bar when navigating through folders.
+ */
+@Composable
+private fun FolderBreadcrumbs(
+    stack: List<FolderEntity>,
+    onCrumbClick: (Int) -> Unit,
+    onNavigateBack: () -> Unit,
+    onCreateSubfolder: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        MediaNestIconButton(
+            onClick = onNavigateBack,
+            size = MediaNestIconButtonSize.Small,
+            contentDescription = "Back"
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_mn_back),
+                contentDescription = "Back",
+                tint = MediaNestColors.TextPrimary,
+                modifier = Modifier.size(16.dp)
+            )
+        }
+
+        Spacer(Modifier.width(6.dp))
+
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .horizontalScroll(rememberScrollState()),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                text = "Folders",
+                style = MaterialTheme.typography.bodySmall.copy(
+                    fontWeight = if (stack.isEmpty()) FontWeight.Bold else FontWeight.Medium,
+                    color = if (stack.isEmpty()) MediaNestColors.Accent else MediaNestColors.TextSecondary
+                ),
+                modifier = Modifier.clickable { onCrumbClick(-1) }
+            )
+
+            stack.forEachIndexed { index, folder ->
+                Icon(
+                    painter = painterResource(R.drawable.ic_mn_chevron_right),
+                    contentDescription = null,
+                    tint = MediaNestColors.TextSecondary.copy(alpha = 0.6f),
+                    modifier = Modifier.size(12.dp)
+                )
+
+                val isLast = index == stack.size - 1
+                Text(
+                    text = folder.name,
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontWeight = if (isLast) FontWeight.Bold else FontWeight.Medium,
+                        color = if (isLast) MediaNestColors.Accent else MediaNestColors.TextSecondary
+                    ),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.clickable { onCrumbClick(index) }
+                )
+            }
+        }
+
+        MediaNestIconButton(
+            onClick = onCreateSubfolder,
+            size = MediaNestIconButtonSize.Small,
+            contentDescription = "New subfolder"
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_mn_folder_add),
+                contentDescription = "New subfolder",
+                tint = MediaNestColors.Accent,
+                modifier = Modifier.size(18.dp)
+            )
+        }
     }
 }
 
@@ -592,16 +1535,34 @@ private fun ContinueWatchingRow(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp)
+            .padding(vertical = 6.dp)
     ) {
-        Text(
-            text = "Continue watching",
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.ic_mn_history),
+                contentDescription = null,
+                tint = MediaNestColors.Accent,
+                modifier = Modifier.size(16.dp)
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = "Continue Watching",
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 15.sp
+                ),
+                color = MediaNestColors.TextPrimary
+            )
+        }
+
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
-            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp)
         ) {
             items(items, key = { "cw_${it.video.id}" }) { item ->
                 ContinueWatchingCard(
@@ -630,14 +1591,15 @@ private fun ContinueWatchingCard(
     GlassCard(
         onClick = onClick,
         modifier = modifier
-            .width(200.dp)
-            .clip(RoundedCornerShape(12.dp))
+            .width(220.dp)
+            .clip(MediaNestShapes.Card),
+        shape = MediaNestShapes.Card
     ) {
         Column {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(110.dp)
+                    .height(115.dp)
             ) {
                 AsyncImage(
                     model = video.thumbnailUrl,
@@ -646,21 +1608,19 @@ private fun ContinueWatchingCard(
                     modifier = Modifier.fillMaxSize()
                 )
 
-                // Media type badge - bottom start
-                Row(
+                // Media type badge - top start
+                Box(
                     modifier = Modifier
-                        .align(Alignment.BottomStart)
+                        .align(Alignment.TopStart)
                         .padding(6.dp)
                         .background(
                             color = if (isAudio) MediaNestColors.AccentDeep.copy(alpha = 0.85f) else MediaNestColors.PlayerSurface.copy(alpha = 0.7f),
                             shape = RoundedCornerShape(4.dp)
                         )
-                        .padding(horizontal = 4.dp, vertical = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(2.dp)
+                        .padding(horizontal = 4.dp, vertical = 2.dp)
                 ) {
                     Icon(
-                        imageVector = if (isAudio) Icons.Default.AudioFile else Icons.Default.Videocam,
+                        painter = painterResource(if (isAudio) R.drawable.ic_mn_music else R.drawable.ic_mn_video),
                         contentDescription = if (isAudio) "AUDIO" else "VIDEO",
                         tint = MediaNestColors.TextPrimary,
                         modifier = Modifier.size(12.dp)
@@ -671,18 +1631,35 @@ private fun ContinueWatchingCard(
                 Box(
                     modifier = Modifier
                         .align(Alignment.Center)
-                        .size(36.dp)
+                        .size(38.dp)
                         .background(
-                            color = MediaNestColors.PlayerSurface.copy(alpha = 0.6f),
-                            shape = RoundedCornerShape(50)
+                            color = MediaNestColors.PlayerSurface.copy(alpha = 0.7f),
+                            shape = CircleShape
                         ),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Default.PlayArrow,
+                        painter = painterResource(R.drawable.ic_mn_play),
                         contentDescription = "Play",
                         tint = MediaNestColors.TextPrimary,
                         modifier = Modifier.size(20.dp)
+                    )
+                }
+
+                // Duration badge - bottom right
+                if (video.durationSeconds > 0) {
+                    Text(
+                        text = UiUtils.formatDuration(video.durationSeconds),
+                        color = MediaNestColors.TextPrimary,
+                        style = MaterialTheme.typography.labelSmall,
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(6.dp)
+                            .background(
+                                color = MediaNestColors.PlayerSurface.copy(alpha = 0.75f),
+                                shape = RoundedCornerShape(4.dp)
+                            )
+                            .padding(horizontal = 4.dp, vertical = 2.dp)
                     )
                 }
 
@@ -691,14 +1668,14 @@ private fun ContinueWatchingCard(
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(2.dp)
+                            .height(3.dp)
                             .align(Alignment.BottomCenter)
-                            .background(MediaNestColors.ProgressTrack.copy(alpha = 0.3f))
+                            .background(MediaNestColors.ProgressTrack.copy(alpha = 0.4f))
                     ) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth(progressFraction.coerceIn(0f, 1f))
-                                .height(2.dp)
+                                .height(3.dp)
                                 .background(MediaNestColors.YouTubeRed)
                         )
                     }
@@ -707,20 +1684,39 @@ private fun ContinueWatchingCard(
 
             Column(
                 modifier = Modifier
-                    .padding(8.dp)
+                    .fillMaxWidth()
+                    .padding(10.dp)
             ) {
                 Text(
                     text = video.title,
-                    style = MaterialTheme.typography.titleSmall,
+                    style = MaterialTheme.typography.titleSmall.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 13.5.sp
+                    ),
+                    color = MediaNestColors.TextPrimary,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
-                if (posLabel.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(2.dp))
+
+                Spacer(modifier = Modifier.height(3.dp))
+
+                val subtitle = buildString {
+                    if (video.channelName.isNotEmpty()) {
+                        append(video.channelName)
+                    }
+                    if (posLabel.isNotEmpty()) {
+                        if (isNotEmpty()) append(" • ")
+                        append(posLabel)
+                    }
+                }
+
+                if (subtitle.isNotEmpty()) {
                     Text(
-                        text = posLabel,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        text = subtitle,
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontSize = 11.5.sp
+                        ),
+                        color = MediaNestColors.TextSecondary,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -743,21 +1739,20 @@ private fun VideoListLayout(
     onFavoriteToggle: (VideoEntity) -> Unit,
     expandedDownloadVideoId: String?,
     fetchingStreamsFor: String?,
-    fetchedStreams: com.example.medianest.data.model.ExtractedVideoInfo?,
-    allDownloads: List<com.example.medianest.data.local.entity.DownloadEntity>,
-    playbackHistory: List<com.example.medianest.data.local.entity.HistoryEntity>,
+    fetchedStreams: ExtractedVideoInfo?,
+    allDownloads: List<DownloadEntity>,
+    playbackHistory: List<HistoryEntity>,
     onDownloadIconClick: (String) -> Unit,
     onDismissDownloadMenu: () -> Unit,
-    onEnqueueDownload: (com.example.medianest.data.model.ExtractedVideoInfo, com.example.medianest.data.model.StreamSource) -> Unit,
-    onDeleteDownload: (com.example.medianest.data.local.entity.DownloadEntity) -> Unit,
-    onExtractAudio: (com.example.medianest.data.local.entity.DownloadEntity) -> Unit,
+    onEnqueueDownload: (ExtractedVideoInfo, StreamSource) -> Unit,
+    onDeleteDownload: (DownloadEntity) -> Unit,
+    onExtractAudio: (DownloadEntity) -> Unit,
     onLoadMore: (() -> Unit)? = null,
     onMarkWatched: (String) -> Unit = {},
     showContinueWatching: Boolean = false,
     isEndReached: Boolean = false
 ) {
     val onMoveToFolderClick = LocalMoveToFolder.current
-    val context = LocalContext.current
 
     val gridState = rememberLazyGridState()
     val listState = rememberLazyListState()
@@ -815,7 +1810,9 @@ private fun VideoListLayout(
         LazyVerticalGrid(
             state = gridState,
             columns = GridCells.Adaptive(160.dp),
-            modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
@@ -828,8 +1825,12 @@ private fun VideoListLayout(
                 }
                 item(span = { GridItemSpan(maxLineSpan) }) {
                     Text(
-                        text = "All videos",
-                        style = MaterialTheme.typography.titleMedium,
+                        text = "All Videos",
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 15.sp
+                        ),
+                        color = MediaNestColors.TextPrimary,
                         modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
                     )
                 }
@@ -896,8 +1897,10 @@ private fun VideoListLayout(
     } else {
         LazyColumn(
             state = listState,
-            modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             if (continueWatchingList.isNotEmpty()) {
                 item {
@@ -908,8 +1911,12 @@ private fun VideoListLayout(
                 }
                 item {
                     Text(
-                        text = "All videos",
-                        style = MaterialTheme.typography.titleMedium,
+                        text = "All Videos",
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 15.sp
+                        ),
+                        color = MediaNestColors.TextPrimary,
                         modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)
                     )
                 }
@@ -962,10 +1969,7 @@ private fun VideoListLayout(
                             videoId = video.id,
                             onEnqueueDownload = onEnqueueDownload,
                             onDeleteDownload = onDeleteDownload,
-                            onExtractAudio = {
-                                onExtractAudio(it)
-                                android.widget.Toast.makeText(context, "Audio extraction started", android.widget.Toast.LENGTH_SHORT).show()
-                            }
+                            onExtractAudio = onExtractAudio
                         )
                     }
                 )
@@ -978,8 +1982,6 @@ private fun VideoListLayout(
         }
     }
 }
-
-
 
 @Composable
 private fun FolderContent(
@@ -994,7 +1996,7 @@ private fun FolderContent(
     isSelectionMode: Boolean,
     selectedIds: Set<String>,
     onFolderClick: (FolderEntity) -> Unit,
-    onCreateFolder: (String) -> Unit,
+    onCreateFolderClick: () -> Unit,
     onRenameFolder: (FolderEntity) -> Unit,
     onDeleteFolder: (FolderEntity) -> Unit,
     onNavigateBack: () -> Unit,
@@ -1005,25 +2007,20 @@ private fun FolderContent(
     onRemoveFromFolder: (String, Long) -> Unit,
     expandedDownloadVideoId: String?,
     fetchingStreamsFor: String?,
-    fetchedStreams: com.example.medianest.data.model.ExtractedVideoInfo?,
-    allDownloads: List<com.example.medianest.data.local.entity.DownloadEntity>,
-    playbackHistory: List<com.example.medianest.data.local.entity.HistoryEntity>,
+    fetchedStreams: ExtractedVideoInfo?,
+    allDownloads: List<DownloadEntity>,
+    playbackHistory: List<HistoryEntity>,
     onDownloadIconClick: (String) -> Unit,
     onDismissDownloadMenu: () -> Unit,
-    onEnqueueDownload: (com.example.medianest.data.model.ExtractedVideoInfo, com.example.medianest.data.model.StreamSource) -> Unit,
-    onDeleteDownload: (com.example.medianest.data.local.entity.DownloadEntity) -> Unit,
-    onExtractAudio: (com.example.medianest.data.local.entity.DownloadEntity) -> Unit,
+    onEnqueueDownload: (ExtractedVideoInfo, StreamSource) -> Unit,
+    onDeleteDownload: (DownloadEntity) -> Unit,
+    onExtractAudio: (DownloadEntity) -> Unit,
     onLoadMoreVideos: (() -> Unit)? = null,
     onMarkWatched: (String) -> Unit = {},
     isEndReached: Boolean = false
 ) {
-    var showCreateDialog by remember { mutableStateOf(false) }
-    var newFolderName by remember { mutableStateOf("") }
-    var showMoveToFolderDialog by remember { mutableStateOf(false) }
-    var singleVideoToMove by remember { mutableStateOf<String?>(null) }
-    var expandedDownloadVideoId by remember { mutableStateOf<String?>(null) }
-
     val gridState = rememberLazyGridState()
+    val listState = rememberLazyListState()
 
     if (onLoadMoreVideos != null) {
         val shouldLoadMore = remember {
@@ -1041,32 +2038,92 @@ private fun FolderContent(
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().padding(horizontal = 8.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            if (selectedFolder != null) {
-                TextButton(onClick = onNavigateBack) { Text("< Back") }
-                Text(selectedFolder.name, style = MaterialTheme.typography.titleMedium)
-            } else {
-                Text("Folders", style = MaterialTheme.typography.titleMedium)
-            }
-            IconButton(onClick = { showCreateDialog = true }) {
-                Icon(Icons.Default.CreateNewFolder, contentDescription = "Create folder")
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 12.dp)
+    ) {
+        // Header when at root folder level
+        if (selectedFolder == null) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "${folders.size} ${if (folders.size == 1) "Folder" else "Folders"}",
+                    style = MaterialTheme.typography.titleSmall.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        color = MediaNestColors.TextSecondary
+                    )
+                )
+
+                MediaNestButton(
+                    text = "New Folder",
+                    onClick = onCreateFolderClick,
+                    variant = MediaNestButtonVariant.Primary,
+                    size = MediaNestButtonSize.Small,
+                    leadingIcon = {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_mn_folder_add),
+                            contentDescription = null,
+                            modifier = Modifier.size(15.dp)
+                        )
+                    }
+                )
             }
         }
 
         if (selectedFolder == null && searchQuery.isEmpty()) {
             if (folders.isEmpty()) {
-                Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    Text("No folders yet", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
+                EmptyState(
+                    title = "No Folders Yet",
+                    message = "Create folders to organize videos into custom offline or online collections.",
+                    iconContent = {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_mn_folder),
+                            contentDescription = null,
+                            tint = MediaNestColors.TextSecondary,
+                            modifier = Modifier.size(32.dp)
+                        )
+                    },
+                    actionText = "Create Folder",
+                    onActionClick = onCreateFolderClick
+                )
             } else {
-                LazyColumn(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    items(folders, key = { it.id }) { folder ->
-                        FolderRow(folder = folder, stats = folderStatsMap[folder.id], onClick = { onFolderClick(folder) }, onRename = { onRenameFolder(folder) }, onDelete = { onDeleteFolder(folder) })
+                if (viewMode == ViewMode.GRID) {
+                    LazyVerticalGrid(
+                        columns = GridCells.Adaptive(155.dp),
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        items(folders, key = { it.id }) { folder ->
+                            FolderCard(
+                                folder = folder,
+                                stats = folderStatsMap[folder.id],
+                                onClick = { onFolderClick(folder) },
+                                onRename = { onRenameFolder(folder) },
+                                onDelete = { onDeleteFolder(folder) }
+                            )
+                        }
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        items(folders, key = { it.id }) { folder ->
+                            FolderRow(
+                                folder = folder,
+                                stats = folderStatsMap[folder.id],
+                                onClick = { onFolderClick(folder) },
+                                onRename = { onRenameFolder(folder) },
+                                onDelete = { onDeleteFolder(folder) }
+                            )
+                        }
                     }
                 }
             }
@@ -1075,34 +2132,60 @@ private fun FolderContent(
             val currentVideos = folderVideos
 
             if (currentFolders.isEmpty() && currentVideos.isEmpty()) {
-                Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    Text(if (searchQuery.isNotEmpty()) "No results found" else "Folder is empty", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            } else {
-                LazyVerticalGrid(
-                    state = gridState,
-                    columns = GridCells.Adaptive(160.dp),
-                    modifier = Modifier.weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    if (currentFolders.isNotEmpty()) {
-                        item(span = { GridItemSpan(maxLineSpan) }) {
-                            Text(
-                                text = if (searchQuery.isNotEmpty()) "Folders" else "Subfolders",
-                                style = MaterialTheme.typography.titleSmall,
-                                modifier = Modifier.padding(vertical = 4.dp)
-                            )
-                        }
-                        items(currentFolders, key = { "folder_${it.id}" }, span = { GridItemSpan(maxLineSpan) }) { folder ->
-                            FolderRow(folder = folder, stats = folderStatsMap[folder.id], onClick = { onFolderClick(folder) }, onRename = { onRenameFolder(folder) }, onDelete = { onDeleteFolder(folder) })
-                        }
+                EmptyState(
+                    title = if (searchQuery.isNotEmpty()) "No Results Found" else "Folder is Empty",
+                    message = if (searchQuery.isNotEmpty()) "No items matching \"$searchQuery\" in this folder." else "Add videos to this folder from the video action menus.",
+                    iconContent = {
+                        Icon(
+                            painter = painterResource(if (searchQuery.isNotEmpty()) R.drawable.ic_mn_search else R.drawable.ic_mn_folder),
+                            contentDescription = null,
+                            tint = MediaNestColors.TextSecondary,
+                            modifier = Modifier.size(32.dp)
+                        )
                     }
-                    if (currentVideos.isNotEmpty()) {
-                        item(span = { GridItemSpan(maxLineSpan) }) {
-                            Text("Videos", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(vertical = 4.dp))
+                )
+            } else {
+                if (viewMode == ViewMode.GRID) {
+                    LazyVerticalGrid(
+                        state = gridState,
+                        columns = GridCells.Adaptive(160.dp),
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        if (currentFolders.isNotEmpty()) {
+                            item(span = { GridItemSpan(maxLineSpan) }) {
+                                Text(
+                                    text = if (searchQuery.isNotEmpty()) "Folders" else "Subfolders",
+                                    style = MaterialTheme.typography.titleSmall.copy(
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MediaNestColors.TextPrimary
+                                    ),
+                                    modifier = Modifier.padding(vertical = 4.dp)
+                                )
+                            }
+                            items(currentFolders, key = { "folder_${it.id}" }) { folder ->
+                                FolderCard(
+                                    folder = folder,
+                                    stats = folderStatsMap[folder.id],
+                                    onClick = { onFolderClick(folder) },
+                                    onRename = { onRenameFolder(folder) },
+                                    onDelete = { onDeleteFolder(folder) }
+                                )
+                            }
                         }
-                        if (viewMode == ViewMode.GRID) {
+
+                        if (currentVideos.isNotEmpty()) {
+                            item(span = { GridItemSpan(maxLineSpan) }) {
+                                Text(
+                                    text = "Videos (${currentVideos.size})",
+                                    style = MaterialTheme.typography.titleSmall.copy(
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MediaNestColors.TextPrimary
+                                    ),
+                                    modifier = Modifier.padding(vertical = 4.dp)
+                                )
+                            }
                             items(currentVideos, key = { "video_${it.id}" }) { video ->
                                 val history = playbackHistory.find { it.videoId == video.id }
                                 val positionMillis = history?.positionMillis ?: 0L
@@ -1159,15 +2242,59 @@ private fun FolderContent(
                                     }
                                 )
                             }
-                        } else {
-                            items(currentVideos, key = { "video_${it.id}" }, span = { GridItemSpan(maxLineSpan) }) { video ->
+                        }
+                        if (isEndReached) {
+                            item(span = { GridItemSpan(maxLineSpan) }) {
+                                EndOfListIndicator()
+                            }
+                        }
+                    }
+                } else {
+                    LazyColumn(
+                        state = listState,
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        if (currentFolders.isNotEmpty()) {
+                            item {
+                                Text(
+                                    text = if (searchQuery.isNotEmpty()) "Folders" else "Subfolders",
+                                    style = MaterialTheme.typography.titleSmall.copy(
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MediaNestColors.TextPrimary
+                                    ),
+                                    modifier = Modifier.padding(vertical = 4.dp)
+                                )
+                            }
+                            items(currentFolders, key = { "folder_${it.id}" }) { folder ->
+                                FolderRow(
+                                    folder = folder,
+                                    stats = folderStatsMap[folder.id],
+                                    onClick = { onFolderClick(folder) },
+                                    onRename = { onRenameFolder(folder) },
+                                    onDelete = { onDeleteFolder(folder) }
+                                )
+                            }
+                        }
+
+                        if (currentVideos.isNotEmpty()) {
+                            item {
+                                Text(
+                                    text = "Videos (${currentVideos.size})",
+                                    style = MaterialTheme.typography.titleSmall.copy(
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MediaNestColors.TextPrimary
+                                    ),
+                                    modifier = Modifier.padding(vertical = 4.dp)
+                                )
+                            }
+                            items(currentVideos, key = { "video_${it.id}" }) { video ->
                                 val history = playbackHistory.find { it.videoId == video.id }
                                 val positionMillis = history?.positionMillis ?: 0L
                                 val progressFraction = if (video.durationSeconds > 0 && positionMillis > 0) {
                                     ((positionMillis.toFloat() / 1000f) / video.durationSeconds.toFloat()).coerceIn(0f, 1f)
                                 } else 0f
                                 val onMoveToFolderClick = LocalMoveToFolder.current
-                                val context = LocalContext.current
 
                                 UnifiedVideoRow(
                                     title = video.title,
@@ -1212,17 +2339,14 @@ private fun FolderContent(
                                             videoId = video.id,
                                             onEnqueueDownload = onEnqueueDownload,
                                             onDeleteDownload = onDeleteDownload,
-                                            onExtractAudio = {
-                                                onExtractAudio(it)
-                                                android.widget.Toast.makeText(context, "Audio extraction started", android.widget.Toast.LENGTH_SHORT).show()
-                                            }
+                                            onExtractAudio = onExtractAudio
                                         )
                                     }
                                 )
                             }
                         }
                         if (isEndReached) {
-                            item(span = { GridItemSpan(maxLineSpan) }) {
+                            item {
                                 EndOfListIndicator()
                             }
                         }
@@ -1231,67 +2355,248 @@ private fun FolderContent(
             }
         }
     }
+}
 
-    if (showCreateDialog) {
-        AlertDialog(
-            onDismissRequest = { showCreateDialog = false; newFolderName = "" },
-            title = { Text("New Folder") },
-            text = {
-                OutlinedTextField(value = newFolderName, onValueChange = { newFolderName = it }, placeholder = { Text("Folder name") }, singleLine = true)
-            },
-            confirmButton = {
-                TextButton(onClick = { if (newFolderName.isNotBlank()) { onCreateFolder(newFolderName.trim()); showCreateDialog = false; newFolderName = "" } }) { Text("Create") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showCreateDialog = false; newFolderName = "" }) { Text("Cancel") }
+/**
+ * Grid-mode Folder Card with Design 2.0 elevated glass surface.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun FolderCard(
+    folder: FolderEntity,
+    stats: FolderStats?,
+    onClick: () -> Unit,
+    onRename: () -> Unit,
+    onDelete: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    var menuExpanded by remember { mutableStateOf(false) }
+
+    GlassCard(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(MediaNestShapes.Card)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = { menuExpanded = true }
+            ),
+        shape = MediaNestShapes.Card
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            // Top Row: Folder Icon Badge and Overflow Action
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .clip(CircleShape)
+                        .background(MediaNestColors.AccentDeep),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_mn_folder),
+                        contentDescription = null,
+                        tint = MediaNestColors.TextPrimary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+
+                Box {
+                    MediaNestIconButton(
+                        onClick = { menuExpanded = true },
+                        size = MediaNestIconButtonSize.ExtraSmall,
+                        contentDescription = "Folder options"
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_mn_more),
+                            contentDescription = "More options",
+                            tint = MediaNestColors.TextSecondary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+
+                    DropdownMenu(
+                        expanded = menuExpanded,
+                        onDismissRequest = { menuExpanded = false },
+                        modifier = Modifier.background(MediaNestColors.Raised)
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Rename", color = MediaNestColors.TextPrimary) },
+                            leadingIcon = {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_mn_edit),
+                                    contentDescription = "Rename",
+                                    tint = MediaNestColors.TextSecondary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            },
+                            onClick = {
+                                menuExpanded = false
+                                onRename()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Delete", color = MediaNestColors.Destructive) },
+                            leadingIcon = {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_mn_trash),
+                                    contentDescription = "Delete",
+                                    tint = MediaNestColors.Destructive,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            },
+                            onClick = {
+                                menuExpanded = false
+                                onDelete()
+                            }
+                        )
+                    }
+                }
             }
-        )
+
+            // Folder Title
+            Text(
+                text = folder.name,
+                style = MaterialTheme.typography.titleSmall.copy(
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 14.5.sp
+                ),
+                color = MediaNestColors.TextPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            // Item Count and Size Badge
+            val itemCount = stats?.itemCount ?: 0
+            val sizeBytes = stats?.totalSizeBytes ?: 0L
+            val sizeText = if (sizeBytes > 0L) " • ${Formatter.formatShortFileSize(context, sizeBytes)}" else ""
+            val countLabel = "$itemCount ${if (itemCount == 1) "item" else "items"}$sizeText"
+
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .background(MediaNestColors.Raised)
+                    .padding(horizontal = 8.dp, vertical = 3.dp)
+            ) {
+                Text(
+                    text = countLabel,
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium
+                    ),
+                    color = MediaNestColors.TextSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
     }
 }
 
-
-
+/**
+ * List-mode Folder Row with Design 2.0 elevated surface.
+ */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun FolderRow(
     folder: FolderEntity,
     stats: FolderStats?,
     onClick: () -> Unit,
     onRename: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+
     GlassCard(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth()
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(MediaNestShapes.Card)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onRename
+            ),
+        shape = MediaNestShapes.Card
     ) {
-        Row(modifier = Modifier.padding(8.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Default.Folder, contentDescription = null, modifier = Modifier.size(40.dp), tint = MaterialTheme.colorScheme.primary)
-            Spacer(Modifier.width(16.dp))
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(42.dp)
+                    .clip(CircleShape)
+                    .background(MediaNestColors.AccentDeep),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_mn_folder),
+                    contentDescription = null,
+                    tint = MediaNestColors.TextPrimary,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+
+            Spacer(Modifier.width(14.dp))
+
             Column(modifier = Modifier.weight(1f)) {
-                Text(folder.name, style = MaterialTheme.typography.titleMedium)
+                Text(
+                    text = folder.name,
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 15.sp
+                    ),
+                    color = MediaNestColors.TextPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
                 Spacer(Modifier.height(2.dp))
                 val itemCount = stats?.itemCount ?: 0
                 val sizeBytes = stats?.totalSizeBytes ?: 0L
-                val sizeText = Formatter.formatShortFileSize(context, sizeBytes)
+                val sizeText = if (sizeBytes > 0L) " • ${Formatter.formatShortFileSize(context, sizeBytes)}" else ""
                 Text(
-                    text = "$itemCount ${if (itemCount == 1) "item" else "items"} • $sizeText",
+                    text = "$itemCount ${if (itemCount == 1) "item" else "items"}$sizeText",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MediaNestColors.TextSecondary
                 )
             }
-            IconButton(onClick = onRename) { Icon(Icons.Default.Edit, contentDescription = "Rename folder", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
-            IconButton(onClick = onDelete) { Icon(Icons.Default.Delete, contentDescription = "Delete folder", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+
+            MediaNestIconButton(
+                onClick = onRename,
+                size = MediaNestIconButtonSize.Small,
+                contentDescription = "Rename folder"
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_mn_edit),
+                    contentDescription = "Rename",
+                    tint = MediaNestColors.TextSecondary,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+
+            MediaNestIconButton(
+                onClick = onDelete,
+                size = MediaNestIconButtonSize.Small,
+                contentDescription = "Delete folder"
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_mn_trash),
+                    contentDescription = "Delete",
+                    tint = MediaNestColors.Destructive,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
         }
     }
 }
-
-val LocalMoveToFolder = androidx.compose.runtime.staticCompositionLocalOf<(String) -> Unit> { {} }
-
-@Composable
-private fun EmptyState(message: String) {
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(message, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-}
-
-
