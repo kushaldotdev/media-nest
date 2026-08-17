@@ -12,7 +12,7 @@ import com.example.medianest.data.local.entity.VideoEntity
 import com.example.medianest.data.local.entity.VideoFolderJoin
 import com.example.medianest.data.model.ExtractedVideoInfo
 import com.example.medianest.data.model.StreamSource
-import com.example.medianest.data.preferences.DevicePreferences
+import com.example.medianest.data.preferences.CollectionsPreferences
 import com.example.medianest.data.preferences.DownloadPreferences
 import com.example.medianest.data.repository.DownloadRepository
 import com.example.medianest.data.repository.VideoRepository
@@ -63,7 +63,7 @@ class LibraryViewModel @Inject constructor(
     private val videoRepository: VideoRepository,
     private val audioExtractor: AudioExtractor,
     private val downloadPreferences: DownloadPreferences,
-    private val devicePreferences: DevicePreferences
+    private val collectionsPreferences: CollectionsPreferences
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(LibraryUiState())
@@ -255,7 +255,7 @@ class LibraryViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            devicePreferences.libraryViewMode.collect { modeStr ->
+            collectionsPreferences.viewMode.collect { modeStr ->
                 try {
                     _uiState.value = _uiState.value.copy(viewMode = ViewMode.valueOf(modeStr))
                 } catch (e: Exception) {
@@ -490,7 +490,7 @@ class LibraryViewModel @Inject constructor(
         val newMode = if (_uiState.value.viewMode == ViewMode.GRID) ViewMode.LIST else ViewMode.GRID
         _uiState.value = _uiState.value.copy(viewMode = newMode)
         viewModelScope.launch {
-            devicePreferences.setLibraryViewMode(newMode.name)
+            collectionsPreferences.setViewMode(newMode.name)
         }
     }
 

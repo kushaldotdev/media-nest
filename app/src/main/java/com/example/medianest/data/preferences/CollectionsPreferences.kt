@@ -43,6 +43,8 @@ class CollectionsPreferences(private val context: Context) {
     val viewMode: Flow<String> = context.collectionsStore.data.map { prefs ->
         prefs[KEY_VIEW_MODE] ?: DEFAULT_VIEW_MODE
     }
+    val viewModeFlow: Flow<String> get() = viewMode
+
 
     val sortMode_history: Flow<String> = context.collectionsStore.data.map { prefs ->
         prefs[KEY_SORT_MODE_HISTORY] ?: DEFAULT_SORT_MODE_HISTORY

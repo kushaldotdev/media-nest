@@ -1,25 +1,45 @@
 package com.example.medianest.ui.theme
 
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 
 object MediaNestColors {
-    val Background = Color(0xFF120B0E)
-    val NavigationBar = Color(0xFF241417)
-    val Card = Color(0xFF2A1A1F)
-    val Raised = Color(0xFF382027)
-    val Border = Color(0xFF4B2B33)
-    val TextPrimary = Color(0xFFFFF7F8)
-    val TextSecondary = Color(0xFFC8AEB4)
-    val Accent = Color(0xFFFFB1B6)
-    val AccentDeep = Color(0xFF8F1D2C)
-    val NavigationActive = Color(0xFF682B38)
-    val Success = Color(0xFF67D98A)
-    val Destructive = Color(0xFFEA4A59)
-    val YouTubeRed = Color(0xFFD21F31)
-    val ProgressTrack = Color(0xFF54333C)
-    val PlayerSurface = Color(0xFF090506)
-    val OnAccent = Color(0xFF3A0B12)
-    val AudioDownload = Color(0xFFFF9800)
+    // -------------------------------------------------------------------------
+    // Core Brand Palette (Strictly Dark)
+    // -------------------------------------------------------------------------
+    val Background = Color(0xFF120B0E)       // #120B0E — Main canvas / screen background
+    val NavigationBar = Color(0xFF241417)    // #241417 — Bottom nav & persistent chrome
+    val Card = Color(0xFF2A1A1F)             // #2A1A1F — Media cards, list rows, stream cards
+    val Raised = Color(0xFF382027)           // #382027 — Hero panels, dialogs, elevated chips
+    val Border = Color(0xFF4B2B33)           // #4B2B33 — Dividers and card borders
+    val TextPrimary = Color(0xFFFFF7F8)      // #FFF7F8 — Titles and primary text
+    val TextSecondary = Color(0xFFC8AEB4)    // #C8AEB4 — Metadata, timestamps, supporting copy
+    val Accent = Color(0xFFFFB1B6)           // #FFB1B6 — Primary actions & active controls
+    val AccentDeep = Color(0xFF8F1D2C)       // #8F1D2C — Selected tab pills & high-emphasis red
+    val NavigationActive = Color(0xFF682B38) // #682B38 — Active bottom navigation pill indicator
+    val Success = Color(0xFF67D98A)          // #67D98A — Completed states & checkmarks
+
+    // -------------------------------------------------------------------------
+    // Supporting & Functional Palette
+    // -------------------------------------------------------------------------
+    val Destructive = Color(0xFFEA4A59)      // #EA4A59 — Delete, cancel, remove
+    val YouTubeRed = Color(0xFFD21F31)       // #D21F31 — YouTube badges & player watched progress
+    val ProgressTrack = Color(0xFF54333C)    // #54333C — Progress bar & seekbar track background
+    val ProgressVideo = Color(0xFFFFB1B6)    // Video download progress fill
+    val ProgressAudio = Color(0xFFFF9800)    // Audio extraction progress fill
+    val ProgressMerge = Color(0xFF67D98A)    // Muxing/merging progress fill
+    val PlayerSurface = Color(0xFF090506)    // #090506 — Video player background
+    val OnAccent = Color(0xFF3A0B12)         // Text/icons rendered on soft pink Accent buttons
+    val AudioDownload = ProgressAudio        // Backward compatibility alias
+
+    // -------------------------------------------------------------------------
+    // Glassmorphism & Overlays
+    // -------------------------------------------------------------------------
+    val Glass = Color(0x9E2A1A1F)          // rgba(42, 26, 31, 0.62)
+    val GlassStrong = Color(0xB8382027)    // rgba(56, 32, 39, 0.72)
+    val GlassBorder = Color(0x24FFB7BF)    // rgba(255, 183, 191, 0.14)
+    val Scrim = Color(0x9E090506)          // rgba(9, 5, 6, 0.62)
+    val Overlay = Color(0x80090506)        // rgba(9, 5, 6, 0.50)
 }
 
 object MediaNestSemanticColors {
@@ -30,4 +50,7 @@ object MediaNestSemanticColors {
     val ActiveNavigation = MediaNestColors.NavigationActive
     val Error = MediaNestColors.Destructive
     val Completed = MediaNestColors.Success
+    val Track = MediaNestColors.ProgressTrack
 }
+
+val LocalMediaNestColors = staticCompositionLocalOf { MediaNestColors }
