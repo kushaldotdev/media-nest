@@ -1,8 +1,15 @@
 package com.example.medianest.ui.screens
 
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
@@ -10,90 +17,98 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDownward
-import androidx.compose.material.icons.filled.ArrowUpward
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.DragHandle
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import com.example.medianest.ui.components.GlassCard
-import com.example.medianest.ui.components.EndOfListIndicator
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.Pause
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.surfaceColorAtElevation
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
+import com.example.medianest.R
 import com.example.medianest.data.local.entity.DownloadEntity
 import com.example.medianest.data.local.entity.DownloadStatus
+import com.example.medianest.data.local.entity.HistoryEntity
 import com.example.medianest.data.local.entity.VideoEntity
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import com.example.medianest.data.preferences.DownloadPreferences
+import com.example.medianest.ui.components.DownloadProgressBar
+import com.example.medianest.ui.components.DownloadProgressStage
+import com.example.medianest.ui.components.EmptyState
+import com.example.medianest.ui.components.EndOfListIndicator
+import com.example.medianest.ui.components.GlassCard
+import com.example.medianest.ui.components.MediaNestButton
+import com.example.medianest.ui.components.MediaNestButtonSize
+import com.example.medianest.ui.components.MediaNestButtonVariant
+import com.example.medianest.ui.components.MediaNestChip
+import com.example.medianest.ui.components.MediaNestFilterRow
+import com.example.medianest.ui.components.MediaNestIconButton
+import com.example.medianest.ui.components.MediaNestIconButtonSize
+import com.example.medianest.ui.components.MediaNestSortBottomSheet
+import com.example.medianest.ui.components.MediaNestSortOption
 import com.example.medianest.ui.theme.MediaNestColors
 import com.example.medianest.ui.theme.MediaNestSemanticColors
+import com.example.medianest.ui.theme.MediaNestShapes
+import com.example.medianest.ui.utils.UiUtils
 import com.example.medianest.ui.viewmodel.DownloadsViewModel
-
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.rememberCoroutineScope
+import com.example.medianest.ui.viewmodel.PendingRestartConfirmation
 import kotlinx.coroutines.launch
+import java.io.File
+import java.util.ArrayList
 
-private fun compactDuration(ms: Long): String {
+// -----------------------------------------------------------------------------
+// Helper Utilities & Sort Functions
+// -----------------------------------------------------------------------------
+
+fun compactDuration(ms: Long): String {
     val totalSecs = (ms / 1000L).coerceAtLeast(0L)
     if (totalSecs <= 0L) return "0s"
     return when {
         totalSecs < 60 -> "${totalSecs}s"
-        totalSecs < 3600 -> {
-            "%dm%02ds".format(totalSecs / 60, totalSecs % 60)
-        }
+        totalSecs < 3600 -> "%dm%02ds".format(totalSecs / 60, totalSecs % 60)
         else -> "%dh%02dm".format(totalSecs / 3600, (totalSecs % 3600) / 60)
     }
 }
 
-private fun buildMetaLine(msg: String, format: String): String {
+fun buildMetaLine(msg: String, format: String): String {
     if (msg.isBlank()) return ""
     val parts = msg.split("|")
     val items = mutableListOf<String>()
@@ -137,6 +152,77 @@ private fun appendTiming(items: MutableList<String>, parts: List<String>, offset
     if (remainingMs > 0L) items.add("${compactDuration(remainingMs)} left")
 }
 
+fun formatBytes(bytes: Long): String {
+    if (bytes <= 0L) return "0 B"
+    val kb = bytes / 1024f
+    val mb = kb / 1024f
+    val gb = mb / 1024f
+    return when {
+        gb >= 1f -> "%.2f GB".format(gb)
+        mb >= 1f -> "%.1f MB".format(mb)
+        kb >= 1f -> "%.0f KB".format(kb)
+        else -> "$bytes B"
+    }
+}
+
+private fun formatSpeed(rawSpeed: String?): String? {
+    if (rawSpeed.isNullOrBlank()) return null
+    val rawBytes = rawSpeed.trim().toLongOrNull()
+    return if (rawBytes != null && rawBytes > 0L) {
+        val mbps = rawBytes / (1024f * 1024f)
+        if (mbps >= 1f) "%.1f MB/s".format(mbps) else "%.0f KB/s".format(rawBytes / 1024f)
+    } else {
+        rawSpeed.trim().takeIf { it.isNotBlank() }
+    }
+}
+
+fun shareDownloadFile(context: Context, download: DownloadEntity) {
+    if (download.filePath.isBlank()) return
+    val file = File(download.filePath)
+    if (!file.exists()) return
+    try {
+        val uri = FileProvider.getUriForFile(
+            context,
+            "${context.packageName}.fileprovider",
+            file
+        )
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = if (download.format.contains("audio")) "audio/*" else "video/*"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        context.startActivity(Intent.createChooser(intent, "Share ${download.title}"))
+    } catch (e: Exception) {
+        android.util.Log.e("DownloadsScreen", "Failed to share download: ${download.id}", e)
+    }
+}
+
+fun shareDownloads(context: Context, downloads: List<DownloadEntity>) {
+    val validDownloads = downloads.filter { it.filePath.isNotBlank() && File(it.filePath).exists() }
+    if (validDownloads.isEmpty()) return
+    try {
+        if (validDownloads.size == 1) {
+            shareDownloadFile(context, validDownloads.first())
+        } else {
+            val uris = ArrayList(validDownloads.map {
+                FileProvider.getUriForFile(
+                    context,
+                    "${context.packageName}.fileprovider",
+                    File(it.filePath)
+                )
+            })
+            val intent = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+                type = "*/*"
+                putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            context.startActivity(Intent.createChooser(intent, "Share ${validDownloads.size} downloads"))
+        }
+    } catch (e: Exception) {
+        android.util.Log.e("DownloadsScreen", "Failed to batch share downloads", e)
+    }
+}
+
 /**
  * Resolves download resolution falling back to configured [defaultResolution] or [DownloadPreferences.DEFAULT_RESOLUTION].
  */
@@ -150,7 +236,7 @@ fun resolveDownloadResolution(
 }
 
 /**
- * Sort categories available in the Downloads screen per design-2 specification.
+ * Sort categories available in the Downloads screen per Design 2.0 specification.
  */
 enum class DownloadSortCategory(val label: String, val defaultMode: String) {
     DATE("Date", "DATE_DESC"),
@@ -182,15 +268,6 @@ fun toggleSortMode(category: DownloadSortCategory, currentMode: String): String 
 
 /**
  * Sorts the download list according to [sortMode] preference.
- * Supported modes:
- * - DATE_DESC: Newest downloads first (default)
- * - DATE_ASC: Oldest downloads first
- * - PROGRESS_DESC: Highest download progress percentage first
- * - PROGRESS_ASC: Lowest download progress percentage first
- * - SIZE_DESC: Largest file size first
- * - SIZE_ASC: Smallest file size first
- * - STATUS_ASC: Active downloading first, followed by queued, paused, failed, canceled, completed
- * - STATUS_DESC: Completed downloads first, followed by canceled, failed, paused, queued, downloading
  */
 fun sortDownloads(
     downloads: List<DownloadEntity>,
@@ -286,6 +363,225 @@ fun applyQueueOrder(
     return ordered + sortedRemaining
 }
 
+enum class CompletedMediaFilter(val label: String) {
+    ALL("All"),
+    VIDEO("Video"),
+    AUDIO("Audio")
+}
+
+data class ParsedProgressInfo(
+    val stage: DownloadProgressStage,
+    val videoProgress: Float?,
+    val audioProgress: Float?,
+    val speedText: String?,
+    val etaText: String?,
+    val statusText: String,
+    val percentage: Int
+)
+
+fun parseDownloadProgress(download: DownloadEntity): ParsedProgressInfo {
+    val msg = download.errorMessage ?: ""
+    val pct = (download.progress.coerceIn(0f, 1f) * 100).toInt()
+
+    when (download.status) {
+        DownloadStatus.QUEUED -> {
+            return ParsedProgressInfo(
+                stage = DownloadProgressStage.QUEUED,
+                videoProgress = null,
+                audioProgress = null,
+                speedText = null,
+                etaText = null,
+                statusText = "Waiting in queue...",
+                percentage = 0
+            )
+        }
+        DownloadStatus.PAUSED -> {
+            val statusText = if (download.fileSizeBytes > 0L) {
+                "Paused · %.1f MB / %.1f MB".format(
+                    (download.progress * download.fileSizeBytes) / (1024f * 1024f),
+                    download.fileSizeBytes / (1024f * 1024f)
+                )
+            } else {
+                "Paused"
+            }
+            return ParsedProgressInfo(
+                stage = DownloadProgressStage.PAUSED,
+                videoProgress = null,
+                audioProgress = null,
+                speedText = null,
+                etaText = null,
+                statusText = statusText,
+                percentage = pct
+            )
+        }
+        DownloadStatus.FAILED -> {
+            return ParsedProgressInfo(
+                stage = DownloadProgressStage.FAILED,
+                videoProgress = null,
+                audioProgress = null,
+                speedText = null,
+                etaText = null,
+                statusText = if (msg.isNotBlank()) msg else "Download failed",
+                percentage = pct
+            )
+        }
+        DownloadStatus.CANCELED -> {
+            return ParsedProgressInfo(
+                stage = DownloadProgressStage.CANCELED,
+                videoProgress = null,
+                audioProgress = null,
+                speedText = null,
+                etaText = null,
+                statusText = "Canceled",
+                percentage = pct
+            )
+        }
+        DownloadStatus.COMPLETED -> {
+            if (msg == "file_missing") {
+                return ParsedProgressInfo(
+                    stage = DownloadProgressStage.FAILED,
+                    videoProgress = null,
+                    audioProgress = null,
+                    speedText = null,
+                    etaText = null,
+                    statusText = "Source file missing",
+                    percentage = 100
+                )
+            }
+            return ParsedProgressInfo(
+                stage = DownloadProgressStage.COMPLETED,
+                videoProgress = null,
+                audioProgress = null,
+                speedText = null,
+                etaText = null,
+                statusText = "Completed · %.1f MB".format(download.fileSizeBytes / (1024f * 1024f)),
+                percentage = 100
+            )
+        }
+        DownloadStatus.DOWNLOADING -> {
+            val parts = msg.split("|")
+
+            if (msg.startsWith("downloading_video")) {
+                val vDownloaded = parts.getOrNull(1)?.toLongOrNull() ?: 0L
+                val vTotal = parts.getOrNull(2)?.toLongOrNull() ?: 0L
+                val aTotal = parts.getOrNull(3)?.toLongOrNull() ?: 0L
+                val speedRaw = parts.getOrNull(4)
+                val remainingMs = parts.getOrNull(6)?.toLongOrNull()
+
+                val totalSize = vTotal + aTotal
+                val downloadedMb = vDownloaded / (1024f * 1024f)
+                val totalMb = if (totalSize > 0) totalSize / (1024f * 1024f) else (download.fileSizeBytes / (1024f * 1024f))
+
+                val speedText = formatSpeed(speedRaw)
+                val etaText = remainingMs?.takeIf { it > 0 }?.let { "${compactDuration(it)} left" }
+                val statusText = "Downloading Video · %.1f MB / %.1f MB".format(downloadedMb, totalMb)
+
+                return ParsedProgressInfo(
+                    stage = DownloadProgressStage.VIDEO,
+                    videoProgress = if (vTotal > 0) (vDownloaded.toFloat() / vTotal.toFloat()).coerceIn(0f, 1f) else download.progress,
+                    audioProgress = 0f,
+                    speedText = speedText,
+                    etaText = etaText,
+                    statusText = statusText,
+                    percentage = pct
+                )
+            } else if (msg.startsWith("downloading_audio")) {
+                val aDownloaded = parts.getOrNull(1)?.toLongOrNull() ?: 0L
+                val aTotal = parts.getOrNull(2)?.toLongOrNull() ?: 0L
+                val vTotal = parts.getOrNull(3)?.toLongOrNull() ?: 0L
+                val speedRaw = parts.getOrNull(4)
+                val remainingMs = parts.getOrNull(6)?.toLongOrNull()
+
+                val totalSize = vTotal + aTotal
+                val totalDownloaded = vTotal + aDownloaded
+                val downloadedMb = totalDownloaded / (1024f * 1024f)
+                val totalMb = if (totalSize > 0) totalSize / (1024f * 1024f) else (download.fileSizeBytes / (1024f * 1024f))
+
+                val speedText = formatSpeed(speedRaw)
+                val etaText = remainingMs?.takeIf { it > 0 }?.let { "${compactDuration(it)} left" }
+                val statusText = "Downloading Audio · %.1f MB / %.1f MB".format(downloadedMb, totalMb)
+
+                val isDual = download.format == "video_only" || vTotal > 0
+                return ParsedProgressInfo(
+                    stage = DownloadProgressStage.AUDIO,
+                    videoProgress = if (isDual) 1.0f else null,
+                    audioProgress = if (isDual && aTotal > 0) (aDownloaded.toFloat() / aTotal.toFloat()).coerceIn(0f, 1f) else null,
+                    speedText = speedText,
+                    etaText = etaText,
+                    statusText = statusText,
+                    percentage = pct
+                )
+            } else if (msg.startsWith("merging")) {
+                val pctPart = parts.getOrNull(1)?.toIntOrNull()
+                val speedRaw = parts.getOrNull(4)
+                val remainingMs = parts.getOrNull(3)?.toLongOrNull()
+                val speedText = formatSpeed(speedRaw)
+                val etaText = remainingMs?.takeIf { it > 0 }?.let { "${compactDuration(it)} left" }
+                val statusText = if (pctPart != null) "Merging Video & Audio ($pctPart%)" else "Merging Video & Audio..."
+
+                return ParsedProgressInfo(
+                    stage = DownloadProgressStage.MERGING,
+                    videoProgress = null,
+                    audioProgress = null,
+                    speedText = speedText,
+                    etaText = etaText,
+                    statusText = statusText,
+                    percentage = pctPart ?: pct
+                )
+            } else if (download.format == "audio_extracted" || msg.startsWith("extracting")) {
+                val remainingMs = parts.getOrNull(1)?.toLongOrNull()
+                val etaText = remainingMs?.takeIf { it > 0 }?.let { "${compactDuration(it)} left" }
+                return ParsedProgressInfo(
+                    stage = DownloadProgressStage.EXTRACTING,
+                    videoProgress = null,
+                    audioProgress = null,
+                    speedText = null,
+                    etaText = etaText,
+                    statusText = "Extracting Audio ($pct%)",
+                    percentage = pct
+                )
+            } else if (msg.startsWith("downloading|")) {
+                val speedRaw = parts.getOrNull(1)
+                val remainingMs = parts.getOrNull(3)?.toLongOrNull()
+                val speedText = formatSpeed(speedRaw)
+                val etaText = remainingMs?.takeIf { it > 0 }?.let { "${compactDuration(it)} left" }
+                val downloadedMb = (download.progress * download.fileSizeBytes) / (1024f * 1024f)
+                val totalMb = download.fileSizeBytes / (1024f * 1024f)
+                val statusText = if (download.fileSizeBytes > 0) "%.1f MB / %.1f MB".format(downloadedMb, totalMb) else "Downloading..."
+
+                val stage = if (download.format == "audio" || download.format == "audio_extracted") DownloadProgressStage.AUDIO else DownloadProgressStage.VIDEO
+                return ParsedProgressInfo(
+                    stage = stage,
+                    videoProgress = null,
+                    audioProgress = null,
+                    speedText = speedText,
+                    etaText = etaText,
+                    statusText = statusText,
+                    percentage = pct
+                )
+            } else {
+                val downloadedMb = (download.progress * download.fileSizeBytes) / (1024f * 1024f)
+                val totalMb = download.fileSizeBytes / (1024f * 1024f)
+                val statusText = if (download.fileSizeBytes > 0) "%.1f MB / %.1f MB".format(downloadedMb, totalMb) else "Downloading ($pct%)"
+                val stage = if (download.format == "audio" || download.format == "audio_extracted") DownloadProgressStage.AUDIO else DownloadProgressStage.VIDEO
+                return ParsedProgressInfo(
+                    stage = stage,
+                    videoProgress = null,
+                    audioProgress = null,
+                    speedText = null,
+                    etaText = null,
+                    statusText = statusText,
+                    percentage = pct
+                )
+            }
+        }
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Downloads Screen Implementation (Design 2.0)
+// -----------------------------------------------------------------------------
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DownloadsScreen(
@@ -315,13 +611,45 @@ fun DownloadsScreen(
     val lastWatchedProgress by viewModel.lastWatchedProgress.collectAsStateWithLifecycle()
     val lastWatchedPositionMs by viewModel.lastWatchedPositionMs.collectAsStateWithLifecycle()
 
+    // Dialog and interactive states
     var showDeleteDialogFor by remember { mutableStateOf<DownloadEntity?>(null) }
     var showRestartDialogFor by remember { mutableStateOf<DownloadEntity?>(null) }
     var pendingDialogId by remember { mutableStateOf<Long?>(null) }
     var showDeleteAllDialog by remember { mutableStateOf(false) }
+    var showBatchDeleteDialog by remember { mutableStateOf(false) }
+    var showMaxConcurrentDialog by remember { mutableStateOf(false) }
+    var showSortBottomSheet by remember { mutableStateOf(false) }
+
+    // Segmented filtering and batch selection
+    var completedFilter by remember { mutableStateOf(CompletedMediaFilter.ALL) }
+    var isBatchMode by remember { mutableStateOf(false) }
+    var selectedBatchIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
+
+    // Separate Active vs Completed downloads
+    val activeDownloads = remember(sortedDownloads) {
+        sortedDownloads.filter { it.status != DownloadStatus.COMPLETED || it.errorMessage == "file_missing" }
+    }
+    val completedDownloads = remember(sortedDownloads) {
+        sortedDownloads.filter { it.status == DownloadStatus.COMPLETED && it.errorMessage != "file_missing" }
+    }
+
+    val completedVideoCount = remember(completedDownloads) {
+        completedDownloads.count { !it.format.contains("audio") }
+    }
+    val completedAudioCount = remember(completedDownloads) {
+        completedDownloads.count { it.format.contains("audio") }
+    }
+
+    val filteredCompleted = remember(completedDownloads, completedFilter) {
+        when (completedFilter) {
+            CompletedMediaFilter.ALL -> completedDownloads
+            CompletedMediaFilter.VIDEO -> completedDownloads.filter { !it.format.contains("audio") }
+            CompletedMediaFilter.AUDIO -> completedDownloads.filter { it.format.contains("audio") }
+        }
+    }
 
     LaunchedEffect(Unit) {
-        com.example.medianest.ui.viewmodel.PendingRestartConfirmation.pendingDownloadId.collect { id ->
+        PendingRestartConfirmation.pendingDownloadId.collect { id ->
             pendingDialogId = id
         }
     }
@@ -340,275 +668,604 @@ fun DownloadsScreen(
     PullToRefreshBox(
         isRefreshing = isRefreshing,
         onRefresh = { viewModel.refreshDownloads() },
-        modifier = Modifier.fillMaxSize()
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MediaNestColors.Background)
     ) {
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp)
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+            contentPadding = PaddingValues(top = 16.dp, bottom = 40.dp)
         ) {
+            // -----------------------------------------------------------------
+            // Top Header & Controls Toolbar
+            // -----------------------------------------------------------------
             item {
-                Row(
+                Column(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text("Downloads", style = MaterialTheme.typography.titleLarge)
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        var sortExpanded by remember { mutableStateOf(false) }
-                        val currentCategory = getSortCategory(sortMode)
-                        val isAsc = isSortAscending(sortMode)
-                        val sortLabel = currentCategory.label
-                        val sortIcon = if (isAsc) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward
-                        Box {
-                            OutlinedButton(
-                                onClick = { sortExpanded = true },
-                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-                                modifier = Modifier.height(36.dp)
-                            ) {
-                                Icon(
-                                    imageVector = sortIcon,
-                                    contentDescription = "Sort queue: $sortLabel",
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(Modifier.width(4.dp))
-                                Text(sortLabel, style = MaterialTheme.typography.labelMedium)
-                            }
-                            DropdownMenu(
-                                expanded = sortExpanded,
-                                onDismissRequest = { sortExpanded = false }
-                            ) {
-                                DownloadSortCategory.values().forEach { category ->
-                                    val isActive = currentCategory == category
-                                    val categoryIcon = if (isActive) {
-                                        if (isAsc) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward
-                                    } else {
-                                        if (category == DownloadSortCategory.STATUS) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward
-                                    }
-                                    DropdownMenuItem(
-                                        leadingIcon = {
-                                            Icon(
-                                                imageVector = categoryIcon,
-                                                contentDescription = null,
-                                                modifier = Modifier.size(18.dp),
-                                                tint = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        },
-                                        text = {
-                                            Text(
-                                                text = category.label,
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                color = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                                            )
-                                        },
-                                        trailingIcon = if (isActive) {
-                                            {
-                                                Icon(
-                                                    imageVector = Icons.Default.Check,
-                                                    contentDescription = "Selected",
-                                                    tint = MaterialTheme.colorScheme.primary,
-                                                    modifier = Modifier.size(18.dp)
-                                                )
-                                            }
-                                        } else null,
-                                        onClick = {
-                                            val newMode = toggleSortMode(category, sortMode)
-                                            viewModel.clearCustomOrder()
-                                            coroutineScope.launch {
-                                                prefs.setSortMode(newMode)
-                                            }
-                                            sortExpanded = false
-                                        }
-                                    )
-                                }
-                            }
-                        }
-
-                        var expanded by remember { mutableStateOf(false) }
-                        Box {
-                            Button(
-                                onClick = { expanded = true },
-                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                                modifier = Modifier.height(36.dp)
-                            ) {
-                                Text("Max: ${uiState.maxConcurrent}", style = MaterialTheme.typography.labelMedium)
-                            }
-                            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                                (1..5).forEach { n ->
-                                    DropdownMenuItem(
-                                        text = { Text("$n concurrent") },
-                                        onClick = {
-                                            viewModel.setMaxConcurrent(n)
-                                            expanded = false
-                                        }
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-                Spacer(Modifier.height(4.dp))
-            }
-
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Start,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    TextButton(onClick = { viewModel.pauseAllDownloads() }) {
-                        Text("Pause All")
-                    }
-                    Spacer(Modifier.width(8.dp))
-                    TextButton(onClick = { viewModel.resumeAllDownloads() }) {
-                        Text("Resume All")
-                    }
-                    Spacer(Modifier.width(8.dp))
-                    TextButton(onClick = { showDeleteAllDialog = true }) {
-                        Text("Delete All")
-                    }
-                }
-                Spacer(Modifier.height(16.dp))
-            }
-
-            // Resume Watching section
-            lastWatchedDownload?.let { download ->
-                item {
-                    Text("Resume Watching", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.primary)
-                    Spacer(Modifier.height(8.dp))
-                    GlassCard(
-                        onClick = { onPlayDownload(download) },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(12.dp).fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(120.dp, 68.dp)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(MaterialTheme.colorScheme.surfaceColorAtElevation(1.dp))
-                            ) {
-                                AsyncImage(
-                                    model = download.thumbnailUrl,
-                                    contentDescription = null,
-                                    contentScale = ContentScale.Crop,
-                                    modifier = Modifier.fillMaxSize()
-                                )
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .background(MediaNestColors.PlayerSurface.copy(alpha = 0.3f)),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.PlayArrow,
-                                        contentDescription = null,
-                                        tint = MediaNestColors.TextPrimary,
-                                        modifier = Modifier.size(28.dp)
-                                    )
-                                }
-                                if (lastWatchedProgress > 0f) {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(4.dp)
-                                            .align(Alignment.BottomCenter)
-                                            .background(MediaNestColors.ProgressTrack)
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxWidth(lastWatchedProgress)
-                                                .height(4.dp)
-                                                .background(MediaNestColors.YouTubeRed)
-                                        )
-                                    }
-                                }
-                            }
-                            Spacer(Modifier.width(12.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                val effectiveQuality = download.quality.ifEmpty { resolveDownloadResolution(null, defaultResolution) }
-                                Text(
-                                    text = download.title.ifEmpty { effectiveQuality },
-                                    style = MaterialTheme.typography.titleSmall,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                                Spacer(Modifier.height(4.dp))
-                                Text(
-                                    text = if (lastWatchedPositionMs > 0) {
-                                        "Left off at ${com.example.medianest.ui.utils.UiUtils.formatDuration(lastWatchedPositionMs / 1000L)}"
-                                    } else {
-                                        "Not started"
-                                    },
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                    }
-                    Spacer(Modifier.height(20.dp))
-                }
-            }
-
-            if (sortedDownloads.isNotEmpty()) {
-                item {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Download Queue & Files", style = MaterialTheme.typography.titleMedium)
-                        Text(
-                            text = "${sortedDownloads.size} items",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Column {
+                            Text(
+                                text = "Downloads",
+                                style = MaterialTheme.typography.headlineSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = MediaNestColors.TextPrimary
+                                )
+                            )
+                            if (downloads.isNotEmpty()) {
+                                Text(
+                                    text = "${downloads.size} item${if (downloads.size > 1) "s" else ""}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MediaNestColors.TextSecondary
+                                )
+                            }
+                        }
+
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Sort Bottom Sheet Trigger
+                            val currentCategory = getSortCategory(sortMode)
+                            val isAsc = isSortAscending(sortMode)
+                            MediaNestButton(
+                                text = currentCategory.label,
+                                onClick = { showSortBottomSheet = true },
+                                variant = MediaNestButtonVariant.Secondary,
+                                size = MediaNestButtonSize.Small,
+                                leadingIcon = {
+                                    Icon(
+                                        painter = painterResource(
+                                            if (isAsc) R.drawable.ic_mn_arrow_up else R.drawable.ic_mn_arrow_down
+                                        ),
+                                        contentDescription = "Sort",
+                                        tint = MediaNestColors.Accent,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
+                            )
+
+                            // Max Concurrent Trigger
+                            MediaNestButton(
+                                text = "Max: ${uiState.maxConcurrent}",
+                                onClick = { showMaxConcurrentDialog = true },
+                                variant = MediaNestButtonVariant.Secondary,
+                                size = MediaNestButtonSize.Small,
+                                leadingIcon = {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_mn_sliders),
+                                        contentDescription = "Max concurrent",
+                                        tint = MediaNestColors.Accent,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
+                            )
+
+                            // Batch Select Toggle (when completed items exist)
+                            if (completedDownloads.isNotEmpty()) {
+                                MediaNestIconButton(
+                                    onClick = {
+                                        isBatchMode = !isBatchMode
+                                        if (!isBatchMode) selectedBatchIds = emptySet()
+                                    },
+                                    size = MediaNestIconButtonSize.Small,
+                                    tint = if (isBatchMode) MediaNestColors.Accent else MediaNestColors.TextSecondary,
+                                    containerColor = if (isBatchMode) MediaNestColors.Raised else Color.Transparent
+                                ) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_mn_checkbox),
+                                        contentDescription = "Batch Select Mode",
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                        }
                     }
-                    Spacer(Modifier.height(8.dp))
+
+                    // Secondary Action Controls Row (Pause All / Resume All / Delete All)
+                    if (activeDownloads.isNotEmpty() || downloads.isNotEmpty()) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (activeDownloads.any { it.status == DownloadStatus.DOWNLOADING || it.status == DownloadStatus.QUEUED }) {
+                                MediaNestButton(
+                                    text = "Pause All",
+                                    onClick = { viewModel.pauseAllDownloads() },
+                                    variant = MediaNestButtonVariant.Ghost,
+                                    size = MediaNestButtonSize.ExtraSmall,
+                                    leadingIcon = {
+                                        Icon(
+                                            painter = painterResource(R.drawable.ic_mn_pause),
+                                            contentDescription = null,
+                                            tint = MediaNestColors.TextSecondary,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
+                                )
+                            }
+
+                            if (activeDownloads.any { it.status == DownloadStatus.PAUSED }) {
+                                MediaNestButton(
+                                    text = "Resume All",
+                                    onClick = { viewModel.resumeAllDownloads() },
+                                    variant = MediaNestButtonVariant.Ghost,
+                                    size = MediaNestButtonSize.ExtraSmall,
+                                    leadingIcon = {
+                                        Icon(
+                                            painter = painterResource(R.drawable.ic_mn_play),
+                                            contentDescription = null,
+                                            tint = MediaNestColors.Accent,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
+                                )
+                            }
+
+                            Spacer(Modifier.weight(1f))
+
+                            MediaNestButton(
+                                text = "Delete All",
+                                onClick = { showDeleteAllDialog = true },
+                                variant = MediaNestButtonVariant.Danger,
+                                size = MediaNestButtonSize.ExtraSmall,
+                                leadingIcon = {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_mn_trash),
+                                        contentDescription = null,
+                                        tint = MediaNestColors.Destructive,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
+                            )
+                        }
+                    }
                 }
             }
 
-            if (sortedDownloads.isEmpty()) {
+            // -----------------------------------------------------------------
+            // Download Storage & Status Overview Card
+            // -----------------------------------------------------------------
+            if (downloads.isNotEmpty()) {
                 item {
-                    Box(
-                        modifier = Modifier
-                            .fillParentMaxSize()
-                            .padding(bottom = 120.dp),
-                        contentAlignment = Alignment.Center
+                    DownloadStatsCard(downloads = downloads)
+                }
+            }
+
+            // -----------------------------------------------------------------
+            // Resume Watching Hero Card
+            // -----------------------------------------------------------------
+            lastWatchedDownload?.let { download ->
+                item {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text("No downloads yet", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            text = "Resume Watching",
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.SemiBold,
+                                color = MediaNestColors.Accent
+                            )
+                        )
+
+                        GlassCard(
+                            onClick = { onPlayDownload(download) },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = MediaNestShapes.Card
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .padding(12.dp)
+                                    .fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // 16:9 Thumbnail with Overlay & Red Watch Progress Bar
+                                Box(
+                                    modifier = Modifier
+                                        .size(124.dp, 70.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(MediaNestColors.Raised)
+                                ) {
+                                    AsyncImage(
+                                        model = download.thumbnailUrl,
+                                        contentDescription = null,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .background(MediaNestColors.PlayerSurface.copy(alpha = 0.35f)),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(34.dp)
+                                                .clip(CircleShape)
+                                                .background(MediaNestColors.GlassStrong),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Icon(
+                                                painter = painterResource(R.drawable.ic_mn_play),
+                                                contentDescription = "Play",
+                                                tint = MediaNestColors.TextPrimary,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+                                    }
+
+                                    if (lastWatchedProgress > 0f) {
+                                        Box(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(3.dp)
+                                                .align(Alignment.BottomCenter)
+                                                .background(MediaNestColors.ProgressTrack)
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxWidth(lastWatchedProgress)
+                                                    .height(3.dp)
+                                                    .background(MediaNestColors.YouTubeRed)
+                                            )
+                                        }
+                                    }
+                                }
+
+                                Spacer(Modifier.width(12.dp))
+
+                                Column(modifier = Modifier.weight(1f)) {
+                                    val effectiveQuality = download.quality.ifEmpty { resolveDownloadResolution(null, defaultResolution) }
+                                    Text(
+                                        text = download.title.ifEmpty { effectiveQuality },
+                                        style = MaterialTheme.typography.titleSmall.copy(
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MediaNestColors.TextPrimary
+                                        ),
+                                        maxLines = 2,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+
+                                    Spacer(Modifier.height(4.dp))
+
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Text(
+                                            text = if (lastWatchedPositionMs > 0) {
+                                                "Left off at ${UiUtils.formatDuration(lastWatchedPositionMs / 1000L)}"
+                                            } else {
+                                                "Not started"
+                                            },
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MediaNestColors.TextSecondary
+                                        )
+
+                                        Text(
+                                            text = "·",
+                                            color = MediaNestColors.Border
+                                        )
+
+                                        Text(
+                                            text = effectiveQuality,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MediaNestColors.Accent
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
-            } else {
-                itemsIndexed(sortedDownloads, key = { _, download -> download.id }) { index, download ->
-                    DownloadItem(
+            }
+
+            // -----------------------------------------------------------------
+            // Entirely Empty State
+            // -----------------------------------------------------------------
+            if (downloads.isEmpty()) {
+                item {
+                    EmptyState(
+                        title = "No downloads yet",
+                        message = "Downloads will appear here. Extract a video or playlist from the Home tab.",
+                        iconContent = {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_mn_download),
+                                contentDescription = null,
+                                tint = MediaNestColors.TextSecondary,
+                                modifier = Modifier.size(32.dp)
+                            )
+                        },
+                        modifier = Modifier.padding(top = 40.dp)
+                    )
+                }
+            }
+
+            // -----------------------------------------------------------------
+            // Active Downloads Section
+            // -----------------------------------------------------------------
+            if (activeDownloads.isNotEmpty()) {
+                item {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 4.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = "Active Queue",
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MediaNestColors.TextPrimary
+                                )
+                            )
+
+                            Box(
+                                modifier = Modifier
+                                    .clip(CircleShape)
+                                    .background(MediaNestColors.AccentDeep)
+                                    .padding(horizontal = 8.dp, vertical = 2.dp)
+                            ) {
+                                Text(
+                                    text = "${activeDownloads.size}",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MediaNestColors.TextPrimary
+                                )
+                            }
+                        }
+                    }
+                }
+
+                itemsIndexed(activeDownloads, key = { _, dl -> dl.id }) { index, download ->
+                    ActiveDownloadCard(
                         download = download,
                         index = index,
-                        totalCount = sortedDownloads.size,
+                        totalCount = activeDownloads.size,
                         onDragMove = { targetIndex ->
                             viewModel.reorderDownloads(index, targetIndex, sortedDownloads)
                         },
-                        hasExtractedAudio = sortedDownloads.any {
-                            it.videoId == download.videoId && it.format == "audio_extracted"
-                        },
                         videosMap = videosMap,
-                        onPlayDownload = onPlayDownload,
                         onVideoClick = onVideoClick,
-                        viewModel = viewModel,
                         onDeleteClick = { showDeleteDialogFor = it },
                         onRestartClick = { showRestartDialogFor = it },
-                        playingVideoId = playingVideoId,
-                        playingUri = playingUri,
-                        isPlaying = isPlaying,
+                        viewModel = viewModel,
                         defaultResolution = defaultResolution
                     )
                 }
+            }
+
+            // -----------------------------------------------------------------
+            // Completed Downloads Section & Filters
+            // -----------------------------------------------------------------
+            if (completedDownloads.isNotEmpty()) {
+                item {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = if (activeDownloads.isNotEmpty()) 8.dp else 0.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    text = "Completed Downloads",
+                                    style = MaterialTheme.typography.titleMedium.copy(
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MediaNestColors.TextPrimary
+                                    )
+                                )
+
+                                Box(
+                                    modifier = Modifier
+                                        .clip(CircleShape)
+                                        .background(MediaNestColors.Raised)
+                                        .padding(horizontal = 8.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        text = "${completedDownloads.size}",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MediaNestColors.TextSecondary
+                                    )
+                                }
+                            }
+                        }
+
+                        // Segmented Filter Bar: All / Video / Audio
+                        MediaNestFilterRow(
+                            contentPadding = PaddingValues(horizontal = 0.dp, vertical = 2.dp)
+                        ) {
+                            MediaNestChip(
+                                label = "All",
+                                badgeText = "${completedDownloads.size}",
+                                selected = completedFilter == CompletedMediaFilter.ALL,
+                                onClick = { completedFilter = CompletedMediaFilter.ALL }
+                            )
+
+                            MediaNestChip(
+                                label = "Video",
+                                badgeText = "$completedVideoCount",
+                                selected = completedFilter == CompletedMediaFilter.VIDEO,
+                                leadingIcon = {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_mn_video),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                },
+                                onClick = { completedFilter = CompletedMediaFilter.VIDEO }
+                            )
+
+                            MediaNestChip(
+                                label = "Audio",
+                                badgeText = "$completedAudioCount",
+                                selected = completedFilter == CompletedMediaFilter.AUDIO,
+                                leadingIcon = {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_mn_music),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                },
+                                onClick = { completedFilter = CompletedMediaFilter.AUDIO }
+                            )
+                        }
+
+                        // Batch Selection Action Toolbar
+                        AnimatedVisibility(
+                            visible = isBatchMode,
+                            enter = fadeIn(),
+                            exit = fadeOut()
+                        ) {
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = MediaNestShapes.Card,
+                                color = MediaNestColors.Raised,
+                                border = BorderStroke(1.dp, MediaNestColors.Border)
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        val allSelected = selectedBatchIds.size == filteredCompleted.size && filteredCompleted.isNotEmpty()
+                                        MediaNestButton(
+                                            text = if (allSelected) "Deselect All" else "Select All",
+                                            onClick = {
+                                                selectedBatchIds = if (allSelected) emptySet() else filteredCompleted.map { it.id }.toSet()
+                                            },
+                                            variant = MediaNestButtonVariant.Secondary,
+                                            size = MediaNestButtonSize.ExtraSmall
+                                        )
+
+                                        Text(
+                                            text = "${selectedBatchIds.size} selected",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MediaNestColors.TextPrimary
+                                        )
+                                    }
+
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        MediaNestButton(
+                                            text = "Share",
+                                            onClick = {
+                                                val targets = completedDownloads.filter { it.id in selectedBatchIds }
+                                                shareDownloads(context, targets)
+                                            },
+                                            variant = MediaNestButtonVariant.Secondary,
+                                            size = MediaNestButtonSize.ExtraSmall,
+                                            enabled = selectedBatchIds.isNotEmpty(),
+                                            leadingIcon = {
+                                                Icon(
+                                                    painter = painterResource(R.drawable.ic_mn_share),
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(12.dp)
+                                                )
+                                            }
+                                        )
+
+                                        MediaNestButton(
+                                            text = "Delete",
+                                            onClick = { showBatchDeleteDialog = true },
+                                            variant = MediaNestButtonVariant.DangerSolid,
+                                            size = MediaNestButtonSize.ExtraSmall,
+                                            enabled = selectedBatchIds.isNotEmpty(),
+                                            leadingIcon = {
+                                                Icon(
+                                                    painter = painterResource(R.drawable.ic_mn_trash),
+                                                    contentDescription = null,
+                                                    modifier = Modifier.size(12.dp)
+                                                )
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (filteredCompleted.isEmpty()) {
+                    item {
+                        EmptyState(
+                            title = "No ${completedFilter.label.lowercase()} downloads",
+                            message = "No completed items found for this category.",
+                            iconContent = {
+                                Icon(
+                                    painter = painterResource(
+                                        if (completedFilter == CompletedMediaFilter.AUDIO) R.drawable.ic_mn_music else R.drawable.ic_mn_video
+                                    ),
+                                    contentDescription = null,
+                                    tint = MediaNestColors.TextSecondary,
+                                    modifier = Modifier.size(32.dp)
+                                )
+                            }
+                        )
+                    }
+                } else {
+                    items(filteredCompleted, key = { it.id }) { download ->
+                        CompletedDownloadCard(
+                            download = download,
+                            videosMap = videosMap,
+                            onPlayDownload = onPlayDownload,
+                            onVideoClick = onVideoClick,
+                            onDeleteClick = { showDeleteDialogFor = it },
+                            hasExtractedAudio = sortedDownloads.any {
+                                it.videoId == download.videoId && it.format == "audio_extracted"
+                            },
+                            viewModel = viewModel,
+                            isBatchMode = isBatchMode,
+                            isSelected = selectedBatchIds.contains(download.id),
+                            onToggleSelect = { id ->
+                                selectedBatchIds = if (selectedBatchIds.contains(id)) {
+                                    selectedBatchIds - id
+                                } else {
+                                    selectedBatchIds + id
+                                }
+                            },
+                            playingVideoId = playingVideoId,
+                            playingUri = playingUri,
+                            isPlaying = isPlaying,
+                            defaultResolution = defaultResolution
+                        )
+                    }
+                }
+            }
+
+            if (downloads.isNotEmpty()) {
                 item {
                     EndOfListIndicator()
                 }
@@ -616,16 +1273,146 @@ fun DownloadsScreen(
         }
     }
 
+    // -------------------------------------------------------------------------
+    // Dialogs & Sheets
+    // -------------------------------------------------------------------------
+
+    // Sort Bottom Sheet
+    if (showSortBottomSheet) {
+        val currentCategory = getSortCategory(sortMode)
+        val isAsc = isSortAscending(sortMode)
+        val downloadSortOptions = remember {
+            listOf(
+                MediaNestSortOption(id = "DATE", label = "Date Added", description = "Recently added or downloaded"),
+                MediaNestSortOption(id = "PROGRESS", label = "Progress", description = "Download completion percentage"),
+                MediaNestSortOption(id = "SIZE", label = "File Size", description = "Total media storage size"),
+                MediaNestSortOption(id = "STATUS", label = "Download Status", description = "Active, queued, paused, completed")
+            )
+        }
+
+        MediaNestSortBottomSheet(
+            onDismissRequest = { showSortBottomSheet = false },
+            selectedSortBy = currentCategory.name,
+            isAscending = isAsc,
+            options = downloadSortOptions,
+            onSortSelected = { newCat, newAsc ->
+                val dir = if (newAsc) "ASC" else "DESC"
+                val newMode = "${newCat}_$dir"
+                viewModel.clearCustomOrder()
+                coroutineScope.launch {
+                    prefs.setSortMode(newMode)
+                }
+            }
+        )
+    }
+
+    // Max Concurrent Downloads Dialog
+    if (showMaxConcurrentDialog) {
+        AlertDialog(
+            onDismissRequest = { showMaxConcurrentDialog = false },
+            containerColor = MediaNestColors.Raised,
+            titleContentColor = MediaNestColors.TextPrimary,
+            textContentColor = MediaNestColors.TextSecondary,
+            shape = MediaNestShapes.Hero,
+            title = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_mn_sliders),
+                        contentDescription = null,
+                        tint = MediaNestColors.Accent,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Text(
+                        text = "Max Concurrent Downloads",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
+                    )
+                }
+            },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "Select maximum number of downloads running simultaneously:",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MediaNestColors.TextSecondary
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    (1..5).forEach { count ->
+                        val isSelected = uiState.maxConcurrent == count
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(MediaNestShapes.Card)
+                                .clickable {
+                                    viewModel.setMaxConcurrent(count)
+                                    showMaxConcurrentDialog = false
+                                },
+                            shape = MediaNestShapes.Card,
+                            color = if (isSelected) MediaNestColors.AccentDeep else MediaNestColors.Card,
+                            border = if (isSelected) null else BorderStroke(1.dp, MediaNestColors.Border)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "$count concurrent download${if (count > 1) "s" else ""}",
+                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                                        color = if (isSelected) MediaNestColors.TextPrimary else MediaNestColors.TextSecondary
+                                    )
+                                )
+                                if (isSelected) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_mn_check),
+                                        contentDescription = "Selected",
+                                        tint = MediaNestColors.Accent,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                MediaNestButton(
+                    text = "Close",
+                    onClick = { showMaxConcurrentDialog = false },
+                    variant = MediaNestButtonVariant.Ghost,
+                    size = MediaNestButtonSize.Small
+                )
+            }
+        )
+    }
+
+    // Delete Single Download Dialog
     if (showDeleteDialogFor != null) {
         val download = showDeleteDialogFor!!
         val isActive = download.status == DownloadStatus.DOWNLOADING || download.status == DownloadStatus.QUEUED
         val effectiveQuality = download.quality.ifEmpty { resolveDownloadResolution(null, defaultResolution) }
         val displayTitle = download.title.ifEmpty { effectiveQuality }
-        
+
         AlertDialog(
             onDismissRequest = { showDeleteDialogFor = null },
+            containerColor = MediaNestColors.Raised,
+            titleContentColor = MediaNestColors.TextPrimary,
+            textContentColor = MediaNestColors.TextSecondary,
+            shape = MediaNestShapes.Hero,
             title = {
-                Text(text = if (isActive) "Cancel Download" else "Delete Download")
+                Text(
+                    text = if (isActive) "Cancel Download" else "Delete Download",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
+                )
             },
             text = {
                 Text(
@@ -633,190 +1420,429 @@ fun DownloadsScreen(
                         "Are you sure you want to cancel downloading \"$displayTitle\"?"
                     } else {
                         "Choose how you want to delete \"$displayTitle\"."
-                    }
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MediaNestColors.TextSecondary
                 )
             },
             confirmButton = {
                 if (isActive) {
-                    TextButton(
+                    MediaNestButton(
+                        text = "Cancel Download",
                         onClick = {
                             viewModel.cancelDownload(download.id)
                             showDeleteDialogFor = null
-                        }
-                    ) {
-                        Text("Cancel Download")
-                    }
+                        },
+                        variant = MediaNestButtonVariant.DangerSolid,
+                        size = MediaNestButtonSize.Small
+                    )
                 } else {
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        TextButton(
+                        MediaNestButton(
+                            text = "List Only",
                             onClick = {
                                 viewModel.deleteDownload(download, deleteFile = false)
                                 showDeleteDialogFor = null
-                            }
-                        ) {
-                            Text("List Only")
-                        }
-                        Spacer(Modifier.width(8.dp))
-                        TextButton(
+                            },
+                            variant = MediaNestButtonVariant.Secondary,
+                            size = MediaNestButtonSize.Small
+                        )
+                        MediaNestButton(
+                            text = "Delete File & List",
                             onClick = {
                                 viewModel.deleteDownload(download, deleteFile = true)
                                 showDeleteDialogFor = null
-                            }
-                        ) {
-                            Text("Delete File & List")
-                        }
+                            },
+                            variant = MediaNestButtonVariant.DangerSolid,
+                            size = MediaNestButtonSize.Small
+                        )
                     }
                 }
             },
             dismissButton = {
-                TextButton(
-                    onClick = { showDeleteDialogFor = null }
-                ) {
-                    Text("Cancel")
-                }
+                MediaNestButton(
+                    text = "Keep",
+                    onClick = { showDeleteDialogFor = null },
+                    variant = MediaNestButtonVariant.Ghost,
+                    size = MediaNestButtonSize.Small
+                )
             }
         )
     }
 
+    // Delete All Downloads Confirmation Dialog
+    if (showDeleteAllDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteAllDialog = false },
+            containerColor = MediaNestColors.Raised,
+            titleContentColor = MediaNestColors.TextPrimary,
+            textContentColor = MediaNestColors.TextSecondary,
+            shape = MediaNestShapes.Hero,
+            title = {
+                Text(
+                    text = "Delete All Downloads",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
+                )
+            },
+            text = {
+                Text(
+                    text = "This will cancel active downloads and remove every entry from the list. Choose how to proceed:",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MediaNestColors.TextSecondary
+                )
+            },
+            confirmButton = {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    MediaNestButton(
+                        text = "List Only",
+                        onClick = {
+                            viewModel.deleteAllDownloads(deleteFiles = false)
+                            showDeleteAllDialog = false
+                        },
+                        variant = MediaNestButtonVariant.Secondary,
+                        size = MediaNestButtonSize.Small
+                    )
+                    MediaNestButton(
+                        text = "Delete Files & List",
+                        onClick = {
+                            viewModel.deleteAllDownloads(deleteFiles = true)
+                            showDeleteAllDialog = false
+                        },
+                        variant = MediaNestButtonVariant.DangerSolid,
+                        size = MediaNestButtonSize.Small
+                    )
+                }
+            },
+            dismissButton = {
+                MediaNestButton(
+                    text = "Cancel",
+                    onClick = { showDeleteAllDialog = false },
+                    variant = MediaNestButtonVariant.Ghost,
+                    size = MediaNestButtonSize.Small
+                )
+            }
+        )
+    }
+
+    // Batch Delete Confirmation Dialog
+    if (showBatchDeleteDialog) {
+        val count = selectedBatchIds.size
+        AlertDialog(
+            onDismissRequest = { showBatchDeleteDialog = false },
+            containerColor = MediaNestColors.Raised,
+            titleContentColor = MediaNestColors.TextPrimary,
+            textContentColor = MediaNestColors.TextSecondary,
+            shape = MediaNestShapes.Hero,
+            title = {
+                Text(
+                    text = "Delete $count Download${if (count > 1) "s" else ""}",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
+                )
+            },
+            text = {
+                Text(
+                    text = "Choose whether to remove the selected entries from the list only, or also delete the downloaded files from storage.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MediaNestColors.TextSecondary
+                )
+            },
+            confirmButton = {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    MediaNestButton(
+                        text = "List Only",
+                        onClick = {
+                            val targets = completedDownloads.filter { it.id in selectedBatchIds }
+                            targets.forEach { dl -> viewModel.deleteDownload(dl, deleteFile = false) }
+                            selectedBatchIds = emptySet()
+                            isBatchMode = false
+                            showBatchDeleteDialog = false
+                        },
+                        variant = MediaNestButtonVariant.Secondary,
+                        size = MediaNestButtonSize.Small
+                    )
+                    MediaNestButton(
+                        text = "Delete Files & List",
+                        onClick = {
+                            val targets = completedDownloads.filter { it.id in selectedBatchIds }
+                            targets.forEach { dl -> viewModel.deleteDownload(dl, deleteFile = true) }
+                            selectedBatchIds = emptySet()
+                            isBatchMode = false
+                            showBatchDeleteDialog = false
+                        },
+                        variant = MediaNestButtonVariant.DangerSolid,
+                        size = MediaNestButtonSize.Small
+                    )
+                }
+            },
+            dismissButton = {
+                MediaNestButton(
+                    text = "Cancel",
+                    onClick = { showBatchDeleteDialog = false },
+                    variant = MediaNestButtonVariant.Ghost,
+                    size = MediaNestButtonSize.Small
+                )
+            }
+        )
+    }
+
+    // Restart Confirmation Dialog
     if (showRestartDialogFor != null) {
         val download = showRestartDialogFor!!
         val effectiveQuality = download.quality.ifEmpty { resolveDownloadResolution(null, defaultResolution) }
         val displayTitle = download.title.ifEmpty { effectiveQuality }
         AlertDialog(
             onDismissRequest = { showRestartDialogFor = null },
+            containerColor = MediaNestColors.Raised,
+            titleContentColor = MediaNestColors.TextPrimary,
+            textContentColor = MediaNestColors.TextSecondary,
+            shape = MediaNestShapes.Hero,
             title = {
-                Text("Restart Download")
+                Text(
+                    text = "Restart Download",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
+                )
             },
             text = {
-                Text("Are you sure you want to restart downloading \"$displayTitle\"? This will delete any partially downloaded files and start from scratch.")
+                Text(
+                    text = "Are you sure you want to restart downloading \"$displayTitle\"? This will start downloading from scratch.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MediaNestColors.TextSecondary
+                )
             },
             confirmButton = {
-                TextButton(
+                MediaNestButton(
+                    text = "Restart",
                     onClick = {
                         viewModel.retryDownload(download)
                         showRestartDialogFor = null
-                    }
-                ) {
-                    Text("Restart")
-                }
+                    },
+                    variant = MediaNestButtonVariant.Primary,
+                    size = MediaNestButtonSize.Small
+                )
             },
             dismissButton = {
-                TextButton(
-                    onClick = { showRestartDialogFor = null }
-                ) {
-                    Text("Cancel")
-                }
-            }
-        )
-    }
-
-    if (showDeleteAllDialog) {
-        AlertDialog(
-            onDismissRequest = { showDeleteAllDialog = false },
-            title = {
-                Text("Delete All Downloads")
-            },
-            text = {
-                Text("Choose how you want to delete all downloads. This will cancel all active downloads and remove them from the list.")
-            },
-            confirmButton = {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    TextButton(
-                        onClick = {
-                            viewModel.deleteAllDownloads(deleteFiles = false)
-                            showDeleteAllDialog = false
-                        }
-                    ) {
-                        Text("List Only")
-                    }
-                    Spacer(Modifier.width(8.dp))
-                    TextButton(
-                        onClick = {
-                            viewModel.deleteAllDownloads(deleteFiles = true)
-                            showDeleteAllDialog = false
-                        }
-                    ) {
-                        Text("Delete Files & List")
-                    }
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = { showDeleteAllDialog = false }
-                ) {
-                    Text("Cancel")
-                }
+                MediaNestButton(
+                    text = "Cancel",
+                    onClick = { showRestartDialogFor = null },
+                    variant = MediaNestButtonVariant.Ghost,
+                    size = MediaNestButtonSize.Small
+                )
             }
         )
     }
 }
+
+// -----------------------------------------------------------------------------
+// Component: Download Stats Card
+// -----------------------------------------------------------------------------
+
 @Composable
-private fun DownloadItem(
+private fun DownloadStatsCard(
+    downloads: List<DownloadEntity>,
+    modifier: Modifier = Modifier
+) {
+    val totalCount = downloads.size
+    val totalBytes = remember(downloads) { downloads.sumOf { it.fileSizeBytes } }
+    val completedBytes = remember(downloads) {
+        downloads.filter { it.status == DownloadStatus.COMPLETED && it.errorMessage != "file_missing" }
+            .sumOf { it.fileSizeBytes }
+    }
+    val downloadingCount = remember(downloads) { downloads.count { it.status == DownloadStatus.DOWNLOADING } }
+    val queuedCount = remember(downloads) { downloads.count { it.status == DownloadStatus.QUEUED } }
+    val pausedCount = remember(downloads) { downloads.count { it.status == DownloadStatus.PAUSED } }
+    val failedCount = remember(downloads) { downloads.count { it.status == DownloadStatus.FAILED || it.errorMessage == "file_missing" } }
+    val completedCount = remember(downloads) { downloads.count { it.status == DownloadStatus.COMPLETED && it.errorMessage != "file_missing" } }
+
+    GlassCard(
+        modifier = modifier.fillMaxWidth(),
+        shape = MediaNestShapes.Card
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            // Header Row: Chart icon + Title + Total size
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(28.dp)
+                            .clip(CircleShape)
+                            .background(MediaNestColors.Raised),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_mn_chart),
+                            contentDescription = null,
+                            tint = MediaNestColors.Accent,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                    Text(
+                        text = "Storage & Status",
+                        style = MaterialTheme.typography.titleSmall.copy(
+                            fontWeight = FontWeight.SemiBold,
+                            color = MediaNestColors.TextPrimary
+                        )
+                    )
+                }
+
+                Text(
+                    text = "$totalCount items · ${formatBytes(totalBytes)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MediaNestColors.TextSecondary
+                )
+            }
+
+            // Status Pills Row
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (downloadingCount > 0) {
+                    StatusStatPill(
+                        label = "Downloading",
+                        count = downloadingCount,
+                        backgroundColor = MediaNestColors.AccentDeep,
+                        contentColor = MediaNestColors.TextPrimary
+                    )
+                }
+                if (queuedCount > 0) {
+                    StatusStatPill(
+                        label = "Queued",
+                        count = queuedCount,
+                        backgroundColor = MediaNestColors.Raised,
+                        contentColor = MediaNestColors.TextSecondary
+                    )
+                }
+                if (pausedCount > 0) {
+                    StatusStatPill(
+                        label = "Paused",
+                        count = pausedCount,
+                        backgroundColor = MediaNestColors.Raised,
+                        contentColor = MediaNestColors.TextSecondary
+                    )
+                }
+                if (failedCount > 0) {
+                    StatusStatPill(
+                        label = "Failed",
+                        count = failedCount,
+                        backgroundColor = MediaNestColors.Destructive.copy(alpha = 0.2f),
+                        contentColor = MediaNestColors.Destructive
+                    )
+                }
+                if (completedCount > 0) {
+                    StatusStatPill(
+                        label = "Completed",
+                        count = completedCount,
+                        backgroundColor = MediaNestColors.Success.copy(alpha = 0.2f),
+                        contentColor = MediaNestColors.Success
+                    )
+                }
+            }
+
+            // Completed storage usage footer
+            if (totalBytes > 0L) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Completed Storage",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MediaNestColors.TextSecondary
+                    )
+                    Text(
+                        text = formatBytes(completedBytes),
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                        color = MediaNestColors.TextPrimary
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatusStatPill(
+    label: String,
+    count: Int,
+    backgroundColor: Color,
+    contentColor: Color
+) {
+    Box(
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(backgroundColor)
+            .padding(horizontal = 8.dp, vertical = 3.dp)
+    ) {
+        Text(
+            text = "$label · $count",
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = contentColor
+        )
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Component: Active Download Card
+// -----------------------------------------------------------------------------
+
+@Composable
+private fun ActiveDownloadCard(
     download: DownloadEntity,
     index: Int,
     totalCount: Int,
     onDragMove: (targetIndex: Int) -> Unit,
-    hasExtractedAudio: Boolean,
     videosMap: Map<String, VideoEntity>,
-    onPlayDownload: (DownloadEntity) -> Unit,
     onVideoClick: (String) -> Unit,
-    viewModel: DownloadsViewModel,
     onDeleteClick: (DownloadEntity) -> Unit,
     onRestartClick: (DownloadEntity) -> Unit,
-    playingVideoId: String?,
-    playingUri: String?,
-    isPlaying: Boolean,
+    viewModel: DownloadsViewModel,
     defaultResolution: String = DownloadPreferences.DEFAULT_RESOLUTION
 ) {
     var dragAccumulator by remember { mutableStateOf(0f) }
     val dragThresholdPx = 120f
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val playbackHistory by viewModel.playbackHistory.collectAsStateWithLifecycle()
-
-    val formatLabel = when (download.format) {
-        "video" -> "Video"
-        "video_only" -> "Video"
-        "audio" -> "Audio"
-        "audio_extracted" -> "Extracted Audio"
-        else -> download.format.replaceFirstChar { it.uppercase() }
-    }
-
     val videoEntity = videosMap[download.videoId]
     val durationSeconds = videoEntity?.durationSeconds ?: 0L
-
-    val history = playbackHistory.find { it.videoId == download.videoId }
-    val positionMillis = history?.positionMillis ?: 0L
-    val progressFraction = if (durationSeconds > 0 && positionMillis > 0) {
-        ((positionMillis.toFloat() / 1000f) / durationSeconds.toFloat()).coerceIn(0f, 1f)
-    } else 0f
     val effectiveQuality = download.quality.ifEmpty { resolveDownloadResolution(null, defaultResolution) }
+    val isAudio = download.format.contains("audio")
 
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        shape = RoundedCornerShape(12.dp),
-        colors = androidx.compose.material3.CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-        ),
-        border = androidx.compose.foundation.BorderStroke(
-            1.dp,
-            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-        )
+    val parsedInfo = remember(download) { parseDownloadProgress(download) }
+
+    GlassCard(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MediaNestShapes.Card
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            // Header Row with Drag Handle and Clickable Metadata Row (navigates to Video Details Screen)
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            // Header Row: Drag Handle + Thumbnail + Title/Metadata
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Top
             ) {
                 // Drag handle with draggable modifier
                 Box(
@@ -834,35 +1860,33 @@ private fun DownloadItem(
                                     dragAccumulator = 0f
                                 }
                             },
-                            onDragStopped = {
-                                dragAccumulator = 0f
-                            }
+                            onDragStopped = { dragAccumulator = 0f }
                         ),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Default.DragHandle,
+                        painter = painterResource(R.drawable.ic_mn_grip),
                         contentDescription = "Reorder Drag Handle",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                        modifier = Modifier.size(18.dp)
+                        tint = MediaNestColors.TextSecondary.copy(alpha = 0.6f),
+                        modifier = Modifier.size(16.dp)
                     )
                 }
 
                 Spacer(Modifier.width(6.dp))
 
-                // Clickable Metadata Row (navigates to Video Details Screen)
+                // Clickable Content Area
                 Row(
                     modifier = Modifier
                         .weight(1f)
                         .clickable { onVideoClick(download.videoId) },
                     verticalAlignment = Alignment.Top
                 ) {
-                    // 16:9 Thumbnail
+                    // 16:9 Thumbnail with Badges
                     Box(
                         modifier = Modifier
-                            .size(110.dp, 62.dp)
+                            .size(112.dp, 64.dp)
                             .clip(RoundedCornerShape(8.dp))
-                            .background(MaterialTheme.colorScheme.surfaceColorAtElevation(1.dp))
+                            .background(MediaNestColors.Raised)
                     ) {
                         AsyncImage(
                             model = download.thumbnailUrl,
@@ -870,50 +1894,482 @@ private fun DownloadItem(
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize()
                         )
-                        if (download.status == DownloadStatus.COMPLETED && download.errorMessage != "file_missing") {
-                            Row(
-                                modifier = Modifier
-                                    .align(Alignment.TopStart)
-                                    .padding(4.dp)
-                                    .background(
-                                        color = MediaNestColors.PlayerSurface.copy(alpha = 0.7f),
-                                        shape = RoundedCornerShape(4.dp)
-                                    )
-                                    .padding(horizontal = 4.dp, vertical = 2.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.CheckCircle,
-                                    contentDescription = "Downloaded",
-                                    tint = MediaNestSemanticColors.Completed,
-                                    modifier = Modifier.size(12.dp)
-                                )
-                                if (download.fileSizeBytes > 0L) {
-                                    Text(
-                                        text = "%.1f MB".format(download.fileSizeBytes / (1024f * 1024f)),
-                                        color = MediaNestColors.TextPrimary,
-                                        style = MaterialTheme.typography.labelSmall
-                                    )
-                                }
-                            }
-                        }
-                        if (durationSeconds > 0) {
-                            Text(
-                                text = com.example.medianest.ui.utils.UiUtils.formatDuration(durationSeconds),
-                                color = MediaNestColors.TextPrimary,
-                                style = MaterialTheme.typography.labelSmall,
-                                modifier = Modifier
-                                    .align(Alignment.BottomEnd)
-                                    .padding(4.dp)
-                                    .background(
-                                        color = MediaNestColors.PlayerSurface.copy(alpha = 0.7f),
-                                        shape = RoundedCornerShape(4.dp)
-                                    )
-                                    .padding(horizontal = 4.dp, vertical = 2.dp)
+
+                        // Format Badge top-left
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopStart)
+                                .padding(3.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(MediaNestColors.GlassStrong)
+                                .padding(horizontal = 4.dp, vertical = 2.dp)
+                        ) {
+                            Icon(
+                                painter = painterResource(if (isAudio) R.drawable.ic_mn_music else R.drawable.ic_mn_video),
+                                contentDescription = null,
+                                tint = if (isAudio) MediaNestColors.ProgressAudio else MediaNestColors.Accent,
+                                modifier = Modifier.size(10.dp)
                             )
                         }
-                        if (download.status == DownloadStatus.COMPLETED && durationSeconds > 0 && positionMillis > 0) {
+
+                        // Status Icon Badge top-right
+                        val statusIcon = when (download.status) {
+                            DownloadStatus.DOWNLOADING -> R.drawable.ic_mn_download
+                            DownloadStatus.PAUSED -> R.drawable.ic_mn_pause
+                            DownloadStatus.FAILED -> R.drawable.ic_mn_warning
+                            DownloadStatus.CANCELED -> R.drawable.ic_mn_close
+                            else -> null
+                        }
+                        if (statusIcon != null) {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(3.dp)
+                                    .clip(CircleShape)
+                                    .background(MediaNestColors.GlassStrong)
+                                    .padding(3.dp)
+                            ) {
+                                Icon(
+                                    painter = painterResource(statusIcon),
+                                    contentDescription = null,
+                                    tint = when (download.status) {
+                                        DownloadStatus.DOWNLOADING -> MediaNestColors.Accent
+                                        DownloadStatus.FAILED -> MediaNestColors.Destructive
+                                        else -> MediaNestColors.TextSecondary
+                                    },
+                                    modifier = Modifier.size(10.dp)
+                                )
+                            }
+                        }
+
+                        // Duration Badge bottom-right
+                        if (durationSeconds > 0) {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .padding(3.dp)
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(MediaNestColors.PlayerSurface.copy(alpha = 0.75f))
+                                    .padding(horizontal = 4.dp, vertical = 1.dp)
+                            ) {
+                                Text(
+                                    text = UiUtils.formatDuration(durationSeconds),
+                                    color = MediaNestColors.TextPrimary,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.width(10.dp))
+
+                    // Title & Quality Information
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = download.title.ifEmpty { effectiveQuality },
+                            style = MaterialTheme.typography.titleSmall.copy(
+                                fontWeight = FontWeight.SemiBold,
+                                color = MediaNestColors.TextPrimary
+                            ),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(4.dp),
+                                color = MediaNestColors.Raised,
+                                border = BorderStroke(1.dp, MediaNestColors.Border)
+                            ) {
+                                Text(
+                                    text = effectiveQuality,
+                                    fontSize = 10.5.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MediaNestColors.Accent,
+                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                                )
+                            }
+
+                            if (download.errorMessage == "file_missing") {
+                                Text(
+                                    text = "Source missing",
+                                    fontSize = 11.sp,
+                                    color = MediaNestColors.Destructive,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Progress Bar & Metadata Row
+            DownloadProgressBar(
+                progress = download.progress,
+                stage = parsedInfo.stage,
+                videoProgress = parsedInfo.videoProgress,
+                audioProgress = parsedInfo.audioProgress,
+                statusText = parsedInfo.statusText,
+                percentage = parsedInfo.percentage,
+                downloadSpeed = parsedInfo.speedText,
+                eta = parsedInfo.etaText,
+                isIndeterminate = (download.errorMessage == "merging"),
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            HorizontalDivider(
+                modifier = Modifier.fillMaxWidth(),
+                thickness = 0.5.dp,
+                color = MediaNestColors.Border
+            )
+
+            // Action Buttons Row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                when (download.status) {
+                    DownloadStatus.QUEUED, DownloadStatus.DOWNLOADING -> {
+                        MediaNestButton(
+                            text = "Pause",
+                            onClick = { viewModel.pauseDownload(download.id) },
+                            variant = MediaNestButtonVariant.Secondary,
+                            size = MediaNestButtonSize.Small,
+                            leadingIcon = {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_mn_pause),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        MediaNestButton(
+                            text = "Cancel",
+                            onClick = { onDeleteClick(download) },
+                            variant = MediaNestButtonVariant.Danger,
+                            size = MediaNestButtonSize.Small,
+                            leadingIcon = {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_mn_close),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+                        )
+                    }
+
+                    DownloadStatus.PAUSED -> {
+                        MediaNestButton(
+                            text = "Resume",
+                            onClick = { viewModel.resumeDownload(download.id) },
+                            variant = MediaNestButtonVariant.Primary,
+                            size = MediaNestButtonSize.Small,
+                            leadingIcon = {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_mn_play),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        MediaNestButton(
+                            text = "Restart",
+                            onClick = { onRestartClick(download) },
+                            variant = MediaNestButtonVariant.Secondary,
+                            size = MediaNestButtonSize.Small,
+                            leadingIcon = {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_mn_refresh),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        MediaNestButton(
+                            text = "Delete",
+                            onClick = { onDeleteClick(download) },
+                            variant = MediaNestButtonVariant.Danger,
+                            size = MediaNestButtonSize.Small,
+                            leadingIcon = {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_mn_trash),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+                        )
+                    }
+
+                    DownloadStatus.FAILED -> {
+                        MediaNestButton(
+                            text = "Retry",
+                            onClick = { onRestartClick(download) },
+                            variant = MediaNestButtonVariant.Primary,
+                            size = MediaNestButtonSize.Small,
+                            leadingIcon = {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_mn_refresh),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        MediaNestButton(
+                            text = "Delete",
+                            onClick = { onDeleteClick(download) },
+                            variant = MediaNestButtonVariant.Danger,
+                            size = MediaNestButtonSize.Small,
+                            leadingIcon = {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_mn_trash),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+                        )
+                    }
+
+                    DownloadStatus.CANCELED -> {
+                        MediaNestButton(
+                            text = "Restart",
+                            onClick = { onRestartClick(download) },
+                            variant = MediaNestButtonVariant.Primary,
+                            size = MediaNestButtonSize.Small,
+                            leadingIcon = {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_mn_refresh),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        MediaNestButton(
+                            text = "Delete",
+                            onClick = { onDeleteClick(download) },
+                            variant = MediaNestButtonVariant.Danger,
+                            size = MediaNestButtonSize.Small,
+                            leadingIcon = {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_mn_trash),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                            }
+                        )
+                    }
+
+                    DownloadStatus.COMPLETED -> {
+                        if (download.errorMessage == "file_missing") {
+                            MediaNestButton(
+                                text = "Redownload",
+                                onClick = { onRestartClick(download) },
+                                variant = MediaNestButtonVariant.Primary,
+                                size = MediaNestButtonSize.Small,
+                                leadingIcon = {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_mn_refresh),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            MediaNestButton(
+                                text = "Delete",
+                                onClick = { onDeleteClick(download) },
+                                variant = MediaNestButtonVariant.Danger,
+                                size = MediaNestButtonSize.Small,
+                                leadingIcon = {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_mn_trash),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Component: Completed Download Card
+// -----------------------------------------------------------------------------
+
+@Composable
+private fun CompletedDownloadCard(
+    download: DownloadEntity,
+    videosMap: Map<String, VideoEntity>,
+    onPlayDownload: (DownloadEntity) -> Unit,
+    onVideoClick: (String) -> Unit,
+    onDeleteClick: (DownloadEntity) -> Unit,
+    hasExtractedAudio: Boolean,
+    viewModel: DownloadsViewModel,
+    isBatchMode: Boolean,
+    isSelected: Boolean,
+    onToggleSelect: (Long) -> Unit,
+    playingVideoId: String?,
+    playingUri: String?,
+    isPlaying: Boolean,
+    defaultResolution: String = DownloadPreferences.DEFAULT_RESOLUTION
+) {
+    val context = LocalContext.current
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val playbackHistory by viewModel.playbackHistory.collectAsStateWithLifecycle()
+
+    val videoEntity = videosMap[download.videoId]
+    val durationSeconds = videoEntity?.durationSeconds ?: 0L
+
+    val history = playbackHistory.find { it.videoId == download.videoId }
+    val positionMillis = history?.positionMillis ?: 0L
+    val progressFraction = if (durationSeconds > 0 && positionMillis > 0) {
+        ((positionMillis.toFloat() / 1000f) / durationSeconds.toFloat()).coerceIn(0f, 1f)
+    } else 0f
+
+    val effectiveQuality = download.quality.ifEmpty { resolveDownloadResolution(null, defaultResolution) }
+    val isAudio = download.format.contains("audio")
+
+    val isCurrentPlaying = playingVideoId == download.videoId &&
+        (playingUri == null || download.filePath.isEmpty() ||
+            playingUri == Uri.fromFile(File(download.filePath)).toString())
+    val showPause = isCurrentPlaying && isPlaying
+
+    GlassCard(
+        modifier = Modifier.fillMaxWidth(),
+        onClick = if (isBatchMode) {
+            { onToggleSelect(download.id) }
+        } else null,
+        shape = MediaNestShapes.Card
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            // Upper Content Row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Top
+            ) {
+                // Batch Checkbox
+                if (isBatchMode) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.CenterVertically)
+                            .size(24.dp)
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(if (isSelected) MediaNestColors.Accent else MediaNestColors.Raised)
+                            .border(
+                                1.dp,
+                                if (isSelected) MediaNestColors.Accent else MediaNestColors.Border,
+                                RoundedCornerShape(6.dp)
+                            )
+                            .clickable { onToggleSelect(download.id) },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (isSelected) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_mn_check),
+                                contentDescription = "Selected",
+                                tint = MediaNestColors.OnAccent,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                    Spacer(Modifier.width(10.dp))
+                }
+
+                // Clickable Content Area
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clickable(enabled = !isBatchMode) { onVideoClick(download.videoId) },
+                    verticalAlignment = Alignment.Top
+                ) {
+                    // 16:9 Thumbnail with Badges
+                    Box(
+                        modifier = Modifier
+                            .size(112.dp, 64.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MediaNestColors.Raised)
+                    ) {
+                        AsyncImage(
+                            model = download.thumbnailUrl,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+
+                        // Format Badge top-left
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopStart)
+                                .padding(3.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(MediaNestColors.GlassStrong)
+                                .padding(horizontal = 4.dp, vertical = 2.dp)
+                        ) {
+                            Icon(
+                                painter = painterResource(if (isAudio) R.drawable.ic_mn_music else R.drawable.ic_mn_video),
+                                contentDescription = null,
+                                tint = if (isAudio) MediaNestColors.ProgressAudio else MediaNestColors.Accent,
+                                modifier = Modifier.size(10.dp)
+                            )
+                        }
+
+                        // Completed Checkmark Badge top-right
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(3.dp)
+                                .clip(CircleShape)
+                                .background(MediaNestColors.GlassStrong)
+                                .padding(2.dp)
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_mn_check_circle),
+                                contentDescription = "Completed",
+                                tint = MediaNestColors.Success,
+                                modifier = Modifier.size(12.dp)
+                            )
+                        }
+
+                        // Duration Badge bottom-right
+                        if (durationSeconds > 0) {
+                            Box(
+                                modifier = Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .padding(3.dp)
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(MediaNestColors.PlayerSurface.copy(alpha = 0.75f))
+                                    .padding(horizontal = 4.dp, vertical = 1.dp)
+                            ) {
+                                Text(
+                                    text = UiUtils.formatDuration(durationSeconds),
+                                    color = MediaNestColors.TextPrimary,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+
+                        // Watch Progress Bar
+                        if (durationSeconds > 0 && positionMillis > 0) {
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -933,443 +2389,154 @@ private fun DownloadItem(
 
                     Spacer(Modifier.width(12.dp))
 
-                    // Title, Format Badge, and Quality text
-                    Column(modifier = Modifier.weight(1f)) {
+                    // Title & Metadata
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
                         Text(
                             text = download.title.ifEmpty { effectiveQuality },
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.onSurface,
+                            style = MaterialTheme.typography.titleSmall.copy(
+                                fontWeight = FontWeight.SemiBold,
+                                color = MediaNestColors.TextPrimary
+                            ),
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis
                         )
-                        Spacer(Modifier.height(4.dp))
-                        
-                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
                             Surface(
                                 shape = RoundedCornerShape(4.dp),
-                                color = MaterialTheme.colorScheme.secondaryContainer,
+                                color = MediaNestColors.Raised,
+                                border = BorderStroke(1.dp, MediaNestColors.Border)
                             ) {
                                 Text(
-                                    text = formatLabel.uppercase(),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    text = effectiveQuality,
+                                    fontSize = 10.5.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MediaNestColors.Accent,
+                                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
                                 )
                             }
-                            Text(
-                                text = effectiveQuality,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            if (download.status == DownloadStatus.COMPLETED && positionMillis > 0) {
-                                Text(
-                                    text = "Left off at ${com.example.medianest.ui.utils.UiUtils.formatDuration(positionMillis / 1000L)}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                        }
-                    }
-                }
-            }
 
-            if (download.status != DownloadStatus.COMPLETED || download.errorMessage == "file_missing") {
-                // Status and Speed info
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    val statusText = when (download.status) {
-                        DownloadStatus.QUEUED -> "Queued"
-                        DownloadStatus.DOWNLOADING -> {
-                            val msg = download.errorMessage ?: ""
-                            val meta = buildMetaLine(msg, download.format)
-                            if (msg.startsWith("downloading_video")) {
-                                val parts = msg.split("|")
-                                val vDownloaded = parts.getOrNull(1)?.toLongOrNull() ?: 0L
-                                val vTotal = parts.getOrNull(2)?.toLongOrNull() ?: 0L
-                                val aTotal = parts.getOrNull(3)?.toLongOrNull() ?: 0L
-                                
-                                val totalSize = vTotal + aTotal
-                                val downloadedMb = vDownloaded / (1024f * 1024f)
-                                val totalMb = totalSize / (1024f * 1024f)
-                                val pct = (download.progress * 100).toInt()
-                                
-                                listOf("%.1fMB / %.1fMB (%d%%)".format(downloadedMb, totalMb, pct), meta).joinToString("\n")
-                            } else if (msg.startsWith("downloading_audio")) {
-                                val parts = msg.split("|")
-                                if (parts.size >= 4) {
-                                    val aDownloaded = parts.getOrNull(1)?.toLongOrNull() ?: 0L
-                                    val aTotal = parts.getOrNull(2)?.toLongOrNull() ?: 0L
-                                    val vTotal = parts.getOrNull(3)?.toLongOrNull() ?: 0L
-                                    
-                                    val totalDownloaded = vTotal + aDownloaded
-                                    val totalSize = vTotal + aTotal
-                                    val downloadedMb = totalDownloaded / (1024f * 1024f)
-                                    val totalMb = totalSize / (1024f * 1024f)
-                                    val pct = (download.progress * 100).toInt()
-                                    
-                                listOf("Downloading audio: %.1fMB / %.1fMB (%d%%)".format(downloadedMb, totalMb, pct), meta).joinToString("\n")
-                                } else {
-                                    val speedPart = msg.substringAfter("|", "")
-                                    if (speedPart.isNotEmpty()) {
-                                        "Downloading audio ($speedPart)..."
-                                    } else {
-                                        "Downloading audio..."
-                                    }
-                                }
-                            } else if (msg.startsWith("merging")) {
-                                val parts = msg.split("|")
-                                val pctPart = parts.getOrNull(1) ?: ""
-                                val pct = pctPart.toIntOrNull()
-                                if (pct != null && pct >= 0) {
-                                    listOf("Merging video & audio ($pct%)", meta).joinToString("\n")
-                                } else {
-                                    "Merging video & audio..."
-                                }
-                            } else if (download.format == "audio_extracted" && msg.startsWith("extracting|")) {
-                                val pct = (download.progress * 100).toInt()
-                                listOf("Extracting audio: $pct%", meta).joinToString("\n")
-                            } else if (msg.startsWith("downloading|")) {
-                                val pctLine = "${(download.progress * 100).toInt()}%"
-                                listOf(pctLine, meta).joinToString("\n")
-                            } else if (download.fileSizeBytes > 0L) {
-                                val downloadedMb = (download.progress * download.fileSizeBytes) / (1024f * 1024f)
-                                val totalMb = download.fileSizeBytes / (1024f * 1024f)
-                                val pct = (download.progress * 100).toInt()
-                                if (msg.isNotEmpty() && !msg.startsWith("downloading_audio") && !msg.startsWith("merging")) {
-                                    "%.1fMB / %.1fMB (%d%%) • %s".format(downloadedMb, totalMb, pct, msg)
-                                } else {
-                                    "%.1fMB / %.1fMB (%d%%)".format(downloadedMb, totalMb, pct)
-                                }
-                            } else {
-                                "${(download.progress * 100).toInt()}%"
-                            }
-                        }
-                        DownloadStatus.PAUSED -> {
                             if (download.fileSizeBytes > 0L) {
-                                "Paused — %.1fMB / %.1fMB".format(
-                                    (download.progress * download.fileSizeBytes) / (1024f * 1024f),
-                                    download.fileSizeBytes / (1024f * 1024f)
-                                )
-                            } else {
-                                "Paused"
-                            }
-                        }
-                        DownloadStatus.FAILED -> download.errorMessage ?: "Failed"
-                        DownloadStatus.CANCELED -> "Canceled"
-                        DownloadStatus.COMPLETED -> if (download.errorMessage == "file_missing") "Source missing" else ""
-                    }
-                    Text(
-                        text = statusText,
-                        modifier = Modifier.fillMaxWidth(),
-                        style = MaterialTheme.typography.bodySmall,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        color = when (download.status) {
-                            DownloadStatus.FAILED -> MaterialTheme.colorScheme.error
-                            DownloadStatus.CANCELED -> MaterialTheme.colorScheme.outline
-                            DownloadStatus.COMPLETED -> if (download.errorMessage == "file_missing") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
-                            else -> MaterialTheme.colorScheme.onSurfaceVariant
-                        }
-                    )
-                }
-            }
-
-            // Progress Bar
-            if (download.status == DownloadStatus.DOWNLOADING || download.status == DownloadStatus.QUEUED) {
-                Spacer(Modifier.height(4.dp))
-                val msg = download.errorMessage ?: ""
-                val trackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
-                val videoColor = MaterialTheme.colorScheme.primary
-                val audioColor = MediaNestColors.AudioDownload
-                val mergeColor = MediaNestColors.Success
-
-                if (msg == "merging") {
-                    LinearProgressIndicator(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(4.dp)
-                            .clip(RoundedCornerShape(2.dp))
-                    )
-                } else {
-                    Canvas(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(4.dp)
-                            .clip(RoundedCornerShape(2.dp))
-                    ) {
-                        val width = size.width
-                        val height = size.height
-
-                        // Draw background track
-                        drawRect(
-                            color = trackColor,
-                            size = size
-                        )
-
-                        if (msg.startsWith("merging")) {
-                            val pctPart = msg.split("|").getOrNull(1) ?: ""
-                            val pct = pctPart.toFloatOrNull() ?: 0f
-                            val filledWidth = (pct / 100f) * width
-                            drawRect(
-                                color = mergeColor,
-                                size = androidx.compose.ui.geometry.Size(filledWidth, height)
-                            )
-                        } else if (download.format == "video_only" && (msg.startsWith("downloading_video") || msg.startsWith("downloading_audio"))) {
-                            if (msg.startsWith("downloading_audio")) {
-                                // Video portion stays blue; only the audio segment is orange
-                                val parts = msg.split("|")
-                                val videoSize = parts.getOrNull(3)?.toLongOrNull() ?: 0L
-                                val audioDownloaded = parts.getOrNull(1)?.toLongOrNull() ?: 0L
-                                val audioTotal = parts.getOrNull(2)?.toLongOrNull() ?: 0L
-                                val totalSize = videoSize + audioTotal
-                                if (totalSize > 0L) {
-                                    val videoEnd = (videoSize.toFloat() / totalSize) * width
-                                    val audioEnd = ((videoSize + audioDownloaded).toFloat() / totalSize) * width
-                                    // Blue: the already-downloaded video portion (0 .. videoEnd)
-                                    drawRect(
-                                        color = videoColor,
-                                        size = androidx.compose.ui.geometry.Size(videoEnd, height)
-                                    )
-                                    // Orange: the audio portion being downloaded (videoEnd .. audioEnd)
-                                    if (audioEnd > videoEnd) {
-                                        drawRect(
-                                            color = audioColor,
-                                            topLeft = androidx.compose.ui.geometry.Offset(videoEnd, 0f),
-                                            size = androidx.compose.ui.geometry.Size(audioEnd - videoEnd, height)
-                                        )
-                                    }
-                                }
-                            } else {
-                                drawRect(
-                                    color = videoColor,
-                                    size = androidx.compose.ui.geometry.Size(download.progress * width, height)
+                                Text(
+                                    text = formatBytes(download.fileSizeBytes),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MediaNestColors.TextSecondary
                                 )
                             }
-                        } else {
-                            // Pure audio or standard download format
-                            val barColor = if (download.format == "audio" || download.format == "audio_extracted") audioColor else videoColor
-                            drawRect(
-                                color = barColor,
-                                size = androidx.compose.ui.geometry.Size(download.progress * width, height)
+                        }
+
+                        if (positionMillis > 0) {
+                            Text(
+                                text = "Left off at ${UiUtils.formatDuration(positionMillis / 1000L)}",
+                                fontSize = 11.sp,
+                                color = MediaNestColors.Accent,
+                                fontWeight = FontWeight.Medium
                             )
                         }
                     }
                 }
             }
 
-            Spacer(Modifier.height(8.dp))
             HorizontalDivider(
                 modifier = Modifier.fillMaxWidth(),
                 thickness = 0.5.dp,
-                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                color = MediaNestColors.Border
             )
-            Spacer(Modifier.height(4.dp))
 
-            // Action Buttons
+            // Actions Row
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = if (download.status == DownloadStatus.COMPLETED && download.errorMessage != "file_missing") Arrangement.SpaceBetween else Arrangement.End,
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                when (download.status) {
-                    DownloadStatus.QUEUED -> {
-                        Button(
-                            onClick = { viewModel.pauseDownload(download.id) },
-                            colors = androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(),
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                            modifier = Modifier.height(32.dp)
-                        ) {
-                            Icon(Icons.Default.Pause, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("Pause", style = MaterialTheme.typography.labelMedium)
-                        }
-                        Spacer(Modifier.width(8.dp))
-                        TextButton(
-                            onClick = { onDeleteClick(download) },
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                            modifier = Modifier.height(32.dp)
-                        ) {
-                            Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("Cancel", style = MaterialTheme.typography.labelMedium)
-                        }
-                    }
-                    DownloadStatus.DOWNLOADING -> {
-                        Button(
-                            onClick = { viewModel.pauseDownload(download.id) },
-                            colors = androidx.compose.material3.ButtonDefaults.filledTonalButtonColors(),
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                            modifier = Modifier.height(32.dp)
-                        ) {
-                            Icon(Icons.Default.Pause, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("Pause", style = MaterialTheme.typography.labelMedium)
-                        }
-                        Spacer(Modifier.width(8.dp))
-                        TextButton(
-                            onClick = { onDeleteClick(download) },
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                            modifier = Modifier.height(32.dp)
-                        ) {
-                            Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("Cancel", style = MaterialTheme.typography.labelMedium)
-                        }
-                    }
-                    DownloadStatus.PAUSED -> {
-                        Button(
-                            onClick = { viewModel.resumeDownload(download.id) },
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                            modifier = Modifier.height(32.dp)
-                        ) {
-                            Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("Resume", style = MaterialTheme.typography.labelMedium)
-                        }
-                        Spacer(Modifier.width(8.dp))
-                        OutlinedButton(
-                            onClick = { onRestartClick(download) },
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                            modifier = Modifier.height(32.dp)
-                        ) {
-                            Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("Restart", style = MaterialTheme.typography.labelMedium)
-                        }
-                        Spacer(Modifier.width(8.dp))
-                        TextButton(
-                            onClick = { onDeleteClick(download) },
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                            modifier = Modifier.height(32.dp)
-                        ) {
-                            Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("Delete", style = MaterialTheme.typography.labelMedium)
-                        }
-                    }
-                    DownloadStatus.FAILED -> {
-                        Button(
-                            onClick = { onRestartClick(download) },
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                            modifier = Modifier.height(32.dp)
-                        ) {
-                            Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("Retry", style = MaterialTheme.typography.labelMedium)
-                        }
-                        Spacer(Modifier.width(8.dp))
-                        TextButton(
-                            onClick = { onDeleteClick(download) },
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                            modifier = Modifier.height(32.dp)
-                        ) {
-                            Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("Delete", style = MaterialTheme.typography.labelMedium)
-                        }
-                    }
-                    DownloadStatus.CANCELED -> {
-                        Button(
-                            onClick = { onRestartClick(download) },
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                            modifier = Modifier.height(32.dp)
-                        ) {
-                            Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("Restart", style = MaterialTheme.typography.labelMedium)
-                        }
-                        Spacer(Modifier.width(8.dp))
-                        TextButton(
-                            onClick = { onDeleteClick(download) },
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                            modifier = Modifier.height(32.dp)
-                        ) {
-                            Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text("Delete", style = MaterialTheme.typography.labelMedium)
-                        }
-                    }
-                    DownloadStatus.COMPLETED -> {
-                        if (download.errorMessage == "file_missing") {
-                            if (download.format != "audio_extracted") {
-                                Button(
-                                    onClick = { onRestartClick(download) },
-                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                                    modifier = Modifier.height(32.dp)
-                                ) {
-                                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    Spacer(Modifier.width(4.dp))
-                                    Text("Redownload", style = MaterialTheme.typography.labelMedium)
-                                }
-                                Spacer(Modifier.width(8.dp))
+                // Play / Pause Action Button
+                if (download.filePath.isNotEmpty()) {
+                    MediaNestButton(
+                        text = if (showPause) "Pause" else "Play",
+                        onClick = {
+                            if (isCurrentPlaying) {
+                                viewModel.togglePlayPause()
+                            } else {
+                                onPlayDownload(download)
                             }
-                            TextButton(
-                                onClick = { onDeleteClick(download) },
-                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                                modifier = Modifier.height(32.dp)
-                            ) {
-                                Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(Modifier.width(4.dp))
-                                Text("Delete", style = MaterialTheme.typography.labelMedium)
-                            }
-                        } else {
-                            if (download.filePath.isNotEmpty()) {
-                                val isCurrentPlaying = playingVideoId == download.videoId && 
-                                    (playingUri == null || download.filePath.isEmpty() || 
-                                     playingUri == android.net.Uri.fromFile(java.io.File(download.filePath)).toString())
-                                val showPause = isCurrentPlaying && isPlaying
-                                Button(
-                                    onClick = {
-                                        if (isCurrentPlaying) {
-                                            viewModel.togglePlayPause()
-                                        } else {
-                                            onPlayDownload(download)
-                                        }
-                                    },
-                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                                    modifier = Modifier.height(32.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = if (showPause) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(16.dp)
+                        },
+                        variant = MediaNestButtonVariant.Primary,
+                        size = MediaNestButtonSize.Small,
+                        leadingIcon = {
+                            Icon(
+                                painter = painterResource(
+                                    if (showPause) R.drawable.ic_mn_pause else R.drawable.ic_mn_play
+                                ),
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp)
+                            )
+                        }
+                    )
+                } else {
+                    Spacer(Modifier.width(1.dp))
+                }
+
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Extract Audio Button (for video files without extracted audio)
+                    if (!isAudio && !hasExtractedAudio) {
+                        val isExtracting = uiState.extractingVideoId == download.videoId
+                        MediaNestButton(
+                            text = "Extract Audio",
+                            onClick = { viewModel.extractAudio(download) },
+                            enabled = !isExtracting,
+                            variant = MediaNestButtonVariant.Secondary,
+                            size = MediaNestButtonSize.Small,
+                            leadingIcon = {
+                                if (isExtracting) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(12.dp),
+                                        strokeWidth = 1.5.dp,
+                                        color = MediaNestColors.Accent
                                     )
-                                    Spacer(Modifier.width(4.dp))
-                                    Text(if (showPause) "Pause" else "Play", style = MaterialTheme.typography.labelMedium)
+                                } else {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_mn_music),
+                                        contentDescription = null,
+                                        modifier = Modifier.size(14.dp)
+                                    )
                                 }
                             }
-                            if (download.format != "audio" && download.format != "audio_extracted" && !hasExtractedAudio) {
-                                val isExtracting = uiState.extractingVideoId == download.videoId
-                                OutlinedButton(
-                                    onClick = { viewModel.extractAudio(download) },
-                                    enabled = !isExtracting,
-                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                                    modifier = Modifier.height(32.dp)
-                                ) {
-                                    if (isExtracting) {
-                                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                                    } else {
-                                        Icon(Icons.Default.MusicNote, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    }
-                                    Spacer(Modifier.width(4.dp))
-                                    Text("Extract Audio", style = MaterialTheme.typography.labelMedium)
-                                }
-                            }
-                            TextButton(
-                                onClick = { onDeleteClick(download) },
-                                contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 4.dp),
-                                modifier = Modifier.height(32.dp)
-                            ) {
-                                Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(Modifier.width(4.dp))
-                                Text("Delete", style = MaterialTheme.typography.labelMedium)
-                            }
-                        }
+                        )
+                    }
+
+                    // Share Button
+                    MediaNestIconButton(
+                        onClick = { shareDownloadFile(context, download) },
+                        size = MediaNestIconButtonSize.Small,
+                        tint = MediaNestColors.TextSecondary
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_mn_share),
+                            contentDescription = "Share",
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+
+                    // Delete Button
+                    MediaNestIconButton(
+                        onClick = { onDeleteClick(download) },
+                        size = MediaNestIconButtonSize.Small,
+                        tint = MediaNestColors.Destructive
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_mn_trash),
+                            contentDescription = "Delete",
+                            modifier = Modifier.size(16.dp)
+                        )
                     }
                 }
             }
