@@ -1,81 +1,35 @@
 package com.example.medianest.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
-import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
-import androidx.compose.material.icons.filled.AccessTime
-import androidx.compose.material.icons.filled.AccountCircle
-import androidx.compose.material.icons.filled.Audiotrack
-import androidx.compose.material.icons.filled.BarChart
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Extension
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FileDownload
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.HighQuality
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.PlayCircle
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.Storage
-import androidx.compose.material.icons.filled.Sync
-import androidx.compose.material.icons.filled.Videocam
-import androidx.compose.material.icons.filled.VideoLibrary
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
+import com.example.medianest.R
 import com.example.medianest.ui.components.EndOfListIndicator
 import com.example.medianest.ui.components.GlassCard
+import com.example.medianest.ui.components.MediaNestButton
+import com.example.medianest.ui.components.MediaNestButtonSize
+import com.example.medianest.ui.components.MediaNestButtonVariant
+import com.example.medianest.ui.components.MediaNestTopAppBar
 import com.example.medianest.ui.theme.MediaNestColors
+import com.example.medianest.ui.theme.MediaNestShapes
 import com.example.medianest.ui.viewmodel.StatisticsUiState
 import com.example.medianest.ui.viewmodel.StatisticsViewModel
 import com.example.medianest.ui.viewmodel.TopVideoStat
@@ -94,99 +48,160 @@ fun StatisticsScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("App Statistics", fontWeight = FontWeight.Bold) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background,
-                    titleContentColor = MaterialTheme.colorScheme.onBackground
-                )
+            MediaNestTopAppBar(
+                title = "App Statistics",
+                subtitle = "Library & storage insights",
+                onNavigateBack = onBack
             )
         },
-        containerColor = MaterialTheme.colorScheme.background
+        containerColor = MediaNestColors.Background
     ) { padding ->
         if (uiState.isLoading) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(padding),
+                    .padding(padding)
+                    .background(MediaNestColors.Background),
                 contentAlignment = Alignment.Center
             ) {
-                CircularProgressIndicator(color = MediaNestColors.Accent)
+                CircularProgressIndicator(
+                    modifier = Modifier.size(36.dp),
+                    color = MediaNestColors.Accent,
+                    strokeWidth = 3.dp
+                )
             }
         } else {
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding)
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Header Banner
+                // =====================================================================
+                // HERO STORAGE & OVERVIEW METER BANNER
+                // =====================================================================
                 item {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(MediaNestColors.AccentDeep),
-                            contentAlignment = Alignment.Center
+                    GlassCard(modifier = Modifier.fillMaxWidth()) {
+                        Column(
+                            modifier = Modifier.padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            Icon(
-                                Icons.Default.BarChart,
-                                contentDescription = null,
-                                tint = MediaNestColors.Accent,
-                                modifier = Modifier.size(24.dp)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(36.dp)
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(MediaNestColors.AccentDeep),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(R.drawable.ic_mn_chart),
+                                            contentDescription = null,
+                                            tint = MediaNestColors.Accent,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                    Spacer(Modifier.width(10.dp))
+                                    Column {
+                                        Text(
+                                            "Overview & Storage",
+                                            style = MaterialTheme.typography.titleMedium.copy(
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 15.sp,
+                                                letterSpacing = (-0.2).sp
+                                            ),
+                                            color = MediaNestColors.TextPrimary
+                                        )
+                                        Text(
+                                            "Total Disk Footprint",
+                                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                                            color = MediaNestColors.TextSecondary
+                                        )
+                                    }
+                                }
+
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = MediaNestColors.Raised,
+                                    border = BorderStroke(1.dp, MediaNestColors.Border)
+                                ) {
+                                    Text(
+                                        text = formatBytes(uiState.totalDownloadBytes),
+                                        style = MaterialTheme.typography.labelMedium.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 12.sp
+                                        ),
+                                        color = MediaNestColors.Accent,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                    )
+                                }
+                            }
+
+                            // Storage Multi-segment Meter Bar
+                            StorageBreakdownBar(
+                                videoBytes = uiState.videoBytes,
+                                audioBytes = uiState.audioBytes,
+                                totalBytes = uiState.totalDownloadBytes
                             )
-                        }
-                        Spacer(Modifier.width(12.dp))
-                        Column {
-                            Text(
-                                "App Statistics",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onBackground
-                            )
-                            Text(
-                                "Library usage at a glance",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MediaNestColors.TextSecondary
-                            )
+
+                            // Storage Legend Row
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                StorageLegendItem(
+                                    color = MediaNestColors.Accent,
+                                    label = "Video",
+                                    value = formatBytes(uiState.videoBytes)
+                                )
+                                StorageLegendItem(
+                                    color = MediaNestColors.ProgressAudio,
+                                    label = "Audio",
+                                    value = formatBytes(uiState.audioBytes)
+                                )
+                                StorageLegendItem(
+                                    color = MediaNestColors.Success,
+                                    label = "On Disk",
+                                    value = formatBytes(uiState.completedBytes)
+                                )
+                            }
                         }
                     }
                 }
 
-                // 1. Overall Engagement & Library Overview
+                // =====================================================================
+                // 1. OVERALL ENGAGEMENT & LIBRARY OVERVIEW
+                // =====================================================================
                 item {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         StatSectionHeader(
-                            icon = Icons.Default.BarChart,
-                            title = "Overall Engagement",
-                            badge = "${uiState.totalTracked} tracked videos"
+                            iconRes = R.drawable.ic_mn_video,
+                            title = "Library Overview",
+                            badge = "${uiState.totalTracked} tracked items"
                         )
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             StatCard(
-                                title = "Tracked Videos",
+                                title = "Tracked Media",
                                 value = uiState.totalTracked.toString(),
-                                icon = Icons.Default.VideoLibrary,
+                                iconRes = R.drawable.ic_mn_video,
                                 subtitle = "library items",
                                 modifier = Modifier.weight(1f)
                             )
                             StatCard(
                                 title = "Library Ratio",
                                 value = "${uiState.videoRatioPct}% / ${uiState.audioRatioPct}%",
-                                icon = Icons.Default.Audiotrack,
-                                subtitle = "${uiState.videoTrackCount} video · ${uiState.audioTrackCount} audio",
+                                iconRes = R.drawable.ic_mn_music,
+                                subtitle = "${uiState.videoTrackCount} video • ${uiState.audioTrackCount} audio",
                                 modifier = Modifier.weight(1f)
                             )
                         }
@@ -195,17 +210,17 @@ fun StatisticsScreen(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             StatCard(
-                                title = "Library Completion",
+                                title = "Completion",
                                 value = "${uiState.completionPct}%",
-                                icon = Icons.Default.CheckCircle,
+                                iconRes = R.drawable.ic_mn_check_circle,
                                 subtitle = "${uiState.watchedVideos} of ${uiState.totalTracked} watched",
                                 modifier = Modifier.weight(1f)
                             )
                             StatCard(
                                 title = "Total Plays",
                                 value = uiState.totalPlayCount.toString(),
-                                icon = Icons.Default.PlayArrow,
-                                subtitle = "sessions recorded",
+                                iconRes = R.drawable.ic_mn_play,
+                                subtitle = "playback sessions",
                                 modifier = Modifier.weight(1f)
                             )
                         }
@@ -216,14 +231,14 @@ fun StatisticsScreen(
                             StatCard(
                                 title = "Favorites",
                                 value = uiState.favorites.toString(),
-                                icon = Icons.Default.Favorite,
-                                subtitle = "favorited videos",
+                                iconRes = R.drawable.ic_mn_heart,
+                                subtitle = "favorited items",
                                 modifier = Modifier.weight(1f)
                             )
                             StatCard(
                                 title = "Subscriptions",
                                 value = uiState.subCount.toString(),
-                                icon = Icons.Default.Notifications,
+                                iconRes = R.drawable.ic_mn_bell,
                                 subtitle = "${uiState.autoDownloadCount} auto-syncing",
                                 modifier = Modifier.weight(1f)
                             )
@@ -231,12 +246,14 @@ fun StatisticsScreen(
                     }
                 }
 
-                // 2. Engagement & Watch Metrics
+                // =====================================================================
+                // 2. ENGAGEMENT & WATCH METRICS
+                // =====================================================================
                 item {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         StatSectionHeader(
-                            icon = Icons.Default.History,
-                            title = "Engagement & Watch Metrics",
+                            iconRes = R.drawable.ic_mn_history,
+                            title = "Watch Metrics",
                             badge = "${uiState.sessionsThisWeek} sessions this week"
                         )
                         Row(
@@ -246,14 +263,14 @@ fun StatisticsScreen(
                             StatCard(
                                 title = "Total Watch Time",
                                 value = formatWatchTime(uiState.totalWatchTimeMillis),
-                                icon = Icons.Default.History,
+                                iconRes = R.drawable.ic_mn_history,
                                 subtitle = "cumulative watch time",
                                 modifier = Modifier.weight(1f)
                             )
                             StatCard(
                                 title = "Watch This Week",
                                 value = formatWatchTime(uiState.weekWatchTimeMillis),
-                                icon = Icons.Default.AccessTime,
+                                iconRes = R.drawable.ic_mn_speed,
                                 subtitle = "${uiState.sessionsThisWeek} sessions",
                                 modifier = Modifier.weight(1f)
                             )
@@ -265,14 +282,14 @@ fun StatisticsScreen(
                             StatCard(
                                 title = "Average Session",
                                 value = formatWatchTime(uiState.avgSessionMillis),
-                                icon = Icons.Default.PlayArrow,
+                                iconRes = R.drawable.ic_mn_play,
                                 subtitle = "per playback session",
                                 modifier = Modifier.weight(1f)
                             )
                             StatCard(
                                 title = "Longest Session",
                                 value = formatWatchTime(uiState.longestSessionMillis),
-                                icon = Icons.Default.Star,
+                                iconRes = R.drawable.ic_mn_star,
                                 subtitle = "single longest session",
                                 modifier = Modifier.weight(1f)
                             )
@@ -280,11 +297,13 @@ fun StatisticsScreen(
                     }
                 }
 
-                // 3. Storage Details
+                // =====================================================================
+                // 3. STORAGE DETAILS & BREAKDOWN
+                // =====================================================================
                 item {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         StatSectionHeader(
-                            icon = Icons.Default.Storage,
+                            iconRes = R.drawable.ic_mn_download,
                             title = "Storage Details",
                             badge = "${formatBytes(uiState.totalDownloadBytes)} on disk"
                         )
@@ -293,17 +312,17 @@ fun StatisticsScreen(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             StatCard(
-                                title = "Total Storage",
-                                value = formatBytes(uiState.totalDownloadBytes),
-                                icon = Icons.Default.Storage,
-                                subtitle = "${uiState.totalDownloadsCount} downloads",
+                                title = "Total Downloads",
+                                value = uiState.totalDownloadsCount.toString(),
+                                iconRes = R.drawable.ic_mn_download,
+                                subtitle = formatBytes(uiState.totalDownloadBytes),
                                 modifier = Modifier.weight(1f)
                             )
                             StatCard(
-                                title = "Video Storage",
-                                value = formatBytes(uiState.videoBytes),
-                                icon = Icons.Default.Videocam,
-                                subtitle = "video files",
+                                title = "Average File Size",
+                                value = formatBytes(uiState.avgFileSizeBytes),
+                                iconRes = R.drawable.ic_mn_file,
+                                subtitle = "per download",
                                 modifier = Modifier.weight(1f)
                             )
                         }
@@ -312,29 +331,29 @@ fun StatisticsScreen(
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             StatCard(
-                                title = "Audio Storage",
-                                value = formatBytes(uiState.audioBytes),
-                                icon = Icons.Default.Audiotrack,
-                                subtitle = "audio files",
+                                title = "Video Storage",
+                                value = formatBytes(uiState.videoBytes),
+                                iconRes = R.drawable.ic_mn_video,
+                                subtitle = "video files",
                                 modifier = Modifier.weight(1f)
                             )
                             StatCard(
-                                title = "Average File Size",
-                                value = formatBytes(uiState.avgFileSizeBytes),
-                                icon = Icons.AutoMirrored.Filled.InsertDriveFile,
-                                subtitle = "per download",
+                                title = "Audio Storage",
+                                value = formatBytes(uiState.audioBytes),
+                                iconRes = R.drawable.ic_mn_music,
+                                subtitle = "audio files",
                                 modifier = Modifier.weight(1f)
                             )
                         }
                         StatCard(
                             title = "Audio Extractions",
                             value = uiState.audioExtractionCount.toString(),
-                            icon = Icons.Default.Extension,
-                            subtitle = "extracted tracks",
+                            iconRes = R.drawable.ic_mn_extract,
+                            subtitle = "extracted audio tracks",
                             modifier = Modifier.fillMaxWidth()
                         )
 
-                        // Storage breakdown progress bars
+                        // Storage breakdown progress bars card
                         GlassCard(modifier = Modifier.fillMaxWidth()) {
                             Column(
                                 modifier = Modifier.padding(14.dp),
@@ -351,9 +370,9 @@ fun StatisticsScreen(
                                     label = "Audio Storage",
                                     count = uiState.audioBytes,
                                     total = totalBytes,
-                                    color = MediaNestColors.Success
+                                    color = MediaNestColors.ProgressAudio
                                 )
-                                Spacer(Modifier.height(4.dp))
+                                HorizontalDivider(color = MediaNestColors.Border, thickness = 1.dp, modifier = Modifier.padding(vertical = 2.dp))
                                 StatTextRow("Completed on disk", formatBytes(uiState.completedBytes))
                                 StatTextRow("Total download footprint", formatBytes(uiState.totalDownloadBytes))
                             }
@@ -361,11 +380,13 @@ fun StatisticsScreen(
                     }
                 }
 
-                // 4. Download Health
+                // =====================================================================
+                // 4. DOWNLOAD HEALTH
+                // =====================================================================
                 item {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         StatSectionHeader(
-                            icon = Icons.Default.CheckCircle,
+                            iconRes = R.drawable.ic_mn_check_circle,
                             title = "Download Health",
                             badge = "${uiState.downloadSuccessRate}% success rate"
                         )
@@ -376,14 +397,14 @@ fun StatisticsScreen(
                             StatCard(
                                 title = "Success Rate",
                                 value = "${uiState.downloadSuccessRate}%",
-                                icon = Icons.Default.CheckCircle,
+                                iconRes = R.drawable.ic_mn_check_circle,
                                 subtitle = "${uiState.completedDownloads} completed",
                                 modifier = Modifier.weight(1f)
                             )
                             StatCard(
                                 title = "Completed",
                                 value = uiState.completedDownloads.toString(),
-                                icon = Icons.Default.FileDownload,
+                                iconRes = R.drawable.ic_mn_download_done,
                                 subtitle = formatBytes(uiState.completedBytes),
                                 modifier = Modifier.weight(1f)
                             )
@@ -395,14 +416,14 @@ fun StatisticsScreen(
                             StatCard(
                                 title = "Active / Queued",
                                 value = uiState.activeDownloads.toString(),
-                                icon = Icons.Default.Sync,
+                                iconRes = R.drawable.ic_mn_refresh,
                                 subtitle = "in progress",
                                 modifier = Modifier.weight(1f)
                             )
                             StatCard(
                                 title = "Failed / Canceled",
                                 value = (uiState.failedDownloads + uiState.canceledDownloads).toString(),
-                                icon = Icons.Default.Warning,
+                                iconRes = R.drawable.ic_mn_warning,
                                 subtitle = "unsuccessful",
                                 modifier = Modifier.weight(1f)
                             )
@@ -410,13 +431,15 @@ fun StatisticsScreen(
                     }
                 }
 
-                // 5. Link Extraction Stats
+                // =====================================================================
+                // 5. LINK EXTRACTION & FOLDERS
+                // =====================================================================
                 item {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         StatSectionHeader(
-                            icon = Icons.Default.Link,
-                            title = "Link Extraction",
-                            badge = "${uiState.totalExtractedLinks} total extracted links"
+                            iconRes = R.drawable.ic_mn_playlist,
+                            title = "Link Extraction & Folders",
+                            badge = "${uiState.totalExtractedLinks} extracted links"
                         )
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -425,15 +448,15 @@ fun StatisticsScreen(
                             StatCard(
                                 title = "Extracted Links",
                                 value = uiState.totalExtractedLinks.toString(),
-                                icon = Icons.Default.Link,
+                                iconRes = R.drawable.ic_mn_playlist,
                                 subtitle = "in link history",
                                 modifier = Modifier.weight(1f)
                             )
                             StatCard(
-                                title = "Video Links",
+                                title = "Single Videos",
                                 value = uiState.videoLinksCount.toString(),
-                                icon = Icons.Default.PlayCircle,
-                                subtitle = "single videos",
+                                iconRes = R.drawable.ic_mn_video,
+                                subtitle = "video URLs",
                                 modifier = Modifier.weight(1f)
                             )
                         }
@@ -444,66 +467,39 @@ fun StatisticsScreen(
                             StatCard(
                                 title = "Playlist Links",
                                 value = uiState.playlistLinksCount.toString(),
-                                icon = Icons.AutoMirrored.Filled.PlaylistPlay,
-                                subtitle = "playlists",
+                                iconRes = R.drawable.ic_mn_playlist,
+                                subtitle = "playlist URLs",
                                 modifier = Modifier.weight(1f)
                             )
                             StatCard(
                                 title = "Channel Links",
                                 value = uiState.channelLinksCount.toString(),
-                                icon = Icons.Default.AccountCircle,
-                                subtitle = "channels",
-                                modifier = Modifier.weight(1f)
-                            )
-                        }
-                    }
-                }
-
-                // 6. Subscriptions & Folders
-                item {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        StatSectionHeader(
-                            icon = Icons.Default.Folder,
-                            title = "Subscriptions & Folders",
-                            badge = "${uiState.subCount} subs · ${uiState.totalFolders} folders"
-                        )
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            StatCard(
-                                title = "Subscriptions",
-                                value = uiState.subCount.toString(),
-                                icon = Icons.Default.Notifications,
-                                subtitle = "channels & playlists",
-                                modifier = Modifier.weight(1f)
-                            )
-                            StatCard(
-                                title = "Auto-Downloads",
-                                value = uiState.autoDownloadCount.toString(),
-                                icon = Icons.Default.Sync,
-                                subtitle = "auto-sync enabled",
+                                iconRes = R.drawable.ic_mn_channel,
+                                subtitle = "channel URLs",
                                 modifier = Modifier.weight(1f)
                             )
                         }
                         StatCard(
                             title = "Total Folders",
                             value = uiState.totalFolders.toString(),
-                            icon = Icons.Default.Folder,
-                            subtitle = "organized folders",
+                            iconRes = R.drawable.ic_mn_folder,
+                            subtitle = "organized media folders",
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
                 }
 
-                // 7. Top Content (Dynamic list with 10-item batching + EndOfListIndicator)
+                // =====================================================================
+                // 6. TOP CONTENT
+                // =====================================================================
                 item {
                     StatSectionHeader(
-                        icon = Icons.Default.Star,
+                        iconRes = R.drawable.ic_mn_star,
                         title = "Top Content",
                         badge = if (uiState.topVideos.isNotEmpty()) "${uiState.topVideos.size} most played" else null
                     )
                 }
+
                 if (uiState.topVideos.isEmpty()) {
                     item {
                         GlassCard(modifier = Modifier.fillMaxWidth()) {
@@ -513,22 +509,29 @@ fun StatisticsScreen(
                                     .padding(24.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
-                                Icon(
-                                    Icons.Default.Star,
-                                    contentDescription = null,
-                                    tint = MediaNestColors.Accent,
-                                    modifier = Modifier.size(32.dp)
-                                )
-                                Spacer(Modifier.height(8.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .size(48.dp)
+                                        .clip(CircleShape)
+                                        .background(MediaNestColors.Raised),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_mn_star),
+                                        contentDescription = null,
+                                        tint = MediaNestColors.Accent,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                                Spacer(Modifier.height(10.dp))
                                 Text(
-                                    "No plays yet",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSurface
+                                    "No playback history yet",
+                                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                                    color = MediaNestColors.TextPrimary
                                 )
                                 Spacer(Modifier.height(4.dp))
                                 Text(
-                                    "Play some videos to populate your top content.",
+                                    "Play some videos to populate your top content analytics.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MediaNestColors.TextSecondary
                                 )
@@ -547,15 +550,12 @@ fun StatisticsScreen(
                                 modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Button(
+                                MediaNestButton(
+                                    text = "Show more top content (${uiState.topVideos.size - topVideosLimit} remaining)",
                                     onClick = { topVideosLimit += 10 },
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = MediaNestColors.Raised,
-                                        contentColor = MediaNestColors.Accent
-                                    )
-                                ) {
-                                    Text("Show more top content (${uiState.topVideos.size - topVideosLimit} remaining)")
-                                }
+                                    variant = MediaNestButtonVariant.Deep,
+                                    size = MediaNestButtonSize.Small
+                                )
                             }
                         }
                     } else {
@@ -565,11 +565,13 @@ fun StatisticsScreen(
                     }
                 }
 
-                // 8. Breakdown by Resolution (inherently small list: ~5 buckets)
+                // =====================================================================
+                // 7. BREAKDOWN BY RESOLUTION
+                // =====================================================================
                 if (uiState.resolutionMap.isNotEmpty()) {
                     item {
                         StatSectionHeader(
-                            icon = Icons.Default.HighQuality,
+                            iconRes = R.drawable.ic_mn_sliders,
                             title = "By Resolution",
                             badge = "${uiState.resolutionMap.size} qualities"
                         )
@@ -584,7 +586,7 @@ fun StatisticsScreen(
                                         label = quality,
                                         count = count.toLong(),
                                         total = total.toLong(),
-                                        color = if (quality.equals("Audio", ignoreCase = true)) MediaNestColors.Success else MediaNestColors.Accent
+                                        color = if (quality.equals("Audio", ignoreCase = true)) MediaNestColors.ProgressAudio else MediaNestColors.Accent
                                     )
                                 }
                             }
@@ -592,11 +594,13 @@ fun StatisticsScreen(
                     }
                 }
 
-                // 9. Breakdown by Channel (Dynamic breakdown with 10-item batching + EndOfListIndicator)
+                // =====================================================================
+                // 8. BREAKDOWN BY CHANNEL
+                // =====================================================================
                 if (uiState.channelMap.isNotEmpty()) {
                     item {
                         StatSectionHeader(
-                            icon = Icons.Default.AccountCircle,
+                            iconRes = R.drawable.ic_mn_channel,
                             title = "By Channel",
                             badge = "${uiState.channelMap.size} channels"
                         )
@@ -612,15 +616,13 @@ fun StatisticsScreen(
                                     StatTextRow(channel, "$count videos")
                                 }
                                 if (sortedChannels.size > channelsLimit) {
-                                    TextButton(
+                                    MediaNestButton(
+                                        text = "Show more channels (${sortedChannels.size - channelsLimit} remaining)",
                                         onClick = { channelsLimit += 10 },
+                                        variant = MediaNestButtonVariant.Ghost,
+                                        size = MediaNestButtonSize.Small,
                                         modifier = Modifier.align(Alignment.CenterHorizontally)
-                                    ) {
-                                        Text(
-                                            "Show more channels (${sortedChannels.size - channelsLimit} remaining)",
-                                            color = MediaNestColors.Accent
-                                        )
-                                    }
+                                    )
                                 } else {
                                     EndOfListIndicator()
                                 }
@@ -629,11 +631,13 @@ fun StatisticsScreen(
                     }
                 }
 
-                // 10. Breakdown by Folder (Dynamic breakdown with 10-item batching + EndOfListIndicator)
+                // =====================================================================
+                // 9. BREAKDOWN BY FOLDER
+                // =====================================================================
                 if (uiState.folderMap.isNotEmpty()) {
                     item {
                         StatSectionHeader(
-                            icon = Icons.Default.Folder,
+                            iconRes = R.drawable.ic_mn_folder,
                             title = "By Folder",
                             badge = "${uiState.folderMap.size} folders"
                         )
@@ -649,15 +653,13 @@ fun StatisticsScreen(
                                     StatTextRow(folderName, "$count items")
                                 }
                                 if (sortedFolders.size > foldersLimit) {
-                                    TextButton(
+                                    MediaNestButton(
+                                        text = "Show more folders (${sortedFolders.size - foldersLimit} remaining)",
                                         onClick = { foldersLimit += 10 },
+                                        variant = MediaNestButtonVariant.Ghost,
+                                        size = MediaNestButtonSize.Small,
                                         modifier = Modifier.align(Alignment.CenterHorizontally)
-                                    ) {
-                                        Text(
-                                            "Show more folders (${sortedFolders.size - foldersLimit} remaining)",
-                                            color = MediaNestColors.Accent
-                                        )
-                                    }
+                                    )
                                 } else {
                                     EndOfListIndicator()
                                 }
@@ -673,6 +675,10 @@ fun StatisticsScreen(
         }
     }
 }
+
+// =============================================================================
+// Helper Composables & Meters
+// =============================================================================
 
 @Composable
 fun TopVideoCard(video: TopVideoStat, rank: Int) {
@@ -705,7 +711,9 @@ fun TopVideoCard(video: TopVideoStat, rank: Int) {
                     color = MediaNestColors.Background.copy(alpha = 0.85f)
                 ) {
                     Icon(
-                        if (video.mediaType.equals("AUDIO", ignoreCase = true)) Icons.Default.Audiotrack else Icons.Default.Videocam,
+                        painter = painterResource(
+                            if (video.mediaType.equals("AUDIO", ignoreCase = true)) R.drawable.ic_mn_music else R.drawable.ic_mn_video
+                        ),
                         contentDescription = null,
                         modifier = Modifier
                             .size(12.dp)
@@ -714,31 +722,34 @@ fun TopVideoCard(video: TopVideoStat, rank: Int) {
                     )
                 }
             }
+
             Spacer(Modifier.width(12.dp))
+
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     "#$rank",
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
                     color = MediaNestColors.Accent
                 )
                 Text(
                     video.title,
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    style = MaterialTheme.typography.titleSmall.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 13.sp
+                    ),
+                    color = MediaNestColors.TextPrimary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     video.channelName,
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
                     color = MediaNestColors.TextSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Spacer(Modifier.height(4.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Surface(
                         shape = RoundedCornerShape(4.dp),
                         color = MediaNestColors.AccentDeep
@@ -748,15 +759,15 @@ fun TopVideoCard(video: TopVideoStat, rank: Int) {
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                Icons.Default.Visibility,
+                                painter = painterResource(R.drawable.ic_mn_eye),
                                 contentDescription = null,
-                                modifier = Modifier.size(12.dp),
+                                modifier = Modifier.size(11.dp),
                                 tint = MediaNestColors.Accent
                             )
                             Spacer(Modifier.width(3.dp))
                             Text(
                                 "${video.watchCount} plays",
-                                style = MaterialTheme.typography.labelSmall,
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
                                 color = MediaNestColors.Accent
                             )
                         }
@@ -764,22 +775,23 @@ fun TopVideoCard(video: TopVideoStat, rank: Int) {
                     if (video.totalWatchTimeMillis > 0L) {
                         Surface(
                             shape = RoundedCornerShape(4.dp),
-                            color = MediaNestColors.Raised
+                            color = MediaNestColors.Raised,
+                            border = BorderStroke(1.dp, MediaNestColors.Border)
                         ) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Icon(
-                                Icons.Default.History,
-                                contentDescription = null,
-                                modifier = Modifier.size(12.dp),
-                                tint = MediaNestColors.TextSecondary
-                            )
+                                    painter = painterResource(R.drawable.ic_mn_history),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(11.dp),
+                                    tint = MediaNestColors.TextSecondary
+                                )
                                 Spacer(Modifier.width(3.dp))
                                 Text(
                                     formatWatchTime(video.totalWatchTimeMillis),
-                                    style = MaterialTheme.typography.labelSmall,
+                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
                                     color = MediaNestColors.TextSecondary
                                 )
                             }
@@ -792,35 +804,63 @@ fun TopVideoCard(video: TopVideoStat, rank: Int) {
 }
 
 @Composable
-fun StatSectionHeader(icon: ImageVector, title: String, badge: String? = null) {
+fun StatSectionHeader(
+    iconRes: Int,
+    title: String,
+    badge: String? = null
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 4.dp),
+            .padding(top = 8.dp, bottom = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                icon,
-                contentDescription = null,
-                tint = MediaNestColors.Accent,
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(Modifier.width(8.dp))
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.weight(1f, fill = false)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(MediaNestColors.Raised),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    painter = painterResource(iconRes),
+                    contentDescription = null,
+                    tint = MediaNestColors.Accent,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+            Spacer(Modifier.width(10.dp))
             Text(
-                title,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onBackground
+                text = title,
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 15.sp,
+                    letterSpacing = (-0.2).sp
+                ),
+                color = MediaNestColors.TextPrimary
             )
         }
         if (badge != null) {
-            Text(
-                badge,
-                style = MaterialTheme.typography.labelSmall,
-                color = MediaNestColors.TextSecondary
-            )
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MediaNestColors.Raised,
+                border = BorderStroke(1.dp, MediaNestColors.Border)
+            ) {
+                Text(
+                    text = badge,
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontSize = 10.5.sp,
+                        fontWeight = FontWeight.Medium
+                    ),
+                    color = MediaNestColors.TextSecondary,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                )
+            }
         }
     }
 }
@@ -829,7 +869,7 @@ fun StatSectionHeader(icon: ImageVector, title: String, badge: String? = null) {
 fun StatCard(
     title: String,
     value: String,
-    icon: ImageVector,
+    iconRes: Int,
     subtitle: String? = null,
     modifier: Modifier = Modifier
 ) {
@@ -842,31 +882,48 @@ fun StatCard(
             ) {
                 Text(
                     title,
-                    style = MaterialTheme.typography.labelMedium,
+                    style = MaterialTheme.typography.labelMedium.copy(
+                        fontSize = 11.5.sp,
+                        fontWeight = FontWeight.Medium
+                    ),
                     color = MediaNestColors.TextSecondary,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
                 )
-                Icon(
-                    icon,
-                    contentDescription = null,
-                    tint = MediaNestColors.Accent,
-                    modifier = Modifier.size(18.dp)
-                )
+                Spacer(Modifier.width(6.dp))
+                Box(
+                    modifier = Modifier
+                        .size(24.dp)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(MediaNestColors.Raised),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        painter = painterResource(iconRes),
+                        contentDescription = null,
+                        tint = MediaNestColors.Accent,
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
             }
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(6.dp))
             Text(
                 value,
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
+                style = MaterialTheme.typography.titleLarge.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    letterSpacing = (-0.3).sp
+                ),
+                color = MediaNestColors.TextPrimary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
             if (subtitle != null) {
+                Spacer(Modifier.height(2.dp))
                 Text(
                     subtitle,
-                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.5.sp),
                     color = MediaNestColors.TextSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
@@ -877,7 +934,12 @@ fun StatCard(
 }
 
 @Composable
-fun StatBarRow(label: String, count: Long, total: Long, color: Color = MediaNestColors.Accent) {
+fun StatBarRow(
+    label: String,
+    count: Long,
+    total: Long,
+    color: Color = MediaNestColors.Accent
+) {
     val pct = if (total > 0) ((count * 100) / total).coerceIn(0, 100).toInt() else 0
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
@@ -887,14 +949,16 @@ fun StatBarRow(label: String, count: Long, total: Long, color: Color = MediaNest
         ) {
             Text(
                 label,
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
                 color = MediaNestColors.TextSecondary
             )
             Text(
                 "$pct%",
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold
+                ),
+                color = MediaNestColors.TextPrimary
             )
         }
         Spacer(Modifier.height(4.dp))
@@ -915,13 +979,13 @@ fun StatTextRow(label: String, value: String) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 2.dp),
+            .padding(vertical = 3.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             label,
-            style = MaterialTheme.typography.bodySmall,
+            style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
             color = MediaNestColors.TextSecondary,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -930,10 +994,91 @@ fun StatTextRow(label: String, value: String) {
         Spacer(Modifier.width(8.dp))
         Text(
             value,
-            style = MaterialTheme.typography.bodySmall,
-            fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.onSurface
+            style = MaterialTheme.typography.bodySmall.copy(
+                fontWeight = FontWeight.SemiBold,
+                fontSize = 12.sp
+            ),
+            color = MediaNestColors.TextPrimary
         )
+    }
+}
+
+@Composable
+private fun StorageBreakdownBar(
+    videoBytes: Long,
+    audioBytes: Long,
+    totalBytes: Long
+) {
+    val effectiveTotal = totalBytes.coerceAtLeast(1L).toFloat()
+    val videoWeight = (videoBytes.toFloat() / effectiveTotal).coerceIn(0f, 1f)
+    val audioWeight = (audioBytes.toFloat() / effectiveTotal).coerceIn(0f, 1f)
+    val remainingWeight = (1f - videoWeight - audioWeight).coerceAtLeast(0f)
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(8.dp)
+            .clip(RoundedCornerShape(4.dp))
+            .background(MediaNestColors.ProgressTrack)
+    ) {
+        Row(modifier = Modifier.fillMaxSize()) {
+            if (videoWeight > 0.001f) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .weight(videoWeight)
+                        .background(MediaNestColors.Accent)
+                )
+            }
+            if (audioWeight > 0.001f) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .weight(audioWeight)
+                        .background(MediaNestColors.ProgressAudio)
+                )
+            }
+            if (remainingWeight > 0.001f) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .weight(remainingWeight)
+                        .background(Color.Transparent)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun StorageLegendItem(
+    color: Color,
+    label: String,
+    value: String
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            modifier = Modifier
+                .size(8.dp)
+                .clip(CircleShape)
+                .background(color)
+        )
+        Spacer(Modifier.width(6.dp))
+        Column {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.5.sp),
+                color = MediaNestColors.TextSecondary
+            )
+            Text(
+                text = value,
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 11.sp
+                ),
+                color = MediaNestColors.TextPrimary
+            )
+        }
     }
 }
 
