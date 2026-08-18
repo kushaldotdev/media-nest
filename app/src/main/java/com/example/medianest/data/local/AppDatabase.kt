@@ -23,7 +23,9 @@ import com.example.medianest.data.local.entity.BulkDownloadJobEntity
 import com.example.medianest.data.local.entity.BulkDownloadItemEntity
 
 import com.example.medianest.data.local.dao.LinkHistoryDao
+import com.example.medianest.data.local.dao.NotificationDao
 import com.example.medianest.data.local.entity.LinkHistoryEntity
+import com.example.medianest.data.local.entity.AppNotificationEntity
 
 @Database(
     entities = [
@@ -37,9 +39,10 @@ import com.example.medianest.data.local.entity.LinkHistoryEntity
         WatchSessionEntity::class,
         LinkHistoryEntity::class,
         BulkDownloadJobEntity::class,
-        BulkDownloadItemEntity::class
+        BulkDownloadItemEntity::class,
+        AppNotificationEntity::class
     ],
-    version = 17,
+    version = 18,
     exportSchema = true
 )
 @TypeConverters(Converters::class)
@@ -53,4 +56,5 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun subscriptionDao(): SubscriptionDao
     abstract fun linkHistoryDao(): LinkHistoryDao
     abstract fun bulkDownloadDao(): BulkDownloadDao
+    abstract fun notificationDao(): NotificationDao
 }

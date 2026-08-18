@@ -14,6 +14,7 @@ import com.example.medianest.data.local.dao.HistoryDao
 import com.example.medianest.data.local.dao.PlaylistDao
 import com.example.medianest.data.local.dao.LinkHistoryDao
 import com.example.medianest.data.local.dao.BulkDownloadDao
+import com.example.medianest.data.local.dao.NotificationDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -234,6 +235,23 @@ object DatabaseModule {
         }
     }
 
+    private val MIGRATION_17_18 = object : Migration(17, 18) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS app_notifications (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    type TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    message TEXT NOT NULL,
+                    timestamp INTEGER NOT NULL,
+                    isRead INTEGER NOT NULL DEFAULT 0,
+                    targetVideoId TEXT,
+                    targetDownloadId INTEGER
+                )
+            """)
+        }
+    }
+
     private val MIGRATION_4_5 = object : Migration(4, 5) {
         override fun migrate(db: SupportSQLiteDatabase) {
             db.execSQL("ALTER TABLE videos ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0")
@@ -282,6 +300,7 @@ object DatabaseModule {
             .addMigrations(MIGRATION_14_15)
             .addMigrations(MIGRATION_15_16)
             .addMigrations(MIGRATION_16_17)
+            .addMigrations(MIGRATION_17_18)
             .fallbackToDestructiveMigration(dropAllTables = true)
             .build()
     }
@@ -312,6 +331,9 @@ object DatabaseModule {
 
     @Provides
     fun provideBulkDownloadDao(database: AppDatabase): BulkDownloadDao = database.bulkDownloadDao()
+
+    @Provides
+    fun provideNotificationDao(database: AppDatabase): NotificationDao = database.notificationDao()
 
     @Provides @Singleton
     fun provideJson(): Json = Json { ignoreUnknownKeys = true }
