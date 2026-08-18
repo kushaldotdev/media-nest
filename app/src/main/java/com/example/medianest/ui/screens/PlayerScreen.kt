@@ -68,6 +68,12 @@ import androidx.media3.ui.PlayerView
 import com.example.medianest.ui.viewmodel.PlayerViewModel
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -248,21 +254,62 @@ fun PlayerScreen(
                 .fillMaxSize()
                 .background(MediaNestColors.PlayerSurface)
         ) {
-            AndroidView(
-                factory = { ctx ->
-                    PlayerView(ctx).apply {
-                        useController = false
+            if (state.isAudioOnly) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight(0.7f)
+                            .aspectRatio(1f)
+                            .clip(RoundedCornerShape(20.dp)),
+                        contentAlignment = Alignment.BottomCenter
+                    ) {
+                        AsyncImage(
+                            model = state.thumbnailUrl,
+                            contentDescription = state.title,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                        Surface(
+                            modifier = Modifier.padding(bottom = 12.dp),
+                            shape = RoundedCornerShape(12.dp),
+                            color = MediaNestColors.PlayerSurface.copy(alpha = 0.8f)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                AudioEqualizerBars(isPlaying = state.isPlaying)
+                                Text(
+                                    text = if (state.isPlaying) "Playing audio" else "Audio paused",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MediaNestColors.TextPrimary,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
                     }
-                },
-                update = { playerView ->
-                    playerView.player = player
-                    playerView.keepScreenOn = state.isPlaying
-                },
-                onRelease = { playerView ->
-                    playerView.player = null
-                },
-                modifier = Modifier.fillMaxSize()
-            )
+                }
+            } else {
+                AndroidView(
+                    factory = { ctx ->
+                        PlayerView(ctx).apply {
+                            useController = false
+                        }
+                    },
+                    update = { playerView ->
+                        playerView.player = player
+                        playerView.keepScreenOn = state.isPlaying
+                    },
+                    onRelease = { playerView ->
+                        playerView.player = null
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
             
             Box(
                 modifier = Modifier
@@ -486,7 +533,7 @@ fun PlayerScreen(
                     Row(
                         modifier = Modifier
                             .align(Alignment.Center)
-                            .fillMaxWidth(0.7f),
+                            .fillMaxWidth(0.85f),
                         horizontalArrangement = Arrangement.SpaceEvenly,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -495,6 +542,9 @@ fun PlayerScreen(
                         }
                         IconButton(onClick = { viewModel.seekRelative(-5_000L) }) {
                             Icon(painter = painterResource(R.drawable.ic_mn_rewind5), contentDescription = "Rewind 5s", tint = MediaNestColors.TextPrimary, modifier = Modifier.size(36.dp))
+                        }
+                        IconButton(onClick = { /* Previous track no-op */ }) {
+                            Icon(painter = painterResource(R.drawable.ic_mn_prev), contentDescription = "Previous Track", tint = MediaNestColors.TextPrimary, modifier = Modifier.size(36.dp))
                         }
                         IconButton(
                             onClick = { viewModel.togglePlayPause() },
@@ -506,6 +556,9 @@ fun PlayerScreen(
                                 tint = MediaNestColors.TextPrimary,
                                 modifier = Modifier.fillMaxSize()
                             )
+                        }
+                        IconButton(onClick = { /* Next track no-op */ }) {
+                            Icon(painter = painterResource(R.drawable.ic_mn_next), contentDescription = "Next Track", tint = MediaNestColors.TextPrimary, modifier = Modifier.size(36.dp))
                         }
                         IconButton(onClick = { viewModel.seekRelative(5_000L) }) {
                             Icon(painter = painterResource(R.drawable.ic_mn_forward5), contentDescription = "Forward 5s", tint = MediaNestColors.TextPrimary, modifier = Modifier.size(36.dp))
@@ -545,7 +598,8 @@ fun PlayerScreen(
                                 },
                                 valueRange = 0f..maxOf(state.durationMs, 1L).toFloat(),
                                 colors = SliderDefaults.colors(
-                                    activeTrackColor = MediaNestColors.TextPrimary,
+                                    thumbColor = MediaNestColors.YouTubeRed,
+                                    activeTrackColor = MediaNestColors.YouTubeRed,
                                     inactiveTrackColor = MediaNestColors.ProgressTrack
                                 ),
                                 modifier = Modifier.fillMaxWidth()
@@ -708,16 +762,50 @@ fun PlayerScreen(
                     ) {
                         if (state.isAudioOnly) {
                             Box(
-                                modifier = Modifier.fillMaxSize(),
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .pointerInput(Unit) {
+                                        detectTapGestures(
+                                            onTap = {
+                                                viewModel.togglePlayPause()
+                                            }
+                                        )
+                                    },
                                 contentAlignment = Alignment.Center
                             ) {
-                                AsyncImage(
-                                    model = state.thumbnailUrl,
-                                    contentDescription = state.title,
+                                Box(
                                     modifier = Modifier
-                                        .fillMaxWidth(0.6f)
+                                        .fillMaxWidth(0.65f)
                                         .aspectRatio(1f)
-                                )
+                                        .clip(RoundedCornerShape(20.dp)),
+                                    contentAlignment = Alignment.BottomCenter
+                                ) {
+                                    AsyncImage(
+                                        model = state.thumbnailUrl,
+                                        contentDescription = state.title,
+                                        contentScale = ContentScale.Crop,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                    Surface(
+                                        modifier = Modifier.padding(bottom = 12.dp),
+                                        shape = RoundedCornerShape(12.dp),
+                                        color = MediaNestColors.PlayerSurface.copy(alpha = 0.8f)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            AudioEqualizerBars(isPlaying = state.isPlaying)
+                                            Text(
+                                                text = if (state.isPlaying) "Playing audio" else "Audio paused",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MediaNestColors.TextPrimary,
+                                                fontWeight = FontWeight.Medium
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         } else {
                             AndroidView(
@@ -973,8 +1061,9 @@ fun PlayerScreen(
                                 },
                                 valueRange = 0f..maxOf(state.durationMs, 1L).toFloat(),
                                 colors = SliderDefaults.colors(
-                                    activeTrackColor = MaterialTheme.colorScheme.primary,
-                                    inactiveTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                                    thumbColor = MediaNestColors.YouTubeRed,
+                                    activeTrackColor = MediaNestColors.YouTubeRed,
+                                    inactiveTrackColor = MediaNestColors.ProgressTrack
                                 ),
                                 modifier = Modifier.fillMaxWidth()
                             )
@@ -1027,6 +1116,9 @@ fun PlayerScreen(
                             IconButton(onClick = { viewModel.seekRelative(-5_000L) }) {
                                 Icon(painter = painterResource(R.drawable.ic_mn_rewind5), contentDescription = "Rewind 5s", tint = MediaNestColors.TextPrimary)
                             }
+                            IconButton(onClick = { /* Previous track no-op */ }) {
+                                Icon(painter = painterResource(R.drawable.ic_mn_prev), contentDescription = "Previous Track", tint = MediaNestColors.TextPrimary)
+                            }
                             IconButton(
                                 onClick = { viewModel.togglePlayPause() },
                                 modifier = Modifier.size(56.dp)
@@ -1037,6 +1129,9 @@ fun PlayerScreen(
                                     tint = MediaNestColors.Accent,
                                     modifier = Modifier.fillMaxSize()
                                 )
+                            }
+                            IconButton(onClick = { /* Next track no-op */ }) {
+                                Icon(painter = painterResource(R.drawable.ic_mn_next), contentDescription = "Next Track", tint = MediaNestColors.TextPrimary)
                             }
                             IconButton(onClick = { viewModel.seekRelative(5_000L) }) {
                                 Icon(painter = painterResource(R.drawable.ic_mn_forward5), contentDescription = "Forward 5s", tint = MediaNestColors.TextPrimary)
@@ -1063,7 +1158,7 @@ fun PlayerScreen(
                             ) {
                                 // Speed Selector
                                 var showSpeedMenu by remember { mutableStateOf(false) }
-                                val speeds = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
+                                val speeds = listOf(0.25f, 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 2.0f)
 
                                 Box(
                                     modifier = Modifier
@@ -1403,6 +1498,82 @@ fun PlayerScreen(
 
 private fun formatDuration(ms: Long): String {
     return com.example.medianest.ui.utils.UiUtils.formatDuration(ms / 1000)
+}
+
+@Composable
+fun AudioEqualizerBars(
+    isPlaying: Boolean,
+    modifier: Modifier = Modifier
+) {
+    val transition = rememberInfiniteTransition(label = "EqualizerTransition")
+
+    val h1 by transition.animateFloat(
+        initialValue = 4f,
+        targetValue = 20f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 650, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "eq1"
+    )
+    val h2 by transition.animateFloat(
+        initialValue = 18f,
+        targetValue = 6f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 550, delayMillis = 100, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "eq2"
+    )
+    val h3 by transition.animateFloat(
+        initialValue = 8f,
+        targetValue = 24f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 750, delayMillis = 200, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "eq3"
+    )
+    val h4 by transition.animateFloat(
+        initialValue = 22f,
+        targetValue = 8f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 600, delayMillis = 150, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "eq4"
+    )
+    val h5 by transition.animateFloat(
+        initialValue = 6f,
+        targetValue = 16f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 700, delayMillis = 50, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "eq5"
+    )
+
+    val heights = if (isPlaying) {
+        listOf(h1, h2, h3, h4, h5)
+    } else {
+        listOf(6f, 12f, 16f, 10f, 6f)
+    }
+
+    Row(
+        modifier = modifier.height(24.dp),
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
+        verticalAlignment = Alignment.Bottom
+    ) {
+        heights.forEach { heightVal ->
+            Box(
+                modifier = Modifier
+                    .width(3.5.dp)
+                    .height(heightVal.dp)
+                    .clip(RoundedCornerShape(1.5.dp))
+                    .background(MediaNestColors.Accent)
+            )
+        }
+    }
 }
 
 @Composable
