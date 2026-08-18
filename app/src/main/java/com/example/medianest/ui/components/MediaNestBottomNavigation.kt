@@ -71,7 +71,7 @@ object MediaNestBottomNavDefaults {
         ),
         MediaNestNavigationItem(
             route = "collections",
-            label = "Library",
+            label = "Collections",
             iconRes = R.drawable.ic_mn_library
         ),
         MediaNestNavigationItem(
@@ -96,7 +96,7 @@ object MediaNestBottomNavDefaults {
  * - Active pill indicator: [MediaNestColors.NavigationActive] (#682B38)
  * - Active icon & text: [MediaNestColors.Accent] (#FFB1B6)
  * - Inactive icon & text: [MediaNestColors.TextSecondary] (#C8AEB4)
- * - 4 main destinations: Home, Library, Downloads, Settings
+ * - 4 main destinations: Home, Collections, Downloads, Settings
  */
 @Composable
 fun MediaNestBottomNavigation(
@@ -105,7 +105,7 @@ fun MediaNestBottomNavigation(
     modifier: Modifier = Modifier,
     items: List<MediaNestNavigationItem> = MediaNestBottomNavDefaults.Destinations,
     badgeCounts: Map<String, Int> = emptyMap(),
-    barHeight: Dp = 64.dp,
+    barHeight: Dp = 72.dp,
     windowInsets: WindowInsets = WindowInsets.navigationBars
 ) {
     Column(
@@ -196,7 +196,7 @@ fun MediaNestBottomNavigationItemView(
 
     Column(
         modifier = modifier
-            .height(56.dp)
+            .height(64.dp)
             .clip(RoundedCornerShape(12.dp))
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
@@ -209,7 +209,7 @@ fun MediaNestBottomNavigationItemView(
         // Top active indicator bar (Design 2.0 CSS .mn-nav__item__indicator)
         Box(
             modifier = Modifier
-                .width(36.dp)
+                .width(40.dp)
                 .height(3.dp)
                 .graphicsLayer { alpha = pillAlpha }
                 .clip(RoundedCornerShape(bottomStart = 3.dp, bottomEnd = 3.dp))

@@ -69,7 +69,7 @@ fun MediaNestTopAppBar(
     containerColor: Color = MediaNestColors.Background,
     borderColor: Color = MediaNestColors.Border,
     showBottomDivider: Boolean = true,
-    height: Dp = 56.dp,
+    height: Dp = 60.dp,
     windowInsets: WindowInsets = TopAppBarDefaults.windowInsets
 ) {
     Column(
@@ -109,11 +109,7 @@ fun MediaNestTopAppBar(
                     ) {
                         Text(
                             text = title,
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 18.sp,
-                                letterSpacing = (-0.2).sp
-                            ),
+                            style = MaterialTheme.typography.headlineLarge,
                             color = MediaNestColors.TextPrimary,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
