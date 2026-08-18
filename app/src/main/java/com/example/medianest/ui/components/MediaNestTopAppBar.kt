@@ -19,11 +19,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ripple
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -37,7 +32,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.res.painterResource
+import com.example.medianest.R
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -177,7 +174,7 @@ fun MediaNestBackButton(
             .clip(CircleShape)
     ) {
         Icon(
-            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+            painter = painterResource(R.drawable.ic_mn_back),
             contentDescription = contentDescription,
             tint = tint,
             modifier = Modifier.size(22.dp)
@@ -190,7 +187,7 @@ fun MediaNestBackButton(
  */
 @Composable
 fun MediaNestAppBarAction(
-    icon: ImageVector,
+    painter: Painter,
     contentDescription: String?,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -211,7 +208,7 @@ fun MediaNestAppBarAction(
         contentAlignment = Alignment.Center
     ) {
         Icon(
-            imageVector = icon,
+            painter = painter,
             contentDescription = contentDescription,
             tint = if (enabled) tint else MediaNestColors.TextSecondary.copy(alpha = 0.4f),
             modifier = Modifier.size(22.dp)
@@ -274,18 +271,18 @@ private fun MediaNestTopAppBarPreview() {
             onNavigateBack = {},
             actions = {
                 MediaNestAppBarAction(
-                    icon = Icons.Default.Search,
+                    painter = painterResource(R.drawable.ic_mn_search),
                     contentDescription = "Search",
                     onClick = {}
                 )
                 MediaNestAppBarAction(
-                    icon = Icons.Default.Notifications,
+                    painter = painterResource(R.drawable.ic_mn_bell),
                     contentDescription = "Notifications",
                     badgeCount = 3,
                     onClick = {}
                 )
                 MediaNestAppBarAction(
-                    icon = Icons.Default.MoreVert,
+                    painter = painterResource(R.drawable.ic_mn_more),
                     contentDescription = "More",
                     onClick = {}
                 )
@@ -303,7 +300,7 @@ private fun MediaNestTopAppBarRootPreview() {
             subtitle = null,
             actions = {
                 MediaNestAppBarAction(
-                    icon = Icons.Default.Search,
+                    painter = painterResource(R.drawable.ic_mn_search),
                     contentDescription = "Search",
                     onClick = {}
                 )

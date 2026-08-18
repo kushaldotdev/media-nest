@@ -1,15 +1,14 @@
 package com.example.medianest.ui.components
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import com.example.medianest.R
 
 @Composable
 fun WatchCountDialog(
@@ -47,7 +46,7 @@ fun WatchCountDialog(
                         )
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Remove,
+                            painter = painterResource(R.drawable.ic_mn_chevron_down),
                             contentDescription = "Decrease count"
                         )
                     }
@@ -64,7 +63,7 @@ fun WatchCountDialog(
                         )
                     ) {
                         Icon(
-                            imageVector = Icons.Default.Add,
+                            painter = painterResource(R.drawable.ic_mn_chevron_up),
                             contentDescription = "Increase count"
                         )
                     }

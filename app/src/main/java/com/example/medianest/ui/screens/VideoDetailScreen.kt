@@ -25,18 +25,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Subscriptions
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.outlined.Subscriptions
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -58,7 +46,6 @@ import android.text.format.Formatter
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.graphics.Color
-import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.ui.layout.ContentScale
@@ -156,7 +143,7 @@ fun VideoDetailScreen(
                             }
                         ) {
                             Icon(
-                                Icons.Default.Favorite,
+                                painter = painterResource(R.drawable.ic_mn_heart),
                                 contentDescription = "Favorite",
                                 tint = if (isFavorite) MediaNestColors.Accent else MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -424,7 +411,7 @@ fun VideoDetailScreen(
                                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                                 ) {
                                     Icon(
-                                        imageVector = Icons.Default.CheckCircle,
+                                        painter = painterResource(R.drawable.ic_mn_check_circle),
                                         contentDescription = null,
                                         tint = MediaNestColors.Success,
                                         modifier = Modifier.size(16.dp)
@@ -521,7 +508,7 @@ fun VideoDetailScreen(
                                     horizontalArrangement = Arrangement.Center
                                 ) {
                                     Icon(
-                                        imageVector = Icons.Default.Visibility,
+                                        painter = painterResource(R.drawable.ic_mn_eye),
                                         contentDescription = "Set as Watched",
                                         modifier = Modifier.size(20.dp)
                                     )
@@ -679,7 +666,7 @@ fun VideoDetailScreen(
                                         Spacer(Modifier.height(8.dp))
                                         Row(verticalAlignment = Alignment.CenterVertically) {
                                             Icon(
-                                                imageVector = Icons.Default.PlayArrow,
+                                                painter = painterResource(R.drawable.ic_mn_play),
                                                 contentDescription = null,
                                                 tint = MaterialTheme.colorScheme.primary,
                                                 modifier = Modifier.size(18.dp)
@@ -941,7 +928,7 @@ private fun StreamQualityRow(
                 horizontalArrangement = Arrangement.End
             ) {
                 IconButton(onClick = { onPlay(stream) }) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = "Play")
+                    Icon(painter = painterResource(R.drawable.ic_mn_play), contentDescription = "Play")
                 }
                 
                 val dbQuality = if (stream.format == "audio") stream.quality else "${stream.quality} (${stream.codec})"
@@ -955,7 +942,7 @@ private fun StreamQualityRow(
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Icon(
-                                        imageVector = Icons.Default.Check,
+                                        painter = painterResource(R.drawable.ic_mn_check),
                                         contentDescription = "Downloaded",
                                         tint = MaterialTheme.colorScheme.primary,
                                         modifier = Modifier.size(16.dp)

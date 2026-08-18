@@ -17,10 +17,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.DownloadDone
-import androidx.compose.material.icons.filled.SearchOff
-import androidx.compose.material.icons.filled.VideoLibrary
+import androidx.compose.ui.res.painterResource
+import com.example.medianest.R
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -165,7 +163,14 @@ private fun EmptyLibraryPreview() {
         EmptyState(
             title = "Library is Empty",
             message = "No downloaded media or collections found. Start exploring to save content for offline access.",
-            icon = Icons.Default.VideoLibrary,
+            iconContent = {
+                Icon(
+                    painter = painterResource(R.drawable.ic_mn_video),
+                    contentDescription = null,
+                    tint = MediaNestColors.TextSecondary,
+                    modifier = Modifier.size(32.dp)
+                )
+            },
             actionText = "Explore Media",
             onActionClick = {},
             actionVariant = MediaNestButtonVariant.Primary
@@ -180,7 +185,14 @@ private fun EmptyDownloadsPreview() {
         EmptyState(
             title = "No Active Downloads",
             message = "Your download queue is clear. Videos and audio will appear here while downloading.",
-            icon = Icons.Default.DownloadDone,
+            iconContent = {
+                Icon(
+                    painter = painterResource(R.drawable.ic_mn_download_done),
+                    contentDescription = null,
+                    tint = MediaNestColors.TextSecondary,
+                    modifier = Modifier.size(32.dp)
+                )
+            },
             actionText = "Check Library",
             onActionClick = {},
             actionVariant = MediaNestButtonVariant.Secondary
@@ -195,7 +207,14 @@ private fun EmptySearchPreview() {
         EmptyState(
             title = "No Results Found",
             message = "We couldn't find anything matching your search. Try different keywords or check spelling.",
-            icon = Icons.Default.SearchOff,
+            iconContent = {
+                Icon(
+                    painter = painterResource(R.drawable.ic_mn_search),
+                    contentDescription = null,
+                    tint = MediaNestColors.TextSecondary,
+                    modifier = Modifier.size(32.dp)
+                )
+            },
             actionText = "Clear Search",
             onActionClick = {},
             actionVariant = MediaNestButtonVariant.Secondary

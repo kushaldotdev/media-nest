@@ -25,6 +25,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -227,6 +228,7 @@ fun <T> MediaNestSegmentedControl(
     onItemSelected: (Int) -> Unit,
     itemLabel: (T) -> String,
     modifier: Modifier = Modifier,
+    itemPainter: ((T) -> Painter)? = null,
     itemIcon: ((T) -> ImageVector)? = null
 ) {
     Surface(
@@ -275,8 +277,17 @@ fun <T> MediaNestSegmentedControl(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center
                     ) {
+                        val painter = itemPainter?.invoke(item)
                         val icon = itemIcon?.invoke(item)
-                        if (icon != null) {
+                        if (painter != null) {
+                            Icon(
+                                painter = painter,
+                                contentDescription = null,
+                                tint = contentColor,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                        } else if (icon != null) {
                             Icon(
                                 imageVector = icon,
                                 contentDescription = null,

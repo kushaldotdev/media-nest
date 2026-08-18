@@ -2099,7 +2099,7 @@ fun HomeMediaRow(
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
                             .padding(4.dp)
-                            .background(Color(0xFF090506).copy(alpha = 0.8f), RoundedCornerShape(4.dp))
+                            .background(MediaNestColors.PlayerSurface.copy(alpha = 0.8f), RoundedCornerShape(4.dp))
                             .padding(horizontal = 4.dp, vertical = 1.dp)
                     ) {
                         Text(

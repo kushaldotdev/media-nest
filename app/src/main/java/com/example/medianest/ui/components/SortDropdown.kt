@@ -11,8 +11,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.*
@@ -20,12 +18,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.medianest.R
 import com.example.medianest.ui.theme.MediaNestColors
 import com.example.medianest.ui.theme.MediaNestShapes
 
@@ -35,44 +34,44 @@ import com.example.medianest.ui.theme.MediaNestShapes
 data class MediaNestSortOption(
     val id: String,
     val label: String,
-    val icon: ImageVector? = null,
+    val iconRes: Int? = null,
     val description: String? = null
 ) {
     companion object {
         val DATE = MediaNestSortOption(
             id = "DATE",
             label = "Date Added",
-            icon = Icons.Default.CalendarToday,
+            iconRes = R.drawable.ic_mn_history,
             description = "Recently added or uploaded"
         )
         val TITLE = MediaNestSortOption(
             id = "TITLE",
             label = "Title",
-            icon = Icons.Default.SortByAlpha,
+            iconRes = R.drawable.ic_mn_sort,
             description = "Alphabetical order by title"
         )
         val DURATION = MediaNestSortOption(
             id = "DURATION",
             label = "Duration",
-            icon = Icons.Default.Timer,
+            iconRes = R.drawable.ic_mn_speed,
             description = "Playback time length"
         )
         val SIZE = MediaNestSortOption(
             id = "SIZE",
             label = "File Size",
-            icon = Icons.Default.Storage,
+            iconRes = R.drawable.ic_mn_sliders,
             description = "Storage space consumed"
         )
         val PROGRESS = MediaNestSortOption(
             id = "PROGRESS",
             label = "Download Progress",
-            icon = Icons.Default.Downloading,
+            iconRes = R.drawable.ic_mn_check_circle,
             description = "Completion percentage"
         )
         val STATUS = MediaNestSortOption(
             id = "STATUS",
             label = "Download Status",
-            icon = Icons.Default.CheckCircle,
+            iconRes = R.drawable.ic_mn_check_circle,
             description = "Active, queued, paused, completed"
         )
 
@@ -180,12 +179,17 @@ fun MediaNestSortBottomSheet(
                 )
 
                 MediaNestIconButton(
-                    imageVector = Icons.Default.Close,
-                    contentDescription = "Close",
                     onClick = onDismissRequest,
                     size = MediaNestIconButtonSize.Small,
-                    tint = MediaNestColors.TextSecondary
-                )
+                    tint = MediaNestColors.TextSecondary,
+                    contentDescription = "Close"
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_mn_close),
+                        contentDescription = "Close",
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
             }
 
             HorizontalDivider(
@@ -245,8 +249,8 @@ fun MediaNestSortBottomSheet(
                             tempIsAscending = directionOptions[index].isAscending
                         },
                         itemLabel = { it.label },
-                        itemIcon = {
-                            if (it.isAscending) Icons.Default.ArrowUpward else Icons.Default.ArrowDownward
+                        itemPainter = {
+                            if (it.isAscending) painterResource(R.drawable.ic_mn_arrow_up) else painterResource(R.drawable.ic_mn_arrow_down)
                         }
                     )
                 }
@@ -321,7 +325,7 @@ private fun SortOptionRow(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // Icon
-            if (option.icon != null) {
+            if (option.iconRes != null) {
                 Box(
                     modifier = Modifier
                         .size(36.dp)
@@ -330,7 +334,7 @@ private fun SortOptionRow(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = option.icon,
+                        painter = painterResource(option.iconRes),
                         contentDescription = null,
                         tint = if (isSelected) MediaNestColors.TextPrimary else MediaNestColors.TextSecondary,
                         modifier = Modifier.size(18.dp)
@@ -368,7 +372,7 @@ private fun SortOptionRow(
             // Selection indicator
             if (isSelected) {
                 Icon(
-                    imageVector = Icons.Default.Check,
+                    painter = painterResource(R.drawable.ic_mn_check),
                     contentDescription = "Selected",
                     tint = MediaNestColors.Accent,
                     modifier = Modifier.size(20.dp)
@@ -401,7 +405,7 @@ fun MediaNestSortButton(
         modifier = modifier,
         leadingIcon = {
             Icon(
-                imageVector = Icons.Default.Sort,
+                painter = painterResource(R.drawable.ic_mn_sort),
                 contentDescription = "Sort",
                 tint = MediaNestColors.TextPrimary,
                 modifier = Modifier.size(14.dp)
@@ -450,10 +454,10 @@ fun MediaNestSortDropdownMenu(
                         }
                     }
                 },
-                leadingIcon = option.icon?.let { icon ->
+                leadingIcon = option.iconRes?.let { iconRes ->
                     {
                         Icon(
-                            imageVector = icon,
+                            painter = painterResource(iconRes),
                             contentDescription = null,
                             tint = if (isSelected) MediaNestColors.Accent else MediaNestColors.TextSecondary,
                             modifier = Modifier.size(18.dp)
@@ -463,7 +467,7 @@ fun MediaNestSortDropdownMenu(
                 trailingIcon = if (isSelected) {
                     {
                         Icon(
-                            imageVector = Icons.Default.Check,
+                            painter = painterResource(R.drawable.ic_mn_check),
                             contentDescription = "Selected",
                             tint = MediaNestColors.Accent,
                             modifier = Modifier.size(16.dp)
