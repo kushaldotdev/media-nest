@@ -19,7 +19,7 @@ import com.example.medianest.ui.theme.MediaNestColors
 fun GlassCard(
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
-    shape: Shape = RoundedCornerShape(12.dp),
+    shape: Shape = RoundedCornerShape(14.dp),
     content: @Composable ColumnScope.() -> Unit
 ) {
     if (onClick != null) {
@@ -27,11 +27,11 @@ fun GlassCard(
             modifier = modifier,
             shape = shape,
             colors = CardDefaults.cardColors(
-                containerColor = MediaNestColors.Card
+                containerColor = MediaNestColors.Glass
             ),
             border = BorderStroke(
                 1.dp,
-                MediaNestColors.Border
+                MediaNestColors.GlassBorder
             ),
             onClick = onClick
         ) {
@@ -42,11 +42,11 @@ fun GlassCard(
             modifier = modifier,
             shape = shape,
             colors = CardDefaults.cardColors(
-                containerColor = MediaNestColors.Card
+                containerColor = MediaNestColors.Glass
             ),
             border = BorderStroke(
                 1.dp,
-                MediaNestColors.Border
+                MediaNestColors.GlassBorder
             )
         ) {
             content()
