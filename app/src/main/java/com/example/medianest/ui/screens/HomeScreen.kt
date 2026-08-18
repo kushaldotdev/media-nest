@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -206,27 +207,40 @@ fun HomeScreen(
                 )
             }
 
-            // 2. Continue Watching Hero Card (when in-progress video exists)
-            val featuredInProgress: Pair<VideoEntity, HistoryEntity>? = continueWatchingVideos.firstOrNull()
-            if (featuredInProgress != null && uiState is HomeUiState.Idle) {
+            // 2. Continue Watching Section (horizontal LazyRow carousel of ~220dp cards)
+            if (continueWatchingVideos.isNotEmpty() && uiState is HomeUiState.Idle) {
                 item {
-                    val vEntity: VideoEntity = featuredInProgress.first
-                    val hEntity: HistoryEntity = featuredInProgress.second
-                    val totalSec = vEntity.durationSeconds
-                    val posSec = hEntity.positionMillis / 1000L
-                    val progressFraction = if (totalSec > 0) (posSec.toFloat() / totalSec.toFloat()).coerceIn(0f, 1f) else 0f
-                    val posText = "${UiUtils.formatDuration(posSec)} / ${UiUtils.formatDuration(totalSec)}"
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp)
+                    ) {
+                        SectionHeader(
+                            title = "Continue watching",
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        LazyRow(
+                            contentPadding = PaddingValues(horizontal = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            items(continueWatchingVideos, key = { it.first.id }) { (vEntity, hEntity) ->
+                                val totalSec = vEntity.durationSeconds
+                                val posSec = hEntity.positionMillis / 1000L
+                                val progressFraction = if (totalSec > 0) (posSec.toFloat() / totalSec.toFloat()).coerceIn(0f, 1f) else 0f
+                                val isAudio = vEntity.mediaType.equals("AUDIO", ignoreCase = true)
 
-                    HeroContinueWatchingCard(
-                        title = vEntity.title,
-                        channelName = vEntity.channelName,
-                        thumbnailUrl = vEntity.thumbnailUrl,
-                        formatBadge = if (vEntity.mediaType.equals("AUDIO", ignoreCase = true)) "AUDIO" else "MP4 1080p",
-                        progressFraction = progressFraction,
-                        positionText = posText,
-                        onResumeClick = { onVideoSelected(vEntity.id) },
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                    )
+                                ContinueWatchingCard(
+                                    video = vEntity,
+                                    history = hEntity,
+                                    isAudio = isAudio,
+                                    progressFraction = progressFraction,
+                                    posSec = posSec,
+                                    onClick = { onVideoSelected(vEntity.id) }
+                                )
+                            }
+                        }
+                    }
                 }
             }
 
@@ -1196,6 +1210,154 @@ fun HomeTopBar(
 }
 
 @Composable
+fun ContinueWatchingCard(
+    video: VideoEntity,
+    history: HistoryEntity,
+    isAudio: Boolean,
+    progressFraction: Float,
+    posSec: Long,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = MediaNestColors.Card,
+        border = androidx.compose.foundation.BorderStroke(1.dp, MediaNestColors.Border),
+        modifier = modifier
+            .width(220.dp)
+            .clickable { onClick() }
+    ) {
+        Column(modifier = Modifier.padding(10.dp)) {
+            // 16:9 Thumbnail Preview with Type Badge, Centered Play Overlay & YouTube Red Progress Strip
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(16f / 9f)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(MediaNestColors.PlayerSurface)
+            ) {
+                AsyncImage(
+                    model = video.thumbnailUrl,
+                    contentDescription = video.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+
+                // Dark vignette overlay
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.45f))
+                            )
+                        )
+                )
+
+                // Top-Left Media Type Badge (ic_mn_video or ic_mn_music)
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(6.dp)
+                        .background(MediaNestColors.PlayerSurface.copy(alpha = 0.75f), RoundedCornerShape(4.dp))
+                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                ) {
+                    Icon(
+                        painter = painterResource(if (isAudio) R.drawable.ic_mn_music else R.drawable.ic_mn_video),
+                        contentDescription = if (isAudio) "Audio" else "Video",
+                        tint = MediaNestColors.TextPrimary,
+                        modifier = Modifier.size(12.dp)
+                    )
+                }
+
+                // Centered Play Button Overlay
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .align(Alignment.Center)
+                        .background(MediaNestColors.PlayerSurface.copy(alpha = 0.8f), CircleShape)
+                        .border(1.dp, MediaNestColors.GlassBorder, CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_mn_play),
+                        contentDescription = "Resume",
+                        tint = MediaNestColors.Accent,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+
+                // Bottom-Right Position Badge
+                if (posSec > 0) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(bottom = 6.dp, end = 6.dp)
+                            .background(MediaNestColors.PlayerSurface.copy(alpha = 0.8f), RoundedCornerShape(4.dp))
+                            .padding(horizontal = 4.dp, vertical = 1.dp)
+                    ) {
+                        Text(
+                            text = UiUtils.formatDuration(posSec),
+                            style = TextStyle(
+                                fontSize = 10.sp,
+                                color = MediaNestColors.TextPrimary,
+                                fontWeight = FontWeight.Medium
+                            )
+                        )
+                    }
+                }
+
+                // Bottom 3dp YouTube Red Progress Strip
+                if (progressFraction > 0f) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(3.dp)
+                            .align(Alignment.BottomCenter)
+                            .background(MediaNestColors.ProgressTrack)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(progressFraction.coerceIn(0f, 1f))
+                                .height(3.dp)
+                                .background(MediaNestColors.YouTubeRed)
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            // Video Title
+            Text(
+                text = video.title,
+                style = TextStyle(
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MediaNestColors.TextPrimary,
+                    lineHeight = 17.sp
+                ),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            Spacer(Modifier.height(2.dp))
+
+            // Channel / Meta line
+            Text(
+                text = if (posSec > 0) "Left off at ${UiUtils.formatDuration(posSec)}" else video.channelName,
+                style = TextStyle(
+                    fontSize = 11.sp,
+                    color = MediaNestColors.TextSecondary
+                ),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
 fun HeroContinueWatchingCard(
     title: String,
     channelName: String,
@@ -1761,6 +1923,7 @@ fun PlaylistResultHeader(
     onToggleSave: () -> Unit,
     onDownloadAll: () -> Unit,
     onToggleShorts: (Boolean) -> Unit,
+    description: String? = null,
     modifier: Modifier = Modifier
 ) {
     Surface(
@@ -1798,6 +1961,16 @@ fun PlaylistResultHeader(
                 text = "Videos: ${playlist.videoCount}" + if (!playlist.uploaderName.isNullOrBlank()) " · ${playlist.uploaderName}" else "",
                 style = TextStyle(fontSize = 13.sp, color = MediaNestColors.TextSecondary)
             )
+
+            if (!description.isNullOrBlank()) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = description,
+                    style = TextStyle(fontSize = 12.sp, color = MediaNestColors.TextSecondary.copy(alpha = 0.8f)),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
 
             Spacer(Modifier.height(14.dp))
 
@@ -2153,6 +2326,19 @@ fun HomeMediaRow(
                         indication = null
                     ) { onTitleToggle() }
                 )
+
+                if (!video.description.isNullOrBlank()) {
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = video.description,
+                        style = TextStyle(
+                            fontSize = 12.sp,
+                            color = MediaNestColors.TextSecondary
+                        ),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
 
                 Spacer(Modifier.height(4.dp))
 
