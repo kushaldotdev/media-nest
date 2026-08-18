@@ -230,7 +230,6 @@ class StatisticsViewModel @Inject constructor(
                     .sortedWith(compareByDescending<VideoEntity> { it.watchCount }
                         .thenByDescending { historyMap[it.id]?.totalWatchTimeMillis ?: 0L }
                         .thenByDescending { it.durationSeconds })
-                    .take(5)
                     .map { video ->
                         val timeSpent = historyMap[video.id]?.totalWatchTimeMillis
                             ?: (video.watchCount * video.durationSeconds * 1000L)

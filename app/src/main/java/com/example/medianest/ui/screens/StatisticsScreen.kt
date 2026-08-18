@@ -42,7 +42,7 @@ fun StatisticsScreen(
     viewModel: StatisticsViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    var topVideosLimit by remember { mutableStateOf(10) }
+    var topVideosLimit by remember { mutableStateOf(5) }
     var channelsLimit by remember { mutableStateOf(10) }
     var foldersLimit by remember { mutableStateOf(10) }
 
@@ -492,11 +492,12 @@ fun StatisticsScreen(
                 // =====================================================================
                 // 6. TOP CONTENT
                 // =====================================================================
+                val displayedTopVideos = uiState.topVideos.take(topVideosLimit)
                 item {
                     StatSectionHeader(
                         iconRes = R.drawable.ic_mn_star,
                         title = "Top Content",
-                        badge = if (uiState.topVideos.isNotEmpty()) "${uiState.topVideos.size} most played" else null
+                        badge = if (uiState.topVideos.isNotEmpty()) "${displayedTopVideos.size} most played" else null
                     )
                 }
 
@@ -539,7 +540,6 @@ fun StatisticsScreen(
                         }
                     }
                 } else {
-                    val displayedTopVideos = uiState.topVideos.take(topVideosLimit)
                     items(displayedTopVideos, key = { it.id }) { video ->
                         val rank = uiState.topVideos.indexOf(video) + 1
                         TopVideoCard(video = video, rank = rank)
@@ -552,7 +552,7 @@ fun StatisticsScreen(
                             ) {
                                 MediaNestButton(
                                     text = "Show more top content (${uiState.topVideos.size - topVideosLimit} remaining)",
-                                    onClick = { topVideosLimit += 10 },
+                                    onClick = { topVideosLimit += 5 },
                                     variant = MediaNestButtonVariant.Deep,
                                     size = MediaNestButtonSize.Small
                                 )
