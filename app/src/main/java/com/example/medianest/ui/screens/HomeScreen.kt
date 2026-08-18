@@ -93,6 +93,7 @@ import com.example.medianest.data.model.ExtractedPlaylistInfo
 import com.example.medianest.data.model.ExtractedVideoInfo
 import com.example.medianest.data.model.StreamSource
 import com.example.medianest.ui.components.EndOfListIndicator
+import com.example.medianest.ui.components.NotificationBellAction
 import com.example.medianest.ui.components.WatchCountDialog
 import com.example.medianest.ui.theme.MediaNestColors
 import com.example.medianest.ui.utils.UiUtils
@@ -117,7 +118,8 @@ fun HomeScreen(
     onVideoSelected: (String) -> Unit = {},
     onSubscribe: (sourceType: String, sourceId: String, name: String, thumbnailUrl: String?) -> Unit = { _, _, _, _ -> },
     onNavigateToSearch: () -> Unit = {},
-    onNavigateToSettings: () -> Unit = {}
+    onNavigateToSettings: () -> Unit = {},
+    onNavigateToNotifications: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val subscriptions by viewModel.subscriptions.collectAsStateWithLifecycle()
@@ -203,7 +205,8 @@ fun HomeScreen(
             item {
                 HomeTopBar(
                     onSearchClick = onNavigateToSearch,
-                    onSettingsClick = onNavigateToSettings
+                    onSettingsClick = onNavigateToSettings,
+                    onNotificationsClick = onNavigateToNotifications
                 )
             }
 
@@ -239,6 +242,7 @@ fun HomeScreen(
                                     onClick = { onVideoSelected(vEntity.id) }
                                 )
                             }
+                            item { EndOfListIndicator() }
                         }
                     }
                 }
@@ -1128,6 +1132,7 @@ fun HomeScreen(
 fun HomeTopBar(
     onSearchClick: () -> Unit,
     onSettingsClick: () -> Unit,
+    onNotificationsClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -1176,7 +1181,7 @@ fun HomeTopBar(
             }
         }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
             IconButton(
                 onClick = onSearchClick,
                 modifier = Modifier
@@ -1191,6 +1196,7 @@ fun HomeTopBar(
                     modifier = Modifier.size(18.dp)
                 )
             }
+            NotificationBellAction(onClick = onNotificationsClick)
             IconButton(
                 onClick = onSettingsClick,
                 modifier = Modifier
@@ -1353,193 +1359,6 @@ fun ContinueWatchingCard(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-        }
-    }
-}
-
-@Composable
-fun HeroContinueWatchingCard(
-    title: String,
-    channelName: String,
-    thumbnailUrl: String?,
-    formatBadge: String,
-    progressFraction: Float,
-    positionText: String,
-    onResumeClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Surface(
-        shape = RoundedCornerShape(24.dp),
-        color = MediaNestColors.Raised,
-        border = androidx.compose.foundation.BorderStroke(1.dp, MediaNestColors.Border),
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable { onResumeClick() }
-    ) {
-        Column(modifier = Modifier.padding(20.dp)) {
-            // Eyebrow and Format Badge Row
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "CONTINUE WATCHING",
-                    style = TextStyle(
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.4.sp,
-                        color = MediaNestColors.Accent
-                    )
-                )
-                Box(
-                    modifier = Modifier
-                        .background(MediaNestColors.AccentDeep, RoundedCornerShape(6.dp))
-                        .padding(horizontal = 8.dp, vertical = 3.dp)
-                ) {
-                    Text(
-                        text = formatBadge,
-                        style = TextStyle(
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MediaNestColors.TextPrimary
-                        )
-                    )
-                }
-            }
-
-            Spacer(Modifier.height(14.dp))
-
-            // Large Thumbnail Preview with Play Overlay & Progress Strip
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(16f / 9f)
-                    .clip(RoundedCornerShape(16.dp))
-                    .background(MediaNestColors.PlayerSurface)
-            ) {
-                AsyncImage(
-                    model = thumbnailUrl,
-                    contentDescription = title,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-
-                // Dark vignette overlay
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.55f))
-                            )
-                        )
-                )
-
-                // Centered Play Button Overlay
-                Box(
-                    modifier = Modifier
-                        .size(52.dp)
-                        .align(Alignment.Center)
-                        .background(MediaNestColors.PlayerSurface.copy(alpha = 0.75f), CircleShape)
-                        .border(1.dp, MediaNestColors.GlassBorder, CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_mn_play),
-                        contentDescription = "Resume",
-                        tint = MediaNestColors.Accent,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-
-                // Duration / Position Badge
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(10.dp)
-                        .background(MediaNestColors.PlayerSurface.copy(alpha = 0.8f), RoundedCornerShape(6.dp))
-                        .padding(horizontal = 6.dp, vertical = 3.dp)
-                ) {
-                    Text(
-                        text = positionText,
-                        style = TextStyle(
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = MediaNestColors.TextPrimary
-                        )
-                    )
-                }
-
-                // Watched Progress Bar on bottom edge of thumbnail
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(3.dp)
-                        .align(Alignment.BottomCenter)
-                        .background(MediaNestColors.ProgressTrack)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth(progressFraction)
-                            .height(3.dp)
-                            .background(MediaNestColors.YouTubeRed)
-                    )
-                }
-            }
-
-            Spacer(Modifier.height(14.dp))
-
-            // Video Title and Channel Name
-            Text(
-                text = title,
-                style = TextStyle(
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MediaNestColors.TextPrimary,
-                    lineHeight = 22.sp
-                ),
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(
-                text = channelName,
-                style = TextStyle(
-                    fontSize = 13.sp,
-                    color = MediaNestColors.TextSecondary
-                )
-            )
-
-            Spacer(Modifier.height(14.dp))
-
-            // Resume Action Button
-            Button(
-                onClick = onResumeClick,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MediaNestColors.Accent,
-                    contentColor = MediaNestColors.OnAccent
-                ),
-                shape = RoundedCornerShape(20.dp),
-                contentPadding = PaddingValues(horizontal = 18.dp, vertical = 8.dp),
-                modifier = Modifier.height(38.dp)
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_mn_play),
-                    contentDescription = null,
-                    tint = MediaNestColors.OnAccent,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(Modifier.width(6.dp))
-                Text(
-                    text = "Resume",
-                    style = TextStyle(
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MediaNestColors.OnAccent
-                    )
-                )
-            }
         }
     }
 }

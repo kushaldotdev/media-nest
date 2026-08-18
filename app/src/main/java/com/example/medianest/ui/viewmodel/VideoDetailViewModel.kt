@@ -365,6 +365,10 @@ class VideoDetailViewModel @Inject constructor(
         }
     }
 
+    fun deleteDownload(download: DownloadEntity) {
+        DownloadService.delete(context, download.id, deleteFiles = true)
+    }
+
     fun updateWatchCount(newCount: Int) {
         val videoId = currentVideoId
         if (videoId.isEmpty()) return

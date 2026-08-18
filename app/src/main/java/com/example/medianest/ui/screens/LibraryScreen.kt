@@ -54,6 +54,7 @@ import com.example.medianest.data.repository.FolderRepository
 import com.example.medianest.data.repository.FolderTreeNode
 import com.example.medianest.data.repository.flattenWithDepth
 import com.example.medianest.ui.components.*
+import com.example.medianest.ui.components.NotificationBellAction
 import com.example.medianest.ui.theme.MediaNestColors
 import com.example.medianest.ui.theme.MediaNestShapes
 import com.example.medianest.ui.utils.UiUtils
@@ -84,6 +85,7 @@ fun LibraryScreen(
     onVideoClick: (String) -> Unit,
     onSubscriptionClick: (String, String) -> Unit = { _, _ -> },
     onNavigateToStatistics: () -> Unit = {},
+    onNavigateToNotifications: () -> Unit = {},
     viewModel: LibraryViewModel = hiltViewModel()
 ) {
     var selectedSubscription by remember { mutableStateOf<Pair<String, String>?>(null) }
@@ -270,6 +272,7 @@ fun LibraryScreen(
                     },
                     actions = {
                         if (!uiState.isSelectionMode) {
+                            NotificationBellAction(onClick = onNavigateToNotifications)
                             MediaNestIconButton(
                                 onClick = onNavigateToStatistics,
                                 contentDescription = "Statistics"
@@ -2176,6 +2179,7 @@ private fun FolderContent(
                                 onDelete = { onDeleteFolder(folder) }
                             )
                         }
+                        item { EndOfListIndicator() }
                     }
                 } else {
                     LazyColumn(
@@ -2191,6 +2195,7 @@ private fun FolderContent(
                                 onDelete = { onDeleteFolder(folder) }
                             )
                         }
+                        item { EndOfListIndicator() }
                     }
                 }
             }

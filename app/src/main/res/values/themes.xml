@@ -1,4 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+    Uses android:Theme.Material.NoActionBar (dark platform) instead of
+    Theme.Material3.Dark.NoActionBar because the project is Compose-only
+    (no com.google.android.material XML dependency). Window colors match
+    Material3 dark theme (#120B0E canvas, #241417 nav bar).
+-->
 <resources>
     <style name="Theme.MediaNest" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowBackground">#120B0E</item>

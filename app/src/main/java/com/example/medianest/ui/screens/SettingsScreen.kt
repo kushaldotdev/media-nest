@@ -50,6 +50,7 @@ import com.example.medianest.ui.components.MediaNestChip
 import com.example.medianest.ui.components.MediaNestIconButton
 import com.example.medianest.ui.components.MediaNestIconButtonSize
 import com.example.medianest.ui.components.MediaNestTopAppBar
+import com.example.medianest.ui.components.NotificationBellAction
 import com.example.medianest.ui.components.MnNoteBox
 import com.example.medianest.ui.components.NoteBoxVariant
 import com.example.medianest.ui.theme.MediaNestColors
@@ -179,7 +180,10 @@ fun SettingsScreen(
         topBar = {
             MediaNestTopAppBar(
                 title = "Settings",
-                subtitle = "App preferences & data management"
+                subtitle = "App preferences & data management",
+                actions = {
+                    NotificationBellAction(onClick = onNavigateToNotifications)
+                }
             )
         },
         snackbarHost = { SnackbarHost(snackbarHostState) },

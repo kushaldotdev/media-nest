@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import com.example.medianest.ui.screens.DownloadsScreen
 import com.example.medianest.ui.screens.HomeScreen
 import com.example.medianest.ui.screens.LibraryScreen
+import com.example.medianest.ui.screens.NotificationsScreen
 import com.example.medianest.ui.screens.PlayerScreen
 import com.example.medianest.ui.screens.SettingsScreen
 import com.example.medianest.ui.screens.SubscriptionsScreen
@@ -56,6 +57,7 @@ object NavigationRoutes {
     const val PLAYER_OFFLINE = "downloads/player/{videoId}?downloadId={downloadId}"
     const val VIDEO_DETAIL = "videoDetail/{videoId}"
     const val STATISTICS = "statistics"
+    const val NOTIFICATIONS = "notifications"
 }
 
 
@@ -137,7 +139,8 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
                     },
                     onSubscribe = { sourceType, sourceId, name, thumbnailUrl ->
                         homeViewModel.subscribe(sourceType, sourceId, name, thumbnailUrl)
-                    }
+                    },
+                    onNavigateToNotifications = { navController.navigate(NavigationRoutes.NOTIFICATIONS) }
                 )
             }
         }
@@ -205,6 +208,7 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
                         onPlayDownload = { download ->
                             navController.navigate("downloads/player/${download.videoId}?downloadId=${download.id}")
                         },
+                        onDeleteDownload = { download -> detailViewModel.deleteDownload(download) },
                         onDownload = { stream ->
                             detailViewModel.enqueueDownload(info, stream)
                         },
@@ -243,7 +247,8 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
                     },
                     onVideoClick = { videoId ->
                         navController.navigate("videoDetail/$videoId")
-                    }
+                    },
+                    onNavigateToNotifications = { navController.navigate(NavigationRoutes.NOTIFICATIONS) }
                 )
             }
         }
@@ -311,7 +316,8 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
                     onSubscriptionClick = { _, _ -> },
                     onNavigateToStatistics = {
                         navController.navigate(NavigationRoutes.STATISTICS)
-                    }
+                    },
+                    onNavigateToNotifications = { navController.navigate(NavigationRoutes.NOTIFICATIONS) }
                 )
             }
         }
@@ -334,7 +340,8 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
         ) { 
             Box(modifier = Modifier.padding(bottom = 80.dp)) {
                 SettingsScreen(
-                    onNavigateToStatistics = { navController.navigate(NavigationRoutes.STATISTICS) }
+                    onNavigateToStatistics = { navController.navigate(NavigationRoutes.STATISTICS) },
+                    onNavigateToNotifications = { navController.navigate(NavigationRoutes.NOTIFICATIONS) }
                 ) 
             }
         }
@@ -357,6 +364,31 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
         ) {
             Box(modifier = Modifier.padding(bottom = 80.dp)) {
                 StatisticsScreen(onBack = { navController.popBackStack() })
+            }
+        }
+        composable(
+            route = NavigationRoutes.NOTIFICATIONS,
+            exitTransition = {
+                if (targetState.destination.route?.contains("player") == true) {
+                    fadeOut(animationSpec = tween(450), targetAlpha = 0.9f)
+                } else {
+                    null
+                }
+            },
+            popEnterTransition = {
+                if (initialState.destination.route?.contains("player") == true) {
+                    fadeIn(animationSpec = tween(450), initialAlpha = 0.9f)
+                } else {
+                    null
+                }
+            }
+        ) {
+            Box(modifier = Modifier.padding(bottom = 80.dp)) {
+                NotificationsScreen(
+                    onBack = { navController.popBackStack() },
+                    onNavigateToVideo = { videoId -> navController.navigate("videoDetail/$videoId") },
+                    onNavigateToDownloads = { navController.navigate(BottomNavItem.Downloads.route) }
+                )
             }
         }
     }

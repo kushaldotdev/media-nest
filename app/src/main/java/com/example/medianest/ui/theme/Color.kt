@@ -40,6 +40,17 @@ object MediaNestColors {
     val GlassBorder = Color(0x24FFB7BF)    // rgba(255, 183, 191, 0.14)
     val Scrim = Color(0x9E090506)          // rgba(9, 5, 6, 0.62)
     val Overlay = Color(0x80090506)        // rgba(9, 5, 6, 0.50)
+
+    // -------------------------------------------------------------------------
+    // Note-Box Callout Variants (§5.5 MnNoteBox)
+    // -------------------------------------------------------------------------
+    val NoteBoxBgWarning = Color(0x14EAB308)     // 8% amber background
+    val NoteBoxBgSuccess = Color(0x1422C55E)      // 8% green background
+    val NoteBoxBgStandard = Color(0x08FFFFFF)     // 3% white overlay background
+    val NoteBoxBorderWarning = Color(0x40EAB308)  // 25% amber border
+    val NoteBoxBorderSuccess = Color(0x4022C55E)  // 25% green border
+    val NoteBoxTextWarning = Color(0xFFEAB308)    // solid amber header
+    val NoteBoxTextSuccess = Color(0xFF22C55E)    // solid green header
 }
 
 object MediaNestSemanticColors {

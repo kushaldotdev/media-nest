@@ -82,6 +82,7 @@ import com.example.medianest.ui.components.MediaNestChip
 import com.example.medianest.ui.components.MediaNestFilterRow
 import com.example.medianest.ui.components.MediaNestIconButton
 import com.example.medianest.ui.components.MediaNestIconButtonSize
+import com.example.medianest.ui.components.NotificationBellAction
 import com.example.medianest.ui.components.MediaNestSortBottomSheet
 import com.example.medianest.ui.components.MediaNestSortOption
 import com.example.medianest.ui.theme.MediaNestColors
@@ -587,6 +588,7 @@ fun parseDownloadProgress(download: DownloadEntity): ParsedProgressInfo {
 fun DownloadsScreen(
     onPlayDownload: (DownloadEntity) -> Unit,
     onVideoClick: (String) -> Unit,
+    onNavigateToNotifications: () -> Unit = {},
     viewModel: DownloadsViewModel = hiltViewModel(),
     downloadPreferences: DownloadPreferences? = null
 ) {
@@ -767,6 +769,8 @@ fun DownloadsScreen(
                                     )
                                 }
                             }
+
+                            NotificationBellAction(onClick = onNavigateToNotifications)
                         }
                     }
 
@@ -1049,6 +1053,7 @@ fun DownloadsScreen(
                         defaultResolution = defaultResolution
                     )
                 }
+                item { EndOfListIndicator() }
             }
 
             // -----------------------------------------------------------------

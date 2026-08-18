@@ -50,21 +50,21 @@ fun MnNoteBox(
     content: @Composable ColumnScope.() -> Unit
 ) {
     val backgroundColor = when (variant) {
-        NoteBoxVariant.STANDARD -> Color(0x08FFFFFF)
-        NoteBoxVariant.WARNING -> Color(0x14EAB308)
-        NoteBoxVariant.SUCCESS -> Color(0x1422C55E)
+        NoteBoxVariant.STANDARD -> MediaNestColors.NoteBoxBgStandard
+        NoteBoxVariant.WARNING -> MediaNestColors.NoteBoxBgWarning
+        NoteBoxVariant.SUCCESS -> MediaNestColors.NoteBoxBgSuccess
     }
 
     val borderColor = when (variant) {
         NoteBoxVariant.STANDARD -> MediaNestColors.Border
-        NoteBoxVariant.WARNING -> Color(0x40EAB308)
-        NoteBoxVariant.SUCCESS -> Color(0x4022C55E)
+        NoteBoxVariant.WARNING -> MediaNestColors.NoteBoxBorderWarning
+        NoteBoxVariant.SUCCESS -> MediaNestColors.NoteBoxBorderSuccess
     }
 
     val headerColor = when (variant) {
         NoteBoxVariant.STANDARD -> MediaNestColors.Accent
-        NoteBoxVariant.WARNING -> Color(0xFFEAB308)
-        NoteBoxVariant.SUCCESS -> Color(0xFF22C55E)
+        NoteBoxVariant.WARNING -> MediaNestColors.NoteBoxTextWarning
+        NoteBoxVariant.SUCCESS -> MediaNestColors.NoteBoxTextSuccess
     }
 
     val effectiveIconPainter = iconPainter ?: when (variant) {
