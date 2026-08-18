@@ -137,7 +137,7 @@ private fun FolderBadges(folders: List<FolderEntity>) {
 /**
  * Universal video card (Grid layout representation) with glassmorphism.
  */
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun UnifiedVideoCard(
     title: String,
@@ -440,7 +440,7 @@ fun UnifiedVideoCard(
 /**
  * Universal video row (List layout representation) with glassmorphism.
  */
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun UnifiedVideoRow(
     title: String,
