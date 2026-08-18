@@ -228,7 +228,7 @@ fun <T> MediaNestSegmentedControl(
     onItemSelected: (Int) -> Unit,
     itemLabel: (T) -> String,
     modifier: Modifier = Modifier,
-    itemPainter: ((T) -> Painter)? = null,
+    itemPainter: (@Composable (T) -> Painter)? = null,
     itemIcon: ((T) -> ImageVector)? = null
 ) {
     Surface(
