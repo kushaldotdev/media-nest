@@ -265,12 +265,12 @@ fun MiniPlayer(
             .widthIn(max = 500.dp)
             .fillMaxWidth()
             .clickable { onClick() },
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MediaNestColors.Card,
+            containerColor = MediaNestColors.GlassStrong,
             contentColor = MediaNestColors.TextPrimary
         ),
-        border = BorderStroke(1.dp, MediaNestColors.Border),
+        border = BorderStroke(1.dp, MediaNestColors.GlassBorder),
         elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
     ) {
         Box(modifier = Modifier.height(72.dp)) {
@@ -285,7 +285,7 @@ fun MiniPlayer(
                     contentDescription = null,
                     modifier = Modifier
                         .padding(8.dp)
-                        .size(56.dp)
+                        .size(52.dp)
                         .clip(RoundedCornerShape(8.dp)),
                     contentScale = ContentScale.Crop
                 )
@@ -322,6 +322,15 @@ fun MiniPlayer(
                     )
                 }
 
+                IconButton(onClick = {}) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_mn_next),
+                        contentDescription = "Next",
+                        tint = MediaNestColors.TextPrimary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+
                 IconButton(onClick = onClose) {
                     Icon(
                         painter = painterResource(R.drawable.ic_mn_close),
@@ -350,7 +359,7 @@ fun MiniPlayer(
                 LinearProgressIndicator(
                     progress = { progress.coerceIn(0f, 1f) },
                     modifier = Modifier.fillMaxSize(),
-                    color = MediaNestColors.YouTubeRed,
+                    color = MediaNestColors.Accent,
                     trackColor = Color.Transparent
                 )
             }
