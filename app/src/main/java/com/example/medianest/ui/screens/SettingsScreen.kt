@@ -1,5 +1,7 @@
 package com.example.medianest.ui.screens
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.net.Uri
 import android.provider.DocumentsContract
@@ -36,6 +38,7 @@ import com.example.medianest.BuildConfig
 import com.example.medianest.R
 import com.example.medianest.data.preferences.CollectionsPreferences
 import com.example.medianest.data.preferences.DownloadPreferences
+import com.example.medianest.data.preferences.PlaybackPreferences
 import com.example.medianest.data.preferences.SubscriptionsPreferences
 import com.example.medianest.data.sync.SyncLogEntry
 import com.example.medianest.data.sync.SyncState
@@ -46,8 +49,9 @@ import com.example.medianest.ui.components.MediaNestButtonVariant
 import com.example.medianest.ui.components.MediaNestChip
 import com.example.medianest.ui.components.MediaNestIconButton
 import com.example.medianest.ui.components.MediaNestIconButtonSize
-import com.example.medianest.ui.components.MediaNestSegmentedControl
 import com.example.medianest.ui.components.MediaNestTopAppBar
+import com.example.medianest.ui.components.MnNoteBox
+import com.example.medianest.ui.components.NoteBoxVariant
 import com.example.medianest.ui.theme.MediaNestColors
 import com.example.medianest.ui.theme.MediaNestShapes
 import com.example.medianest.ui.utils.UiUtils
@@ -69,7 +73,8 @@ import java.util.Locale
 @Composable
 fun SettingsScreen(
     viewModel: ExportImportViewModel = hiltViewModel(),
-    onNavigateToStatistics: () -> Unit = {}
+    onNavigateToStatistics: () -> Unit = {},
+    onNavigateToNotifications: () -> Unit = {}
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -77,6 +82,7 @@ fun SettingsScreen(
     val downloadPreferences = remember { DownloadPreferences(applicationContext) }
     val subscriptionsPreferences = remember { SubscriptionsPreferences(applicationContext) }
     val collectionsPreferences = remember { CollectionsPreferences(applicationContext) }
+    val playbackPreferences = remember { PlaybackPreferences(applicationContext) }
     val scrollState = rememberScrollState()
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
@@ -194,191 +200,110 @@ fun SettingsScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // =========================================================================
-            // 1. APPEARANCE & DISPLAY PREFERENCES
+            // 1. VPS SYNC & CLOUD
             // =========================================================================
             SettingsSectionHeader(
-                title = "Appearance & Display",
-                iconRes = R.drawable.ic_mn_sliders,
-                subtitle = "Layout and playback preferences"
+                title = "VPS Sync & Cloud",
+                iconRes = R.drawable.ic_mn_cloud,
+                subtitle = "Cross-device synchronization server"
             )
 
             GlassCard(modifier = Modifier.fillMaxWidth()) {
                 Column(
                     modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // Collections View Mode toggle
-                    val collectionsViewMode by collectionsPreferences.viewMode.collectAsStateWithLifecycle(
-                        initialValue = CollectionsPreferences.DEFAULT_VIEW_MODE
+                    MnNoteBox(
+                        title = "VPS Cloud Sync",
+                        variant = NoteBoxVariant.STANDARD,
+                        iconPainter = painterResource(R.drawable.ic_mn_cloud)
+                    ) {
+                        Text(
+                            "Synchronize watch history, favorites, custom folders, playlists, and subscription channels across your devices using your private self-hosted VPS server instance. Media files are stored locally and not transmitted over sync."
+                        )
+                    }
+
+                    val serverUrl by viewModel.serverUrl.collectAsStateWithLifecycle()
+                    val apiKey by viewModel.apiKey.collectAsStateWithLifecycle()
+
+                    OutlinedTextField(
+                        value = serverUrl,
+                        onValueChange = { viewModel.setServerUrl(it) },
+                        label = { Text("VPS Server URL") },
+                        placeholder = { Text("https://your-vps-ip:8000") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = customTextFieldColors(),
+                        shape = RoundedCornerShape(12.dp)
                     )
-                    val isGrid = collectionsViewMode.equals("GRID", ignoreCase = true)
+
+                    OutlinedTextField(
+                        value = apiKey,
+                        onValueChange = { viewModel.setApiKey(it) },
+                        label = { Text("API Key") },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = customTextFieldColors(),
+                        shape = RoundedCornerShape(12.dp)
+                    )
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                        MediaNestButton(
+                            text = "Register Device",
+                            onClick = { viewModel.registerDevice(serverUrl) },
+                            enabled = serverUrl.isNotBlank(),
+                            variant = MediaNestButtonVariant.Deep,
+                            modifier = Modifier.weight(1f),
+                            leadingIcon = {
                                 Icon(
-                                    painter = painterResource(if (isGrid) R.drawable.ic_mn_grid else R.drawable.ic_mn_list),
+                                    painter = painterResource(R.drawable.ic_mn_device),
                                     contentDescription = null,
-                                    tint = MediaNestColors.Accent,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(Modifier.width(8.dp))
-                                Text(
-                                    "Collections Layout",
-                                    style = MaterialTheme.typography.titleMedium.copy(
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.SemiBold
-                                    ),
-                                    color = MediaNestColors.TextPrimary
+                                    modifier = Modifier.size(16.dp)
                                 )
                             }
-                            Spacer(Modifier.height(2.dp))
-                            Text(
-                                "Default view for media collections (${if (isGrid) "Grid" else "List"})",
-                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
-                                color = MediaNestColors.TextSecondary
-                            )
-                        }
+                        )
 
-                        Spacer(Modifier.width(12.dp))
-
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            MediaNestChip(
-                                label = "Grid",
-                                selected = isGrid,
-                                onClick = {
-                                    coroutineScope.launch {
-                                        collectionsPreferences.setViewMode("GRID")
-                                    }
-                                }
-                            )
-                            MediaNestChip(
-                                label = "List",
-                                selected = !isGrid,
-                                onClick = {
-                                    coroutineScope.launch {
-                                        collectionsPreferences.setViewMode("LIST")
-                                    }
-                                }
-                            )
-                        }
-                    }
-
-                    HorizontalDivider(color = MediaNestColors.Border, thickness = 1.dp)
-
-                    // Show Shorts toggle
-                    val showShorts by subscriptionsPreferences.showShorts.collectAsStateWithLifecycle(
-                        initialValue = SubscriptionsPreferences.DEFAULT_SHOW_SHORTS
-                    )
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                coroutineScope.launch {
-                                    subscriptionsPreferences.setShowShorts(!showShorts)
-                                }
-                            },
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+                        MediaNestButton(
+                            text = "Sync Now",
+                            onClick = { viewModel.triggerSync() },
+                            enabled = serverUrl.isNotBlank() && apiKey.isNotBlank(),
+                            variant = MediaNestButtonVariant.Primary,
+                            modifier = Modifier.weight(1f),
+                            leadingIcon = {
                                 Icon(
-                                    painter = painterResource(R.drawable.ic_mn_youtube),
+                                    painter = painterResource(R.drawable.ic_mn_cloud_up),
                                     contentDescription = null,
-                                    tint = MediaNestColors.Accent,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(Modifier.width(8.dp))
-                                Text(
-                                    "Show YouTube Shorts",
-                                    style = MaterialTheme.typography.titleMedium.copy(
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.SemiBold
-                                    ),
-                                    color = MediaNestColors.TextPrimary
+                                    modifier = Modifier.size(16.dp)
                                 )
                             }
-                            Spacer(Modifier.height(2.dp))
-                            Text(
-                                "Include short-form videos in subscriptions and channel feeds",
-                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
-                                color = MediaNestColors.TextSecondary
-                            )
-                        }
-                        Spacer(Modifier.width(12.dp))
-                        Switch(
-                            checked = showShorts,
-                            onCheckedChange = { checked ->
-                                coroutineScope.launch {
-                                    subscriptionsPreferences.setShowShorts(checked)
-                                }
-                            },
-                            colors = customSwitchColors()
                         )
                     }
-                }
-            }
 
-            // =========================================================================
-            // 2. DOWNLOADS & STORAGE
-            // =========================================================================
-            SettingsSectionHeader(
-                title = "Downloads & Storage",
-                iconRes = R.drawable.ic_mn_download,
-                subtitle = "Storage path, quality, and library integrity"
-            )
-
-            GlassCard(modifier = Modifier.fillMaxWidth()) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    // Default Quality Dropdown
-                    val defaultResolution by downloadPreferences.defaultResolution.collectAsStateWithLifecycle(
-                        initialValue = DownloadPreferences.DEFAULT_RESOLUTION
-                    )
-                    val resolutionOptions = listOf("1080p", "720p", "480p", "360p", "Audio")
-                    var resolutionExpanded by remember { mutableStateOf(false) }
-
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_mn_sliders),
-                            contentDescription = null,
-                            tint = MediaNestColors.Accent,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            "Default Download Quality",
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold
-                            ),
-                            color = MediaNestColors.TextPrimary
-                        )
-                    }
+                    // Auto-sync interval dropdown
+                    val interval by viewModel.syncIntervalHours.collectAsStateWithLifecycle()
+                    val intervalOptions = listOf(0, 1, 2, 6, 12, 24)
+                    var intervalExpanded by remember { mutableStateOf(false) }
 
                     ExposedDropdownMenuBox(
-                        expanded = resolutionExpanded,
-                        onExpandedChange = { resolutionExpanded = it }
+                        expanded = intervalExpanded,
+                        onExpandedChange = { intervalExpanded = it }
                     ) {
                         OutlinedTextField(
-                            value = defaultResolution,
+                            value = when (interval) {
+                                0 -> "Manual only"
+                                1 -> "Every 1 hour"
+                                else -> "Every $interval hours"
+                            },
                             onValueChange = {},
                             readOnly = true,
-                            label = { Text("Quality Preset") },
+                            label = { Text("Auto-sync interval") },
                             trailingIcon = {
                                 Icon(
-                                    painter = painterResource(if (resolutionExpanded) R.drawable.ic_mn_chevron_up else R.drawable.ic_mn_chevron_down),
+                                    painter = painterResource(if (intervalExpanded) R.drawable.ic_mn_chevron_up else R.drawable.ic_mn_chevron_down),
                                     contentDescription = null,
                                     tint = MediaNestColors.TextSecondary,
                                     modifier = Modifier.size(16.dp)
@@ -395,30 +320,311 @@ fun SettingsScreen(
                             singleLine = true
                         )
                         ExposedDropdownMenu(
-                            expanded = resolutionExpanded,
-                            onDismissRequest = { resolutionExpanded = false },
+                            expanded = intervalExpanded,
+                            onDismissRequest = { intervalExpanded = false },
                             containerColor = MediaNestColors.Card
                         ) {
-                            resolutionOptions.forEach { option ->
+                            intervalOptions.forEach { option ->
+                                val label = when (option) {
+                                    0 -> "Manual only"
+                                    1 -> "Every 1 hour"
+                                    else -> "Every $option hours"
+                                }
                                 DropdownMenuItem(
                                     text = {
                                         Text(
-                                            option,
-                                            color = if (option == defaultResolution) MediaNestColors.Accent else MediaNestColors.TextPrimary
+                                            label,
+                                            color = if (option == interval) MediaNestColors.Accent else MediaNestColors.TextPrimary
                                         )
                                     },
                                     onClick = {
-                                        coroutineScope.launch {
-                                            downloadPreferences.setDefaultResolution(option)
-                                        }
-                                        resolutionExpanded = false
+                                        viewModel.setSyncIntervalHours(option)
+                                        intervalExpanded = false
                                     }
                                 )
                             }
                         }
                     }
 
-                    HorizontalDivider(color = MediaNestColors.Border, thickness = 1.dp)
+                    // Sync State Feedback
+                    val syncState by viewModel.syncState.collectAsStateWithLifecycle()
+                    LaunchedEffect(syncState) {
+                        if (syncState is SyncState.Success || syncState is SyncState.Error) {
+                            delay(3000)
+                            viewModel.resetSyncState()
+                        }
+                    }
+
+                    when (val s = syncState) {
+                        is SyncState.Syncing -> {
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(14.dp),
+                                        color = MediaNestColors.Accent,
+                                        strokeWidth = 2.dp
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(
+                                        "Syncing with VPS...",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MediaNestColors.Accent
+                                    )
+                                }
+                                Spacer(Modifier.height(6.dp))
+                                LinearProgressIndicator(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(4.dp)
+                                        .clip(RoundedCornerShape(2.dp)),
+                                    color = MediaNestColors.Accent,
+                                    trackColor = MediaNestColors.ProgressTrack
+                                )
+                            }
+                        }
+                        is SyncState.Success -> {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_mn_check_circle),
+                                    contentDescription = null,
+                                    tint = MediaNestColors.Success,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    s.message,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MediaNestColors.Success
+                                )
+                            }
+                        }
+                        is SyncState.Error -> {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_mn_warning),
+                                    contentDescription = null,
+                                    tint = MediaNestColors.Destructive,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    s.message,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MediaNestColors.Destructive
+                                )
+                            }
+                        }
+                        else -> {}
+                    }
+
+                    // Metadata details (Last sync, Device ID with copy button)
+                    val lastSyncAt by viewModel.lastSyncAt.collectAsStateWithLifecycle()
+                    if (lastSyncAt > 0) {
+                        val date = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(lastSyncAt))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_mn_history),
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp),
+                                tint = MediaNestColors.TextSecondary
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                "Last synced: $date",
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
+                                color = MediaNestColors.TextSecondary
+                            )
+                        }
+                    }
+
+                    val deviceId by viewModel.deviceId.collectAsStateWithLifecycle()
+                    if (deviceId.isNotBlank()) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_mn_device),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                    tint = MediaNestColors.TextSecondary
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Column {
+                                    Text(
+                                        "Device ID",
+                                        style = MaterialTheme.typography.bodyMedium.copy(
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Medium
+                                        ),
+                                        color = MediaNestColors.TextPrimary
+                                    )
+                                    Text(
+                                        deviceId,
+                                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                                        color = MediaNestColors.TextSecondary,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                            MediaNestIconButton(
+                                onClick = {
+                                    try {
+                                        val clipboardManager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                        val clip = ClipData.newPlainText("Device ID", deviceId)
+                                        clipboardManager.setPrimaryClip(clip)
+                                        coroutineScope.launch {
+                                            snackbarHostState.showSnackbar("Device ID copied to clipboard")
+                                        }
+                                    } catch (_: Exception) {
+                                        coroutineScope.launch {
+                                            snackbarHostState.showSnackbar("Failed to copy Device ID")
+                                        }
+                                    }
+                                },
+                                size = MediaNestIconButtonSize.Small,
+                                contentDescription = "Copy Device ID"
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_mn_copy),
+                                    contentDescription = "Copy",
+                                    tint = MediaNestColors.Accent,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // VPS Sync Activity Log Card
+            var logExpanded by remember { mutableStateOf(false) }
+            GlassCard(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_mn_history),
+                                contentDescription = null,
+                                tint = MediaNestColors.Accent,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                "Sync Activity Log",
+                                style = MaterialTheme.typography.titleSmall.copy(
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                ),
+                                color = MediaNestColors.TextPrimary
+                            )
+                        }
+
+                        Row {
+                            if (logExpanded && viewModel.syncLog.value.isNotEmpty()) {
+                                TextButton(onClick = { viewModel.clearSyncLog() }) {
+                                    Text("Clear", style = MaterialTheme.typography.bodySmall, color = MediaNestColors.Destructive)
+                                }
+                            }
+                            TextButton(onClick = { logExpanded = !logExpanded }) {
+                                Text(
+                                    if (logExpanded) "Hide" else "Show",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MediaNestColors.Accent
+                                )
+                            }
+                        }
+                    }
+
+                    if (logExpanded) {
+                        Spacer(Modifier.height(8.dp))
+                        val log by viewModel.syncLog.collectAsStateWithLifecycle()
+                        if (log.isEmpty()) {
+                            Text(
+                                "No sync activity recorded yet.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MediaNestColors.TextSecondary
+                            )
+                        } else {
+                            LazyColumn(modifier = Modifier.fillMaxWidth().height(150.dp)) {
+                                items(log.take(50)) { entry ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            entry.formattedTime,
+                                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.5.sp),
+                                            modifier = Modifier.width(52.dp),
+                                            color = MediaNestColors.TextSecondary
+                                        )
+                                        val iconRes = when (entry.type) {
+                                            "error" -> R.drawable.ic_mn_warning
+                                            "push" -> R.drawable.ic_mn_cloud_up
+                                            "pull" -> R.drawable.ic_mn_cloud_down
+                                            "apply" -> R.drawable.ic_mn_edit
+                                            else -> R.drawable.ic_mn_info
+                                        }
+                                        val tint = when (entry.type) {
+                                            "error" -> MediaNestColors.Destructive
+                                            "apply" -> MediaNestColors.Success
+                                            else -> MediaNestColors.TextSecondary
+                                        }
+                                        Icon(
+                                            painter = painterResource(iconRes),
+                                            contentDescription = null,
+                                            modifier = Modifier.size(12.dp),
+                                            tint = tint
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            (entry.table?.let { "[$it] " } ?: "") + entry.summary,
+                                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
+                                            color = MediaNestColors.TextPrimary,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // =========================================================================
+            // 2. DOWNLOADS & NETWORK
+            // =========================================================================
+            SettingsSectionHeader(
+                title = "Downloads & Network",
+                iconRes = R.drawable.ic_mn_download,
+                subtitle = "Storage directory, resolution defaults & concurrency"
+            )
+
+            GlassCard(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    MnNoteBox(
+                        title = "Downloads & Storage Rules",
+                        variant = NoteBoxVariant.STANDARD,
+                        iconPainter = painterResource(R.drawable.ic_mn_download)
+                    ) {
+                        Text(
+                            "Configure storage destination, stream resolution defaults, and background network concurrency limits."
+                        )
+                    }
 
                     // Download Storage Location
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -498,6 +704,929 @@ fun SettingsScreen(
                         size = MediaNestButtonSize.Standard,
                         fullWidth = true
                     )
+
+                    HorizontalDivider(color = MediaNestColors.Border, thickness = 1.dp)
+
+                    // Default Quality Dropdown
+                    val defaultResolution by downloadPreferences.defaultResolution.collectAsStateWithLifecycle(
+                        initialValue = DownloadPreferences.DEFAULT_RESOLUTION
+                    )
+                    val resolutionOptions = listOf("1080p", "720p", "480p", "360p", "Audio")
+                    var resolutionExpanded by remember { mutableStateOf(false) }
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_mn_video),
+                            contentDescription = null,
+                            tint = MediaNestColors.Accent,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "Default Download Quality",
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold
+                            ),
+                            color = MediaNestColors.TextPrimary
+                        )
+                    }
+
+                    ExposedDropdownMenuBox(
+                        expanded = resolutionExpanded,
+                        onExpandedChange = { resolutionExpanded = it }
+                    ) {
+                        OutlinedTextField(
+                            value = defaultResolution,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Quality Preset") },
+                            trailingIcon = {
+                                Icon(
+                                    painter = painterResource(if (resolutionExpanded) R.drawable.ic_mn_chevron_up else R.drawable.ic_mn_chevron_down),
+                                    contentDescription = null,
+                                    tint = MediaNestColors.TextSecondary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .menuAnchor(
+                                    ExposedDropdownMenuAnchorType.PrimaryNotEditable,
+                                    enabled = true
+                                ),
+                            colors = customTextFieldColors(),
+                            shape = RoundedCornerShape(12.dp),
+                            singleLine = true
+                        )
+                        ExposedDropdownMenu(
+                            expanded = resolutionExpanded,
+                            onDismissRequest = { resolutionExpanded = false },
+                            containerColor = MediaNestColors.Card
+                        ) {
+                            resolutionOptions.forEach { option ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            option,
+                                            color = if (option == defaultResolution) MediaNestColors.Accent else MediaNestColors.TextPrimary
+                                        )
+                                    },
+                                    onClick = {
+                                        coroutineScope.launch {
+                                            downloadPreferences.setDefaultResolution(option)
+                                        }
+                                        resolutionExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    HorizontalDivider(color = MediaNestColors.Border, thickness = 1.dp)
+
+                    // Max Concurrent Downloads Control (1-5)
+                    val maxConcurrent by downloadPreferences.maxConcurrentDownloads.collectAsStateWithLifecycle(
+                        initialValue = DownloadPreferences.DEFAULT_MAX
+                    )
+                    val maxConcurrentOptions = listOf(1, 2, 3, 4, 5)
+                    var maxConcurrentExpanded by remember { mutableStateOf(false) }
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_mn_sliders),
+                            contentDescription = null,
+                            tint = MediaNestColors.Accent,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "Max Concurrent Downloads",
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.SemiBold
+                            ),
+                            color = MediaNestColors.TextPrimary
+                        )
+                    }
+
+                    Text(
+                        "Number of simultaneous background network download streams (1–5).",
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
+                        color = MediaNestColors.TextSecondary
+                    )
+
+                    ExposedDropdownMenuBox(
+                        expanded = maxConcurrentExpanded,
+                        onExpandedChange = { maxConcurrentExpanded = it }
+                    ) {
+                        OutlinedTextField(
+                            value = when (maxConcurrent) {
+                                1 -> "1 stream (Minimal bandwidth)"
+                                2 -> "2 parallel (Default)"
+                                5 -> "5 parallel (Maximum)"
+                                else -> "$maxConcurrent parallel streams"
+                            },
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Concurrency Limit") },
+                            trailingIcon = {
+                                Icon(
+                                    painter = painterResource(if (maxConcurrentExpanded) R.drawable.ic_mn_chevron_up else R.drawable.ic_mn_chevron_down),
+                                    contentDescription = null,
+                                    tint = MediaNestColors.TextSecondary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .menuAnchor(
+                                    ExposedDropdownMenuAnchorType.PrimaryNotEditable,
+                                    enabled = true
+                                ),
+                            colors = customTextFieldColors(),
+                            shape = RoundedCornerShape(12.dp),
+                            singleLine = true
+                        )
+                        ExposedDropdownMenu(
+                            expanded = maxConcurrentExpanded,
+                            onDismissRequest = { maxConcurrentExpanded = false },
+                            containerColor = MediaNestColors.Card
+                        ) {
+                            maxConcurrentOptions.forEach { option ->
+                                val label = when (option) {
+                                    1 -> "1 stream (Minimal bandwidth)"
+                                    2 -> "2 parallel (Default)"
+                                    3 -> "3 parallel streams"
+                                    4 -> "4 parallel streams"
+                                    5 -> "5 parallel (Maximum)"
+                                    else -> "$option parallel"
+                                }
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            label,
+                                            color = if (option == maxConcurrent) MediaNestColors.Accent else MediaNestColors.TextPrimary
+                                        )
+                                    },
+                                    onClick = {
+                                        coroutineScope.launch {
+                                            downloadPreferences.setMaxConcurrentDownloads(option)
+                                        }
+                                        maxConcurrentExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // =========================================================================
+            // 3. PREFERENCES
+            // =========================================================================
+            SettingsSectionHeader(
+                title = "Preferences",
+                iconRes = R.drawable.ic_mn_sliders,
+                subtitle = "Shorts filtering, collections layout & playback rules"
+            )
+
+            GlassCard(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    MnNoteBox(
+                        title = "Display & Playback Preferences",
+                        variant = NoteBoxVariant.STANDARD,
+                        iconPainter = painterResource(R.drawable.ic_mn_sliders)
+                    ) {
+                        Text(
+                            "Customize feed content filtering, default collection layouts, and video playback thresholds."
+                        )
+                    }
+
+                    // Show Shorts toggle
+                    val showShorts by subscriptionsPreferences.showShorts.collectAsStateWithLifecycle(
+                        initialValue = SubscriptionsPreferences.DEFAULT_SHOW_SHORTS
+                    )
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                coroutineScope.launch {
+                                    subscriptionsPreferences.setShowShorts(!showShorts)
+                                }
+                            },
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_mn_youtube),
+                                    contentDescription = null,
+                                    tint = MediaNestColors.Accent,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    "Show YouTube Shorts",
+                                    style = MaterialTheme.typography.titleMedium.copy(
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    ),
+                                    color = MediaNestColors.TextPrimary
+                                )
+                            }
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                "Include short-form videos in subscriptions and channel feeds",
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
+                                color = MediaNestColors.TextSecondary
+                            )
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Switch(
+                            checked = showShorts,
+                            onCheckedChange = { checked ->
+                                coroutineScope.launch {
+                                    subscriptionsPreferences.setShowShorts(checked)
+                                }
+                            },
+                            colors = customSwitchColors()
+                        )
+                    }
+
+                    HorizontalDivider(color = MediaNestColors.Border, thickness = 1.dp)
+
+                    // Collections View Mode toggle
+                    val collectionsViewMode by collectionsPreferences.viewMode.collectAsStateWithLifecycle(
+                        initialValue = CollectionsPreferences.DEFAULT_VIEW_MODE
+                    )
+                    val isGrid = collectionsViewMode.equals("GRID", ignoreCase = true)
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    painter = painterResource(if (isGrid) R.drawable.ic_mn_grid else R.drawable.ic_mn_list),
+                                    contentDescription = null,
+                                    tint = MediaNestColors.Accent,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    "Collections Layout",
+                                    style = MaterialTheme.typography.titleMedium.copy(
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    ),
+                                    color = MediaNestColors.TextPrimary
+                                )
+                            }
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                "Default view for media collections (${if (isGrid) "Grid" else "List"})",
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
+                                color = MediaNestColors.TextSecondary
+                            )
+                        }
+
+                        Spacer(Modifier.width(12.dp))
+
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            MediaNestChip(
+                                label = "Grid",
+                                selected = isGrid,
+                                onClick = {
+                                    coroutineScope.launch {
+                                        collectionsPreferences.setViewMode("GRID")
+                                    }
+                                }
+                            )
+                            MediaNestChip(
+                                label = "List",
+                                selected = !isGrid,
+                                onClick = {
+                                    coroutineScope.launch {
+                                        collectionsPreferences.setViewMode("LIST")
+                                    }
+                                }
+                            )
+                        }
+                    }
+
+                    HorizontalDivider(color = MediaNestColors.Border, thickness = 1.dp)
+
+                    // Auto-mark as Watched switch
+                    val autoMarkWatched by playbackPreferences.autoMarkWatched.collectAsStateWithLifecycle(
+                        initialValue = PlaybackPreferences.DEFAULT_AUTO_MARK_WATCHED
+                    )
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                coroutineScope.launch {
+                                    playbackPreferences.setAutoMarkWatched(!autoMarkWatched)
+                                }
+                            },
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_mn_watched),
+                                    contentDescription = null,
+                                    tint = MediaNestColors.Accent,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    "Auto-mark as Watched",
+                                    style = MaterialTheme.typography.titleMedium.copy(
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    ),
+                                    color = MediaNestColors.TextPrimary
+                                )
+                            }
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                "Automatically mark videos as watched when remaining playback time is ≤ 1 minute.",
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
+                                color = MediaNestColors.TextSecondary
+                            )
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Switch(
+                            checked = autoMarkWatched,
+                            onCheckedChange = { checked ->
+                                coroutineScope.launch {
+                                    playbackPreferences.setAutoMarkWatched(checked)
+                                }
+                            },
+                            colors = customSwitchColors()
+                        )
+                    }
+
+                    HorizontalDivider(color = MediaNestColors.Border, thickness = 1.dp)
+
+                    // Background Audio Playback switch
+                    val backgroundPlayback by playbackPreferences.backgroundPlayback.collectAsStateWithLifecycle(
+                        initialValue = PlaybackPreferences.DEFAULT_BACKGROUND_PLAYBACK
+                    )
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                coroutineScope.launch {
+                                    playbackPreferences.setBackgroundPlayback(!backgroundPlayback)
+                                }
+                            },
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_mn_music),
+                                    contentDescription = null,
+                                    tint = MediaNestColors.Accent,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    "Background Audio Playback",
+                                    style = MaterialTheme.typography.titleMedium.copy(
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    ),
+                                    color = MediaNestColors.TextPrimary
+                                )
+                            }
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                "Continue playing audio smoothly in the background when navigating away or locking screen.",
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
+                                color = MediaNestColors.TextSecondary
+                            )
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Switch(
+                            checked = backgroundPlayback,
+                            onCheckedChange = { checked ->
+                                coroutineScope.launch {
+                                    playbackPreferences.setBackgroundPlayback(checked)
+                                }
+                            },
+                            colors = customSwitchColors()
+                        )
+                    }
+                }
+            }
+
+            // =========================================================================
+            // 4. DATA MANAGEMENT & STORAGE
+            // =========================================================================
+            SettingsSectionHeader(
+                title = "Data Management & Storage",
+                iconRes = R.drawable.ic_mn_file,
+                subtitle = "Backups, library repair, broken files & statistics"
+            )
+
+            // App Statistics Quick Entry Card
+            GlassCard(
+                modifier = Modifier.fillMaxWidth(),
+                onClick = onNavigateToStatistics
+            ) {
+                Row(
+                    modifier = Modifier.padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(MediaNestColors.AccentDeep),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_mn_chart),
+                                contentDescription = null,
+                                tint = MediaNestColors.Accent,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            Text(
+                                "App Statistics",
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 14.sp
+                                ),
+                                color = MediaNestColors.TextPrimary
+                            )
+                            Text(
+                                "Storage usage meters, watch metrics & library breakdown",
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
+                                color = MediaNestColors.TextSecondary
+                            )
+                        }
+                    }
+
+                    Icon(
+                        painter = painterResource(R.drawable.ic_mn_chevron_right),
+                        contentDescription = "Navigate",
+                        tint = MediaNestColors.TextSecondary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+
+            // Backup & Restore Card
+            GlassCard(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text(
+                        "Backup & Restore",
+                        style = MaterialTheme.typography.titleSmall.copy(
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 14.sp
+                        ),
+                        color = MediaNestColors.TextPrimary
+                    )
+
+                    Text(
+                        "Export complete database records and media files into a ZIP archive, or restore from a previously exported archive.",
+                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
+                        color = MediaNestColors.TextSecondary
+                    )
+
+                    MnNoteBox(
+                        title = "Backup & Restore Explanations",
+                        variant = NoteBoxVariant.STANDARD,
+                        iconPainter = painterResource(R.drawable.ic_mn_file)
+                    ) {
+                        Text("• Export: Packages all database records (videos list, subscriptions, watch history & timestamps, custom folders, playlists, and preferences) into a portable ZIP archive. You can optionally include downloaded video & audio files for a full offline backup.")
+                        Spacer(Modifier.height(4.dp))
+                        Text("• Import: Overwrites database with imported records and re-extracts video & audio files to their designated local storage paths.")
+                        Spacer(Modifier.height(4.dp))
+                        Text("• Download Missing Files: Appears when files are missing on disk. Clicking it will re-queue and re-download completed files that are absent. Do not run 'Repair Library' first, as it will clear database references to those files.")
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        MediaNestButton(
+                            text = "Export Backup",
+                            onClick = { showExportDialog = true },
+                            enabled = state !is ExportImportState.InProgress,
+                            variant = MediaNestButtonVariant.Primary,
+                            modifier = Modifier.weight(1f),
+                            leadingIcon = {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_mn_cloud_up),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        )
+
+                        MediaNestButton(
+                            text = "Import Backup",
+                            onClick = { importLauncher.launch(arrayOf("application/zip")) },
+                            enabled = state !is ExportImportState.InProgress,
+                            variant = MediaNestButtonVariant.Secondary,
+                            modifier = Modifier.weight(1f),
+                            leadingIcon = {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_mn_cloud_down),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        )
+                    }
+
+                    // Backup & Restore Progress / Feedback
+                    val isBackupRestoreState = remember(state) {
+                        when (val s = state) {
+                            is ExportImportState.InProgress -> s.operation == "Exporting" || s.operation == "Restoring"
+                            is ExportImportState.Success -> s.message.startsWith("Export complete") || s.message.startsWith("Restore complete")
+                            is ExportImportState.Error -> s.message.startsWith("Export failed") || s.message.startsWith("Restore failed")
+                            else -> false
+                        }
+                    }
+
+                    if (isBackupRestoreState) {
+                        when (val s = state) {
+                            is ExportImportState.InProgress -> {
+                                Spacer(Modifier.height(4.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        "${s.operation}...",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MediaNestColors.Accent
+                                    )
+                                    Text(
+                                        "${(s.progress * 100).toInt()}%",
+                                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                                        color = MediaNestColors.Accent
+                                    )
+                                }
+                                Spacer(Modifier.height(4.dp))
+                                LinearProgressIndicator(
+                                    progress = { s.progress },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(6.dp)
+                                        .clip(RoundedCornerShape(3.dp)),
+                                    color = MediaNestColors.Accent,
+                                    trackColor = MediaNestColors.ProgressTrack
+                                )
+                            }
+                            is ExportImportState.Success -> {
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = MediaNestColors.Raised,
+                                    border = BorderStroke(1.dp, MediaNestColors.Success.copy(alpha = 0.5f)),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(12.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(R.drawable.ic_mn_check_circle),
+                                            contentDescription = null,
+                                            tint = MediaNestColors.Success,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(Modifier.width(8.dp))
+                                        Text(
+                                            s.message,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MediaNestColors.TextPrimary,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        IconButton(
+                                            onClick = { viewModel.resetState() },
+                                            modifier = Modifier.size(24.dp)
+                                        ) {
+                                            Icon(
+                                                painter = painterResource(R.drawable.ic_mn_close),
+                                                contentDescription = "Close",
+                                                tint = MediaNestColors.TextSecondary,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                            is ExportImportState.Error -> {
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = MediaNestColors.Raised,
+                                    border = BorderStroke(1.dp, MediaNestColors.Destructive.copy(alpha = 0.5f)),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(12.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(R.drawable.ic_mn_warning),
+                                            contentDescription = null,
+                                            tint = MediaNestColors.Destructive,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Spacer(Modifier.width(8.dp))
+                                        Text(
+                                            s.message,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MediaNestColors.Destructive,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                        IconButton(
+                                            onClick = { viewModel.resetState() },
+                                            modifier = Modifier.size(24.dp)
+                                        ) {
+                                            Icon(
+                                                painter = painterResource(R.drawable.ic_mn_close),
+                                                contentDescription = "Close",
+                                                tint = MediaNestColors.Destructive,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                            else -> {}
+                        }
+                    }
+
+                    // Missing Files Redownload Callout & Button
+                    val missingCount by viewModel.missingDownloadsCount.collectAsStateWithLifecycle()
+                    if (missingCount > 0) {
+                        Spacer(Modifier.height(4.dp))
+                        MnNoteBox(
+                            title = "Missing Media Files Detected",
+                            variant = NoteBoxVariant.WARNING,
+                            iconPainter = painterResource(R.drawable.ic_mn_warning)
+                        ) {
+                            Text(
+                                "Found $missingCount completed video record(s) with missing files on storage disk. Click below to re-queue them for background download. Tip: Do NOT run 'Repair Library' first, as it will clear database references to missing files!"
+                            )
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        MediaNestButton(
+                            text = "Download Missing Files ($missingCount)",
+                            onClick = { viewModel.redownloadMissingFiles() },
+                            enabled = state !is ExportImportState.InProgress,
+                            variant = MediaNestButtonVariant.Deep,
+                            fullWidth = true,
+                            leadingIcon = {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_mn_download),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        )
+                    }
+
+                    HorizontalDivider(color = MediaNestColors.Border, thickness = 1.dp)
+
+                    // Auto-Backup Settings
+                    Text(
+                        "Auto-Backup Settings",
+                        style = MaterialTheme.typography.titleSmall.copy(
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 14.sp
+                        ),
+                        color = MediaNestColors.TextPrimary
+                    )
+
+                    val autoInterval by viewModel.autoBackupIntervalHours.collectAsStateWithLifecycle()
+                    val autoIntervalOptions = listOf(0, 6, 12, 24, 168)
+                    var autoIntervalExpanded by remember { mutableStateOf(false) }
+
+                    ExposedDropdownMenuBox(
+                        expanded = autoIntervalExpanded,
+                        onExpandedChange = { autoIntervalExpanded = it }
+                    ) {
+                        OutlinedTextField(
+                            value = when (autoInterval) {
+                                0 -> "Disabled (Off)"
+                                168 -> "Every 7 days"
+                                else -> "Every $autoInterval hours"
+                            },
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Auto-backup interval") },
+                            trailingIcon = {
+                                Icon(
+                                    painter = painterResource(if (autoIntervalExpanded) R.drawable.ic_mn_chevron_up else R.drawable.ic_mn_chevron_down),
+                                    contentDescription = null,
+                                    tint = MediaNestColors.TextSecondary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .menuAnchor(
+                                    ExposedDropdownMenuAnchorType.PrimaryNotEditable,
+                                    enabled = true
+                                ),
+                            colors = customTextFieldColors(),
+                            shape = RoundedCornerShape(12.dp),
+                            singleLine = true
+                        )
+                        ExposedDropdownMenu(
+                            expanded = autoIntervalExpanded,
+                            onDismissRequest = { autoIntervalExpanded = false },
+                            containerColor = MediaNestColors.Card
+                        ) {
+                            autoIntervalOptions.forEach { option ->
+                                val text = when (option) {
+                                    0 -> "Disabled (Off)"
+                                    168 -> "Every 7 days"
+                                    else -> "Every $option hours"
+                                }
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            text,
+                                            color = if (option == autoInterval) MediaNestColors.Accent else MediaNestColors.TextPrimary
+                                        )
+                                    },
+                                    onClick = {
+                                        viewModel.setAutoBackupIntervalHours(option)
+                                        autoIntervalExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    val nextBackupTime by viewModel.nextBackupTime.collectAsStateWithLifecycle(initialValue = null)
+                    var countdownText by remember { mutableStateOf("") }
+
+                    if (autoInterval > 0) {
+                        LaunchedEffect(nextBackupTime) {
+                            while (true) {
+                                val nextTime = nextBackupTime
+                                if (nextTime != null && nextTime > 0) {
+                                    val diff = nextTime - System.currentTimeMillis()
+                                    if (diff <= 0) {
+                                        countdownText = "Imminent / Running"
+                                    } else {
+                                        countdownText = UiUtils.formatDuration(diff / 1000)
+                                    }
+                                } else {
+                                    countdownText = "Disabled"
+                                }
+                                delay(1000)
+                            }
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = MediaNestColors.Success,
+                                    modifier = Modifier.size(8.dp)
+                                ) {}
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    "Auto-Backup: Active",
+                                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                                    color = MediaNestColors.Success
+                                )
+                            }
+                            if (nextBackupTime != null && nextBackupTime!! > 0) {
+                                Text(
+                                    "Next: in $countdownText",
+                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
+                                    color = MediaNestColors.TextSecondary
+                                )
+                            }
+                        }
+                    }
+
+                    // Local Backups List
+                    val localBackups by viewModel.localBackups.collectAsStateWithLifecycle()
+                    if (localBackups.isNotEmpty()) {
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "Local Backups Log (Max 3 retained):",
+                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                            color = MediaNestColors.TextPrimary
+                        )
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            localBackups.forEach { backup ->
+                                val isFull = backup.name.startsWith("backup_full_")
+                                val backupType = if (isFull) "Full Backup" else "Metadata"
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = MediaNestColors.Raised,
+                                    border = BorderStroke(1.dp, MediaNestColors.Border),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(10.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(if (isFull) R.drawable.ic_mn_video else R.drawable.ic_mn_file),
+                                            contentDescription = null,
+                                            tint = MediaNestColors.Accent,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                        Spacer(Modifier.width(10.dp))
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = backup.name,
+                                                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.5.sp),
+                                                color = MediaNestColors.TextPrimary,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                            val formattedTime = remember(backup.lastModified) {
+                                                SimpleDateFormat("MMM d, yyyy, h:mm a", Locale.getDefault()).format(Date(backup.lastModified))
+                                            }
+                                            Text(
+                                                text = "$formattedTime • $backupType • ${viewModel.formatSize(backup.sizeBytes)}",
+                                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.5.sp),
+                                                color = MediaNestColors.TextSecondary
+                                            )
+                                        }
+                                        MediaNestIconButton(
+                                            onClick = {
+                                                localBackupToRestore = backup
+                                                localRestoreIncludeMedia = isFull
+                                                showLocalRestoreDialog = true
+                                            },
+                                            size = MediaNestIconButtonSize.Small,
+                                            enabled = state !is ExportImportState.InProgress,
+                                            contentDescription = "Restore backup"
+                                        ) {
+                                            Icon(
+                                                painter = painterResource(R.drawable.ic_mn_history),
+                                                contentDescription = null,
+                                                tint = MediaNestColors.Accent,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                        MediaNestIconButton(
+                                            onClick = {
+                                                localBackupToDelete = backup
+                                                showLocalDeleteDialog = true
+                                            },
+                                            size = MediaNestIconButtonSize.Small,
+                                            enabled = state !is ExportImportState.InProgress,
+                                            contentDescription = "Delete backup"
+                                        ) {
+                                            Icon(
+                                                painter = painterResource(R.drawable.ic_mn_trash),
+                                                contentDescription = null,
+                                                tint = MediaNestColors.Destructive,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
@@ -530,6 +1659,20 @@ fun SettingsScreen(
                         style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
                         color = MediaNestColors.TextSecondary
                     )
+
+                    MnNoteBox(
+                        title = "Library Repair Details",
+                        variant = NoteBoxVariant.STANDARD,
+                        iconPainter = painterResource(R.drawable.ic_mn_repair)
+                    ) {
+                        Text("• Scans video and audio storage directories on disk.")
+                        Spacer(Modifier.height(4.dp))
+                        Text("• If a video is on disk but has an incorrect path in the database, it fixes the path.")
+                        Spacer(Modifier.height(4.dp))
+                        Text("• If a video in the database is missing on disk, it clears its offline status.")
+                        Spacer(Modifier.height(4.dp))
+                        Text("• Any files on disk not linked to any database video or download are cleaned up as orphans. It does NOT search for or add new videos to your library.")
+                    }
 
                     MediaNestButton(
                         text = "Repair Library",
@@ -779,841 +1922,44 @@ fun SettingsScreen(
             }
 
             // =========================================================================
-            // 3. CLOUD SYNC & VPS CONFIGURATION
-            // =========================================================================
-            SettingsSectionHeader(
-                title = "VPS Cloud Sync",
-                iconRes = R.drawable.ic_mn_cloud,
-                subtitle = "Cross-device synchronization server"
-            )
-
-            GlassCard(modifier = Modifier.fillMaxWidth()) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    val serverUrl by viewModel.serverUrl.collectAsStateWithLifecycle()
-                    val apiKey by viewModel.apiKey.collectAsStateWithLifecycle()
-
-                    OutlinedTextField(
-                        value = serverUrl,
-                        onValueChange = { viewModel.setServerUrl(it) },
-                        label = { Text("VPS Server URL") },
-                        placeholder = { Text("https://your-vps-ip:8000") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = customTextFieldColors(),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-
-                    OutlinedTextField(
-                        value = apiKey,
-                        onValueChange = { viewModel.setApiKey(it) },
-                        label = { Text("API Key") },
-                        singleLine = true,
-                        visualTransformation = PasswordVisualTransformation(),
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = customTextFieldColors(),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        MediaNestButton(
-                            text = "Register Device",
-                            onClick = { viewModel.registerDevice(serverUrl) },
-                            enabled = serverUrl.isNotBlank(),
-                            variant = MediaNestButtonVariant.Deep,
-                            modifier = Modifier.weight(1f),
-                            leadingIcon = {
-                                Icon(
-                                    painter = painterResource(R.drawable.ic_mn_device),
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                        )
-
-                        MediaNestButton(
-                            text = "Sync Now",
-                            onClick = { viewModel.triggerSync() },
-                            enabled = serverUrl.isNotBlank() && apiKey.isNotBlank(),
-                            variant = MediaNestButtonVariant.Primary,
-                            modifier = Modifier.weight(1f),
-                            leadingIcon = {
-                                Icon(
-                                    painter = painterResource(R.drawable.ic_mn_cloud_up),
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                        )
-                    }
-
-                    // Auto-sync interval dropdown
-                    val interval by viewModel.syncIntervalHours.collectAsStateWithLifecycle()
-                    val intervalOptions = listOf(1, 2, 6, 12, 24)
-                    var intervalExpanded by remember { mutableStateOf(false) }
-
-                    ExposedDropdownMenuBox(
-                        expanded = intervalExpanded,
-                        onExpandedChange = { intervalExpanded = it }
-                    ) {
-                        OutlinedTextField(
-                            value = "Every $interval ${if (interval == 1) "hour" else "hours"}",
-                            onValueChange = {},
-                            readOnly = true,
-                            label = { Text("Auto-sync interval") },
-                            trailingIcon = {
-                                Icon(
-                                    painter = painterResource(if (intervalExpanded) R.drawable.ic_mn_chevron_up else R.drawable.ic_mn_chevron_down),
-                                    contentDescription = null,
-                                    tint = MediaNestColors.TextSecondary,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .menuAnchor(
-                                    ExposedDropdownMenuAnchorType.PrimaryNotEditable,
-                                    enabled = true
-                                ),
-                            colors = customTextFieldColors(),
-                            shape = RoundedCornerShape(12.dp),
-                            singleLine = true
-                        )
-                        ExposedDropdownMenu(
-                            expanded = intervalExpanded,
-                            onDismissRequest = { intervalExpanded = false },
-                            containerColor = MediaNestColors.Card
-                        ) {
-                            intervalOptions.forEach { option ->
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(
-                                            "Every $option ${if (option == 1) "hour" else "hours"}",
-                                            color = if (option == interval) MediaNestColors.Accent else MediaNestColors.TextPrimary
-                                        )
-                                    },
-                                    onClick = {
-                                        viewModel.setSyncIntervalHours(option)
-                                        intervalExpanded = false
-                                    }
-                                )
-                            }
-                        }
-                    }
-
-                    // Sync State Feedback
-                    val syncState by viewModel.syncState.collectAsStateWithLifecycle()
-                    LaunchedEffect(syncState) {
-                        if (syncState is SyncState.Success || syncState is SyncState.Error) {
-                            delay(3000)
-                            viewModel.resetSyncState()
-                        }
-                    }
-
-                    when (val s = syncState) {
-                        is SyncState.Syncing -> {
-                            Column(modifier = Modifier.fillMaxWidth()) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(14.dp),
-                                        color = MediaNestColors.Accent,
-                                        strokeWidth = 2.dp
-                                    )
-                                    Spacer(Modifier.width(8.dp))
-                                    Text(
-                                        "Syncing with VPS...",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MediaNestColors.Accent
-                                    )
-                                }
-                                Spacer(Modifier.height(6.dp))
-                                LinearProgressIndicator(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(4.dp)
-                                        .clip(RoundedCornerShape(2.dp)),
-                                    color = MediaNestColors.Accent,
-                                    trackColor = MediaNestColors.ProgressTrack
-                                )
-                            }
-                        }
-                        is SyncState.Success -> {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    painter = painterResource(R.drawable.ic_mn_check_circle),
-                                    contentDescription = null,
-                                    tint = MediaNestColors.Success,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(Modifier.width(6.dp))
-                                Text(
-                                    s.message,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MediaNestColors.Success
-                                )
-                            }
-                        }
-                        is SyncState.Error -> {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    painter = painterResource(R.drawable.ic_mn_warning),
-                                    contentDescription = null,
-                                    tint = MediaNestColors.Destructive,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(Modifier.width(6.dp))
-                                Text(
-                                    s.message,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MediaNestColors.Destructive
-                                )
-                            }
-                        }
-                        else -> {}
-                    }
-
-                    // Metadata details (Last sync, Device ID)
-                    val lastSyncAt by viewModel.lastSyncAt.collectAsStateWithLifecycle()
-                    if (lastSyncAt > 0) {
-                        val date = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(lastSyncAt))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                painter = painterResource(R.drawable.ic_mn_history),
-                                contentDescription = null,
-                                modifier = Modifier.size(14.dp),
-                                tint = MediaNestColors.TextSecondary
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                "Last synced: $date",
-                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
-                                color = MediaNestColors.TextSecondary
-                            )
-                        }
-                    }
-
-                    val deviceId by viewModel.deviceId.collectAsStateWithLifecycle()
-                    if (deviceId.isNotBlank()) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                painter = painterResource(R.drawable.ic_mn_device),
-                                contentDescription = null,
-                                modifier = Modifier.size(14.dp),
-                                tint = MediaNestColors.TextSecondary
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                "Device ID: $deviceId",
-                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
-                                color = MediaNestColors.TextSecondary
-                            )
-                        }
-                    }
-                }
-            }
-
-            // VPS Sync Activity Log Card
-            var logExpanded by remember { mutableStateOf(false) }
-            GlassCard(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                painter = painterResource(R.drawable.ic_mn_history),
-                                contentDescription = null,
-                                tint = MediaNestColors.Accent,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                "Sync Activity Log",
-                                style = MaterialTheme.typography.titleSmall.copy(
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                ),
-                                color = MediaNestColors.TextPrimary
-                            )
-                        }
-
-                        Row {
-                            if (logExpanded && viewModel.syncLog.value.isNotEmpty()) {
-                                TextButton(onClick = { viewModel.clearSyncLog() }) {
-                                    Text("Clear", style = MaterialTheme.typography.bodySmall, color = MediaNestColors.Destructive)
-                                }
-                            }
-                            TextButton(onClick = { logExpanded = !logExpanded }) {
-                                Text(
-                                    if (logExpanded) "Hide" else "Show",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MediaNestColors.Accent
-                                )
-                            }
-                        }
-                    }
-
-                    if (logExpanded) {
-                        Spacer(Modifier.height(8.dp))
-                        val log by viewModel.syncLog.collectAsStateWithLifecycle()
-                        if (log.isEmpty()) {
-                            Text(
-                                "No sync activity recorded yet.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MediaNestColors.TextSecondary
-                            )
-                        } else {
-                            LazyColumn(modifier = Modifier.fillMaxWidth().height(150.dp)) {
-                                items(log.take(50)) { entry ->
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(
-                                            entry.formattedTime,
-                                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.5.sp),
-                                            modifier = Modifier.width(52.dp),
-                                            color = MediaNestColors.TextSecondary
-                                        )
-                                        val iconRes = when (entry.type) {
-                                            "error" -> R.drawable.ic_mn_warning
-                                            "push" -> R.drawable.ic_mn_cloud_up
-                                            "pull" -> R.drawable.ic_mn_cloud_down
-                                            "apply" -> R.drawable.ic_mn_edit
-                                            else -> R.drawable.ic_mn_info
-                                        }
-                                        val tint = when (entry.type) {
-                                            "error" -> MediaNestColors.Destructive
-                                            "apply" -> MediaNestColors.Success
-                                            else -> MediaNestColors.TextSecondary
-                                        }
-                                        Icon(
-                                            painter = painterResource(iconRes),
-                                            contentDescription = null,
-                                            modifier = Modifier.size(12.dp),
-                                            tint = tint
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(
-                                            (entry.table?.let { "[$it] " } ?: "") + entry.summary,
-                                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
-                                            color = MediaNestColors.TextPrimary,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // =========================================================================
-            // 4. DATA MANAGEMENT & BACKUP
-            // =========================================================================
-            SettingsSectionHeader(
-                title = "Data Management & Backup",
-                iconRes = R.drawable.ic_mn_file,
-                subtitle = "Export, restore, auto-backups, and statistics"
-            )
-
-            // App Statistics Quick Entry Card
-            GlassCard(
-                modifier = Modifier.fillMaxWidth(),
-                onClick = onNavigateToStatistics
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .size(36.dp)
-                                .clip(RoundedCornerShape(10.dp))
-                                .background(MediaNestColors.AccentDeep),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Icon(
-                                painter = painterResource(R.drawable.ic_mn_chart),
-                                contentDescription = null,
-                                tint = MediaNestColors.Accent,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                        Spacer(Modifier.width(12.dp))
-                        Column {
-                            Text(
-                                "App Statistics",
-                                style = MaterialTheme.typography.titleMedium.copy(
-                                    fontWeight = FontWeight.SemiBold,
-                                    fontSize = 14.sp
-                                ),
-                                color = MediaNestColors.TextPrimary
-                            )
-                            Text(
-                                "Storage usage meters, watch metrics & library breakdown",
-                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
-                                color = MediaNestColors.TextSecondary
-                            )
-                        }
-                    }
-
-                    Icon(
-                        painter = painterResource(R.drawable.ic_mn_chevron_right),
-                        contentDescription = "Navigate",
-                        tint = MediaNestColors.TextSecondary,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-            }
-
-            // Backup & Restore Card
-            GlassCard(modifier = Modifier.fillMaxWidth()) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Text(
-                        "Backup & Restore",
-                        style = MaterialTheme.typography.titleSmall.copy(
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 14.sp
-                        ),
-                        color = MediaNestColors.TextPrimary
-                    )
-
-                    Text(
-                        "Export complete database records and media files into a ZIP archive, or restore from a previously exported archive.",
-                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
-                        color = MediaNestColors.TextSecondary
-                    )
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        MediaNestButton(
-                            text = "Export Backup",
-                            onClick = { showExportDialog = true },
-                            enabled = state !is ExportImportState.InProgress,
-                            variant = MediaNestButtonVariant.Primary,
-                            modifier = Modifier.weight(1f),
-                            leadingIcon = {
-                                Icon(
-                                    painter = painterResource(R.drawable.ic_mn_cloud_up),
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                        )
-
-                        MediaNestButton(
-                            text = "Import Backup",
-                            onClick = { importLauncher.launch(arrayOf("application/zip")) },
-                            enabled = state !is ExportImportState.InProgress,
-                            variant = MediaNestButtonVariant.Secondary,
-                            modifier = Modifier.weight(1f),
-                            leadingIcon = {
-                                Icon(
-                                    painter = painterResource(R.drawable.ic_mn_cloud_down),
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                        )
-                    }
-
-                    // Backup & Restore Progress / Feedback
-                    val isBackupRestoreState = remember(state) {
-                        when (val s = state) {
-                            is ExportImportState.InProgress -> s.operation == "Exporting" || s.operation == "Restoring"
-                            is ExportImportState.Success -> s.message.startsWith("Export complete") || s.message.startsWith("Restore complete")
-                            is ExportImportState.Error -> s.message.startsWith("Export failed") || s.message.startsWith("Restore failed")
-                            else -> false
-                        }
-                    }
-
-                    if (isBackupRestoreState) {
-                        when (val s = state) {
-                            is ExportImportState.InProgress -> {
-                                Spacer(Modifier.height(4.dp))
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text(
-                                        "${s.operation}...",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MediaNestColors.Accent
-                                    )
-                                    Text(
-                                        "${(s.progress * 100).toInt()}%",
-                                        style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
-                                        color = MediaNestColors.Accent
-                                    )
-                                }
-                                Spacer(Modifier.height(4.dp))
-                                LinearProgressIndicator(
-                                    progress = { s.progress },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(6.dp)
-                                        .clip(RoundedCornerShape(3.dp)),
-                                    color = MediaNestColors.Accent,
-                                    trackColor = MediaNestColors.ProgressTrack
-                                )
-                            }
-                            is ExportImportState.Success -> {
-                                Surface(
-                                    shape = RoundedCornerShape(10.dp),
-                                    color = MediaNestColors.Raised,
-                                    border = BorderStroke(1.dp, MediaNestColors.Success.copy(alpha = 0.5f)),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(12.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(
-                                            painter = painterResource(R.drawable.ic_mn_check_circle),
-                                            contentDescription = null,
-                                            tint = MediaNestColors.Success,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                        Spacer(Modifier.width(8.dp))
-                                        Text(
-                                            s.message,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MediaNestColors.TextPrimary,
-                                            modifier = Modifier.weight(1f)
-                                        )
-                                        IconButton(
-                                            onClick = { viewModel.resetState() },
-                                            modifier = Modifier.size(24.dp)
-                                        ) {
-                                            Icon(
-                                                painter = painterResource(R.drawable.ic_mn_close),
-                                                contentDescription = "Close",
-                                                tint = MediaNestColors.TextSecondary,
-                                                modifier = Modifier.size(14.dp)
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                            is ExportImportState.Error -> {
-                                Surface(
-                                    shape = RoundedCornerShape(10.dp),
-                                    color = MediaNestColors.Raised,
-                                    border = BorderStroke(1.dp, MediaNestColors.Destructive.copy(alpha = 0.5f)),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(12.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(
-                                            painter = painterResource(R.drawable.ic_mn_warning),
-                                            contentDescription = null,
-                                            tint = MediaNestColors.Destructive,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                        Spacer(Modifier.width(8.dp))
-                                        Text(
-                                            s.message,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MediaNestColors.Destructive,
-                                            modifier = Modifier.weight(1f)
-                                        )
-                                        IconButton(
-                                            onClick = { viewModel.resetState() },
-                                            modifier = Modifier.size(24.dp)
-                                        ) {
-                                            Icon(
-                                                painter = painterResource(R.drawable.ic_mn_close),
-                                                contentDescription = "Close",
-                                                tint = MediaNestColors.Destructive,
-                                                modifier = Modifier.size(14.dp)
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                            else -> {}
-                        }
-                    }
-
-                    // Missing Files Redownload Button
-                    val missingCount by viewModel.missingDownloadsCount.collectAsStateWithLifecycle()
-                    if (missingCount > 0) {
-                        Spacer(Modifier.height(4.dp))
-                        MediaNestButton(
-                            text = "Download Missing Files ($missingCount)",
-                            onClick = { viewModel.redownloadMissingFiles() },
-                            enabled = state !is ExportImportState.InProgress,
-                            variant = MediaNestButtonVariant.Deep,
-                            fullWidth = true,
-                            leadingIcon = {
-                                Icon(
-                                    painter = painterResource(R.drawable.ic_mn_download),
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                        )
-                        Text(
-                            text = "Re-queue missing downloads that are recorded in database but absent on disk.",
-                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                            color = MediaNestColors.TextSecondary
-                        )
-                    }
-
-                    HorizontalDivider(color = MediaNestColors.Border, thickness = 1.dp)
-
-                    // Auto-Backup Settings
-                    Text(
-                        "Auto-Backup Settings",
-                        style = MaterialTheme.typography.titleSmall.copy(
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 14.sp
-                        ),
-                        color = MediaNestColors.TextPrimary
-                    )
-
-                    val autoInterval by viewModel.autoBackupIntervalHours.collectAsStateWithLifecycle()
-                    val autoIntervalOptions = listOf(0, 6, 12, 24, 168)
-                    var autoIntervalExpanded by remember { mutableStateOf(false) }
-
-                    ExposedDropdownMenuBox(
-                        expanded = autoIntervalExpanded,
-                        onExpandedChange = { autoIntervalExpanded = it }
-                    ) {
-                        OutlinedTextField(
-                            value = when (autoInterval) {
-                                0 -> "Disabled (Off)"
-                                168 -> "Every 7 days"
-                                else -> "Every $autoInterval hours"
-                            },
-                            onValueChange = {},
-                            readOnly = true,
-                            label = { Text("Auto-backup interval") },
-                            trailingIcon = {
-                                Icon(
-                                    painter = painterResource(if (autoIntervalExpanded) R.drawable.ic_mn_chevron_up else R.drawable.ic_mn_chevron_down),
-                                    contentDescription = null,
-                                    tint = MediaNestColors.TextSecondary,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .menuAnchor(
-                                    ExposedDropdownMenuAnchorType.PrimaryNotEditable,
-                                    enabled = true
-                                ),
-                            colors = customTextFieldColors(),
-                            shape = RoundedCornerShape(12.dp),
-                            singleLine = true
-                        )
-                        ExposedDropdownMenu(
-                            expanded = autoIntervalExpanded,
-                            onDismissRequest = { autoIntervalExpanded = false },
-                            containerColor = MediaNestColors.Card
-                        ) {
-                            autoIntervalOptions.forEach { option ->
-                                val text = when (option) {
-                                    0 -> "Disabled (Off)"
-                                    168 -> "Every 7 days"
-                                    else -> "Every $option hours"
-                                }
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(
-                                            text,
-                                            color = if (option == autoInterval) MediaNestColors.Accent else MediaNestColors.TextPrimary
-                                        )
-                                    },
-                                    onClick = {
-                                        viewModel.setAutoBackupIntervalHours(option)
-                                        autoIntervalExpanded = false
-                                    }
-                                )
-                            }
-                        }
-                    }
-
-                    val nextBackupTime by viewModel.nextBackupTime.collectAsStateWithLifecycle(initialValue = null)
-                    var countdownText by remember { mutableStateOf("") }
-
-                    if (autoInterval > 0) {
-                        LaunchedEffect(nextBackupTime) {
-                            while (true) {
-                                val nextTime = nextBackupTime
-                                if (nextTime != null && nextTime > 0) {
-                                    val diff = nextTime - System.currentTimeMillis()
-                                    if (diff <= 0) {
-                                        countdownText = "Imminent / Running"
-                                    } else {
-                                        countdownText = UiUtils.formatDuration(diff / 1000)
-                                    }
-                                } else {
-                                    countdownText = "Disabled"
-                                }
-                                delay(1000)
-                            }
-                        }
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Surface(
-                                    shape = CircleShape,
-                                    color = MediaNestColors.Success,
-                                    modifier = Modifier.size(8.dp)
-                                ) {}
-                                Spacer(Modifier.width(6.dp))
-                                Text(
-                                    "Auto-Backup: Active",
-                                    style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
-                                    color = MediaNestColors.Success
-                                )
-                            }
-                            if (nextBackupTime != null && nextBackupTime!! > 0) {
-                                Text(
-                                    "Next: in $countdownText",
-                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
-                                    color = MediaNestColors.TextSecondary
-                                )
-                            }
-                        }
-                    }
-
-                    // Local Backups List
-                    val localBackups by viewModel.localBackups.collectAsStateWithLifecycle()
-                    if (localBackups.isNotEmpty()) {
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            "Local Backups Log (Max 3 retained):",
-                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
-                            color = MediaNestColors.TextPrimary
-                        )
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            localBackups.forEach { backup ->
-                                val isFull = backup.name.startsWith("backup_full_")
-                                val backupType = if (isFull) "Full Backup" else "Metadata"
-                                Surface(
-                                    shape = RoundedCornerShape(10.dp),
-                                    color = MediaNestColors.Raised,
-                                    border = BorderStroke(1.dp, MediaNestColors.Border),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(10.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(
-                                            painter = painterResource(if (isFull) R.drawable.ic_mn_video else R.drawable.ic_mn_file),
-                                            contentDescription = null,
-                                            tint = MediaNestColors.Accent,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                        Spacer(Modifier.width(10.dp))
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = backup.name,
-                                                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 12.5.sp),
-                                                color = MediaNestColors.TextPrimary,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                            val formattedTime = remember(backup.lastModified) {
-                                                SimpleDateFormat("MMM d, yyyy, h:mm a", Locale.getDefault()).format(Date(backup.lastModified))
-                                            }
-                                            Text(
-                                                text = "$formattedTime • $backupType • ${viewModel.formatSize(backup.sizeBytes)}",
-                                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.5.sp),
-                                                color = MediaNestColors.TextSecondary
-                                            )
-                                        }
-                                        MediaNestIconButton(
-                                            onClick = {
-                                                localBackupToRestore = backup
-                                                localRestoreIncludeMedia = isFull
-                                                showLocalRestoreDialog = true
-                                            },
-                                            size = MediaNestIconButtonSize.Small,
-                                            enabled = state !is ExportImportState.InProgress,
-                                            contentDescription = "Restore backup"
-                                        ) {
-                                            Icon(
-                                                painter = painterResource(R.drawable.ic_mn_history),
-                                                contentDescription = null,
-                                                tint = MediaNestColors.Accent,
-                                                modifier = Modifier.size(16.dp)
-                                            )
-                                        }
-                                        MediaNestIconButton(
-                                            onClick = {
-                                                localBackupToDelete = backup
-                                                showLocalDeleteDialog = true
-                                            },
-                                            size = MediaNestIconButtonSize.Small,
-                                            enabled = state !is ExportImportState.InProgress,
-                                            contentDescription = "Delete backup"
-                                        ) {
-                                            Icon(
-                                                painter = painterResource(R.drawable.ic_mn_trash),
-                                                contentDescription = null,
-                                                tint = MediaNestColors.Destructive,
-                                                modifier = Modifier.size(16.dp)
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // =========================================================================
-            // 5. ABOUT & APP UPDATES
+            // 5. ABOUT & UPDATES
             // =========================================================================
             SettingsSectionHeader(
                 title = "About & Updates",
                 iconRes = R.drawable.ic_mn_info,
-                subtitle = "App information and releases"
+                subtitle = "App information, notifications & releases"
             )
 
             val updateState by viewModel.updateState.collectAsStateWithLifecycle()
-            val currentAppVersion = try {
-                context.packageManager.getPackageInfo(context.packageName, 0).versionName ?: "1.0"
-            } catch (_: Exception) {
-                "1.0"
+            val currentAppVersion = remember {
+                try {
+                    "v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE})"
+                } catch (_: Exception) {
+                    try {
+                        val pInfo = context.packageManager.getPackageInfo(context.packageName, 0)
+                        "v${pInfo.versionName ?: "1.0.9"} (Build ${pInfo.longVersionCode})"
+                    } catch (_: Exception) {
+                        "v1.0.9 (Build 9)"
+                    }
+                }
             }
 
             // About MediaNest Info Card
             GlassCard(modifier = Modifier.fillMaxWidth()) {
                 Column(
                     modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
+                    MnNoteBox(
+                        title = "About MediaNest",
+                        variant = NoteBoxVariant.STANDARD,
+                        iconPainter = painterResource(R.drawable.ic_mn_info)
+                    ) {
+                        Text(
+                            "A premium offline-first media manager and subscription player designed to organize, save, and stream your favorite content seamlessly."
+                        )
+                    }
+
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(
                             modifier = Modifier
@@ -1640,18 +1986,68 @@ fun SettingsScreen(
                                 color = MediaNestColors.TextPrimary
                             )
                             Text(
-                                "Version v$currentAppVersion • By Kushal",
+                                "Version $currentAppVersion • By Kushal",
                                 style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
                                 color = MediaNestColors.Accent
                             )
                         }
                     }
 
-                    Text(
-                        text = "A premium offline-first media manager and subscription player designed to organize, save, and stream your favorite content seamlessly.",
-                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
-                        color = MediaNestColors.TextSecondary
-                    )
+                    HorizontalDivider(color = MediaNestColors.Border, thickness = 1.dp)
+
+                    // In-App Notifications Hub Nav Row
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable(onClick = onNavigateToNotifications)
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(MediaNestColors.AccentDeep),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_mn_bell),
+                                    contentDescription = null,
+                                    tint = MediaNestColors.Accent,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            Spacer(Modifier.width(12.dp))
+                            Column {
+                                Text(
+                                    "In-App Notifications",
+                                    style = MaterialTheme.typography.titleMedium.copy(
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 14.sp
+                                    ),
+                                    color = MediaNestColors.TextPrimary
+                                )
+                                Text(
+                                    "Download completions, background sync alerts & updates",
+                                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
+                                    color = MediaNestColors.TextSecondary
+                                )
+                            }
+                        }
+
+                        Icon(
+                            painter = painterResource(R.drawable.ic_mn_chevron_right),
+                            contentDescription = "Navigate",
+                            tint = MediaNestColors.TextSecondary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
             }
 
