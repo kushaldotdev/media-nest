@@ -50,6 +50,9 @@ import com.example.medianest.data.local.entity.HistoryEntity
 import com.example.medianest.data.local.entity.VideoEntity
 import com.example.medianest.data.model.ExtractedVideoInfo
 import com.example.medianest.data.model.StreamSource
+import com.example.medianest.data.repository.FolderRepository
+import com.example.medianest.data.repository.FolderTreeNode
+import com.example.medianest.data.repository.flattenWithDepth
 import com.example.medianest.ui.components.*
 import com.example.medianest.ui.theme.MediaNestColors
 import com.example.medianest.ui.theme.MediaNestShapes
@@ -61,9 +64,19 @@ import com.example.medianest.ui.viewmodel.MediaTypeFilter
 import com.example.medianest.ui.viewmodel.SortCategory
 import com.example.medianest.ui.viewmodel.SortDirection
 import com.example.medianest.ui.viewmodel.ViewMode
+import dagger.hilt.EntryPoint
+import dagger.hilt.InstallIn
+import dagger.hilt.android.EntryPointAccessors
+import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.launch
 
 val LocalMoveToFolder = androidx.compose.runtime.staticCompositionLocalOf<(String) -> Unit> { {} }
+
+@EntryPoint
+@InstallIn(SingletonComponent::class)
+interface LibraryFolderEntryPoint {
+    fun folderRepository(): FolderRepository
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -116,6 +129,40 @@ fun LibraryScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
+
+    // Move-to-Folder tree resolution
+    val folderRepository = remember(context) {
+        try {
+            EntryPointAccessors.fromApplication(
+                context.applicationContext,
+                LibraryFolderEntryPoint::class.java
+            ).folderRepository()
+        } catch (e: Exception) {
+            null
+        }
+    }
+    val folderTree by produceState<List<FolderTreeNode>>(initialValue = emptyList(), folderRepository) {
+        folderRepository?.getAllFoldersTreeFlow()?.collect { value = it }
+    }
+    val flattenedFolders = remember(folderTree, rootFolders) {
+        if (folderTree.isNotEmpty()) {
+            folderTree.flattenWithDepth()
+        } else {
+            rootFolders.map { it to 0 }
+        }
+    }
+    val allFoldersMap = remember(folderTree, rootFolders) {
+        val map = mutableMapOf<Long, FolderEntity>()
+        fun addNode(node: FolderTreeNode) {
+            map[node.folder.id] = node.folder
+            node.children.forEach { addNode(it) }
+        }
+        folderTree.forEach { addNode(it) }
+        if (map.isEmpty()) {
+            rootFolders.forEach { map[it.id] = it }
+        }
+        map
+    }
 
     var showMoveToFolderDialog by remember { mutableStateOf(false) }
     var singleVideoToMove by remember { mutableStateOf<String?>(null) }
@@ -234,20 +281,18 @@ fun LibraryScreen(
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
-                            if (uiState.currentTab != LibraryTab.FOLDERS || uiState.selectedFolder != null) {
-                                MediaNestIconButton(
-                                    onClick = { viewModel.toggleViewMode() },
-                                    contentDescription = if (uiState.viewMode == ViewMode.GRID) "Switch to list view" else "Switch to grid view"
-                                ) {
-                                    Icon(
-                                        painter = painterResource(
-                                            if (uiState.viewMode == ViewMode.GRID) R.drawable.ic_mn_list else R.drawable.ic_mn_grid
-                                        ),
-                                        contentDescription = null,
-                                        tint = MediaNestColors.TextPrimary,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
+                            MediaNestIconButton(
+                                onClick = { viewModel.toggleViewMode() },
+                                contentDescription = if (uiState.viewMode == ViewMode.GRID) "Switch to list view" else "Switch to grid view"
+                            ) {
+                                Icon(
+                                    painter = painterResource(
+                                        if (uiState.viewMode == ViewMode.GRID) R.drawable.ic_mn_list else R.drawable.ic_mn_grid
+                                    ),
+                                    contentDescription = null,
+                                    tint = MediaNestColors.TextPrimary,
+                                    modifier = Modifier.size(20.dp)
+                                )
                             }
                         }
                     }
@@ -276,64 +321,42 @@ fun LibraryScreen(
                         detectTapGestures(onTap = { focusManager.clearFocus() })
                     }
             ) {
+                // Collection Sub-Tabs Row with PillTabRow
+                val tabs = listOf(
+                    LibraryTab.HISTORY,
+                    LibraryTab.WATCHED,
+                    LibraryTab.FOLDERS,
+                    LibraryTab.FAVORITES,
+                    LibraryTab.PLAYLISTS,
+                    LibraryTab.SUBSCRIPTIONS
+                )
+
+                PillTabRow(
+                    items = tabs,
+                    selected = uiState.currentTab,
+                    onSelect = { tab -> viewModel.setTab(tab) },
+                    label = { it.label },
+                    iconRes = { tab ->
+                        when (tab) {
+                            LibraryTab.HISTORY -> R.drawable.ic_mn_history
+                            LibraryTab.WATCHED -> R.drawable.ic_mn_watched
+                            LibraryTab.FOLDERS -> R.drawable.ic_mn_folder
+                            LibraryTab.FAVORITES -> R.drawable.ic_mn_heart
+                            LibraryTab.PLAYLISTS -> R.drawable.ic_mn_playlist
+                            LibraryTab.SUBSCRIPTIONS -> R.drawable.ic_mn_channel
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp)
+                )
+
                 // Search Bar
                 LibrarySearchBar(
                     query = uiState.searchQuery,
                     onQueryChange = { viewModel.setSearchQuery(it) },
                     placeholder = "Search ${uiState.currentTab.label.lowercase()}...",
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
                 )
-
-                // Collection Tabs Row with FilterChips
-                val tabs = listOf(
-                    LibraryTab.HISTORY,
-                    LibraryTab.FAVORITES,
-                    LibraryTab.WATCHED,
-                    LibraryTab.FOLDERS,
-                    LibraryTab.SUBSCRIPTIONS,
-                    LibraryTab.PLAYLISTS
-                )
-
-                MediaNestFilterRow(
-                    modifier = Modifier.fillMaxWidth(),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
-                    horizontalSpacing = 8.dp
-                ) {
-                    tabs.forEach { tab ->
-                        val isSelected = uiState.currentTab == tab
-                        val count = when (tab) {
-                            LibraryTab.HISTORY -> historyStats.first
-                            LibraryTab.FAVORITES -> favoritesCount
-                            LibraryTab.WATCHED -> watchedCount
-                            LibraryTab.FOLDERS -> rootFolders.size
-                            LibraryTab.SUBSCRIPTIONS -> channelsCount
-                            LibraryTab.PLAYLISTS -> playlistsCount
-                        }
-                        val iconRes = when (tab) {
-                            LibraryTab.HISTORY -> R.drawable.ic_mn_history
-                            LibraryTab.FAVORITES -> R.drawable.ic_mn_heart
-                            LibraryTab.WATCHED -> R.drawable.ic_mn_watched
-                            LibraryTab.FOLDERS -> R.drawable.ic_mn_folder
-                            LibraryTab.SUBSCRIPTIONS -> R.drawable.ic_mn_channel
-                            LibraryTab.PLAYLISTS -> R.drawable.ic_mn_playlist
-                        }
-
-                        MediaNestChip(
-                            label = tab.label,
-                            selected = isSelected,
-                            onClick = { viewModel.setTab(tab) },
-                            leadingIcon = {
-                                Icon(
-                                    painter = painterResource(iconRes),
-                                    contentDescription = null,
-                                    tint = if (isSelected) MediaNestColors.TextPrimary else MediaNestColors.TextSecondary,
-                                    modifier = Modifier.size(15.dp)
-                                )
-                            },
-                            badgeText = if (count > 0) count.toString() else null
-                        )
-                    }
-                }
 
                 // Secondary Filter Controls Bar (Media Type & Sort for media tabs)
                 val showSecondaryFilters = uiState.currentTab in listOf(
@@ -414,6 +437,21 @@ fun LibraryScreen(
                         )
                     }
                 }
+
+                // Scoped Summary Metadata Line
+                LibraryStatsLine(
+                    tab = uiState.currentTab,
+                    historyCount = historyStats.first,
+                    historyWatchTimeMs = historyStats.second,
+                    watchedCount = watchedCount,
+                    favoritesCount = favoritesCount,
+                    rootFoldersCount = rootFolders.size,
+                    childFoldersCount = childFolders.size,
+                    folderVideosCount = folderVideos.size,
+                    selectedFolder = uiState.selectedFolder,
+                    playlistsCount = playlistsCount,
+                    channelsCount = channelsCount
+                )
 
                 // Active Folder Breadcrumb Navigation
                 if (uiState.currentTab == LibraryTab.FOLDERS && uiState.selectedFolder != null) {
@@ -770,9 +808,9 @@ fun LibraryScreen(
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .heightIn(max = 300.dp)
+                                .heightIn(max = 350.dp)
                         ) {
-                            if (rootFolders.isEmpty()) {
+                            if (flattenedFolders.isEmpty()) {
                                 Text(
                                     text = "No folders available. Create a folder first.",
                                     style = MaterialTheme.typography.bodyMedium,
@@ -780,13 +818,25 @@ fun LibraryScreen(
                                     modifier = Modifier.padding(vertical = 12.dp)
                                 )
                             } else {
+                                fun getFolderPath(folder: FolderEntity): String {
+                                    val parts = mutableListOf<String>()
+                                    var curr: FolderEntity? = folder
+                                    val visited = mutableSetOf<Long>()
+                                    while (curr != null && visited.add(curr.id)) {
+                                        parts.add(0, curr.name)
+                                        curr = curr.parentId?.let { allFoldersMap[it] }
+                                    }
+                                    return parts.joinToString(" / ")
+                                }
+
                                 LazyColumn(
                                     verticalArrangement = Arrangement.spacedBy(6.dp),
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
-                                    items(rootFolders, key = { it.id }) { folder ->
+                                    items(flattenedFolders, key = { it.first.id }) { (folder, depth) ->
                                         val stats = folderStatsMap[folder.id]
                                         val itemCount = stats?.itemCount ?: 0
+                                        val fullPath = getFolderPath(folder)
                                         Surface(
                                             modifier = Modifier
                                                 .fillMaxWidth()
@@ -814,7 +864,12 @@ fun LibraryScreen(
                                             Row(
                                                 modifier = Modifier
                                                     .fillMaxWidth()
-                                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                                    .padding(
+                                                        start = 12.dp + (depth * 16).dp,
+                                                        end = 12.dp,
+                                                        top = 10.dp,
+                                                        bottom = 10.dp
+                                                    ),
                                                 verticalAlignment = Alignment.CenterVertically,
                                                 horizontalArrangement = Arrangement.spacedBy(10.dp)
                                             ) {
@@ -824,16 +879,28 @@ fun LibraryScreen(
                                                     tint = MediaNestColors.Accent,
                                                     modifier = Modifier.size(20.dp)
                                                 )
-                                                Text(
-                                                    text = folder.name,
-                                                    style = MaterialTheme.typography.bodyMedium.copy(
-                                                        fontWeight = FontWeight.Medium,
-                                                        color = MediaNestColors.TextPrimary
-                                                    ),
-                                                    modifier = Modifier.weight(1f),
-                                                    maxLines = 1,
-                                                    overflow = TextOverflow.Ellipsis
-                                                )
+                                                Column(modifier = Modifier.weight(1f)) {
+                                                    Text(
+                                                        text = folder.name,
+                                                        style = MaterialTheme.typography.bodyMedium.copy(
+                                                            fontWeight = FontWeight.Medium,
+                                                            color = MediaNestColors.TextPrimary
+                                                        ),
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis
+                                                    )
+                                                    if (depth > 0) {
+                                                        Text(
+                                                            text = fullPath,
+                                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                                fontSize = 11.sp,
+                                                                color = MediaNestColors.TextSecondary
+                                                            ),
+                                                            maxLines = 1,
+                                                            overflow = TextOverflow.Ellipsis
+                                                        )
+                                                    }
+                                                }
                                                 Text(
                                                     text = "$itemCount ${if (itemCount == 1) "item" else "items"}",
                                                     style = MaterialTheme.typography.labelSmall,
@@ -2095,7 +2162,7 @@ private fun FolderContent(
             } else {
                 if (viewMode == ViewMode.GRID) {
                     LazyVerticalGrid(
-                        columns = GridCells.Adaptive(155.dp),
+                        columns = GridCells.Fixed(2),
                         modifier = Modifier.fillMaxSize(),
                         horizontalArrangement = Arrangement.spacedBy(10.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
@@ -2148,7 +2215,7 @@ private fun FolderContent(
                 if (viewMode == ViewMode.GRID) {
                     LazyVerticalGrid(
                         state = gridState,
-                        columns = GridCells.Adaptive(160.dp),
+                        columns = GridCells.Fixed(2),
                         modifier = Modifier.fillMaxSize(),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -2598,5 +2665,79 @@ private fun FolderRow(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun LibraryStatsLine(
+    tab: LibraryTab,
+    historyCount: Int,
+    historyWatchTimeMs: Long,
+    watchedCount: Int,
+    favoritesCount: Int,
+    rootFoldersCount: Int,
+    childFoldersCount: Int,
+    folderVideosCount: Int,
+    selectedFolder: FolderEntity?,
+    playlistsCount: Int,
+    channelsCount: Int,
+    modifier: Modifier = Modifier
+) {
+    val iconRes = when (tab) {
+        LibraryTab.HISTORY -> R.drawable.ic_mn_history
+        LibraryTab.WATCHED -> R.drawable.ic_mn_watched
+        LibraryTab.FOLDERS -> R.drawable.ic_mn_folder
+        LibraryTab.FAVORITES -> R.drawable.ic_mn_heart
+        LibraryTab.PLAYLISTS -> R.drawable.ic_mn_playlist
+        LibraryTab.SUBSCRIPTIONS -> R.drawable.ic_mn_channel
+    }
+
+    val label = when (tab) {
+        LibraryTab.HISTORY -> {
+            val timeStr = UiUtils.formatDuration(historyWatchTimeMs / 1000L)
+            "$historyCount ${if (historyCount == 1) "video" else "videos"} · $timeStr watched"
+        }
+        LibraryTab.WATCHED -> {
+            "$watchedCount watched ${if (watchedCount == 1) "video" else "videos"}"
+        }
+        LibraryTab.FOLDERS -> {
+            if (selectedFolder == null) {
+                "$rootFoldersCount ${if (rootFoldersCount == 1) "folder" else "folders"}"
+            } else {
+                val folderStr = if (childFoldersCount > 0) "$childFoldersCount ${if (childFoldersCount == 1) "subfolder" else "subfolders"} · " else ""
+                "$folderStr$folderVideosCount ${if (folderVideosCount == 1) "video" else "videos"}"
+            }
+        }
+        LibraryTab.FAVORITES -> {
+            "$favoritesCount favorite ${if (favoritesCount == 1) "video" else "videos"}"
+        }
+        LibraryTab.PLAYLISTS -> {
+            "$playlistsCount saved ${if (playlistsCount == 1) "playlist" else "playlists"}"
+        }
+        LibraryTab.SUBSCRIPTIONS -> {
+            "$channelsCount subscribed ${if (channelsCount == 1) "channel" else "channels"}"
+        }
+    }
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Icon(
+            painter = painterResource(iconRes),
+            contentDescription = null,
+            tint = MediaNestColors.Accent,
+            modifier = Modifier.size(14.dp)
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall.copy(
+                color = MediaNestColors.TextSecondary,
+                fontSize = 12.sp
+            )
+        )
     }
 }
