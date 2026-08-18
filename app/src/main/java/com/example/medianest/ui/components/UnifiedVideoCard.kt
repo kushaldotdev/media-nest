@@ -1,5 +1,6 @@
 package com.example.medianest.ui.components
 
+import android.text.format.Formatter
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -13,20 +14,19 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.example.medianest.R
-import com.example.medianest.data.local.entity.FolderEntity
-import com.example.medianest.ui.utils.UiUtils
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalConfiguration
-import android.text.format.Formatter
 import com.example.medianest.data.local.entity.DownloadEntity
+import com.example.medianest.data.local.entity.FolderEntity
 import com.example.medianest.data.model.ExtractedVideoInfo
 import com.example.medianest.data.model.StreamSource
 import com.example.medianest.ui.theme.MediaNestColors
+import com.example.medianest.ui.utils.UiUtils
 
 /**
  * Configuration options for displaying optional features on the unified video card.
@@ -41,7 +41,8 @@ data class VideoCardConfig(
     val showPlaybackProgress: Boolean = false,
     val showDownloadedBadge: Boolean = false,
     val showMarkWatchedButton: Boolean = false,
-    val showMediaTypeBadge: Boolean = false
+    val showMediaTypeBadge: Boolean = false,
+    val showMoreButton: Boolean = true
 )
 
 /**
@@ -164,6 +165,7 @@ fun UnifiedVideoCard(
     mediaType: String = "VIDEO"
 ) {
     var isTitleExpanded by remember { mutableStateOf(false) }
+    var showActionSheet by remember { mutableStateOf(false) }
 
     GlassCard(
         modifier = modifier
@@ -347,75 +349,91 @@ fun UnifiedVideoCard(
                     }
                 }
 
-                // Action buttons row (if selection mode is disabled)
-                if (!config.showSelectionCheckbox &&
-                    (config.showFavoriteButton || config.showMoveToFolderButton || config.showRemoveFromFolderButton || config.showDownloadButton || config.showMarkWatchedButton)
-                ) {
-                    Spacer(modifier = Modifier.height(8.dp))
+                // Action 3-dot button (if selection mode is disabled)
+                if (!config.showSelectionCheckbox && config.showMoreButton) {
+                    Spacer(modifier = Modifier.height(4.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.End,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        if (config.showFavoriteButton) {
-                            IconToggleButton(
-                                checked = isFavorite,
-                                onCheckedChange = { onFavoriteToggle() }
+                        Box {
+                            IconButton(
+                                onClick = { showActionSheet = true },
+                                modifier = Modifier.size(32.dp)
                             ) {
                                 Icon(
-                                    painter = painterResource(R.drawable.ic_mn_heart),
-                                    contentDescription = "Favorite",
-                                    tint = if (isFavorite) MediaNestColors.Accent else MaterialTheme.colorScheme.onSurfaceVariant
+                                    painter = painterResource(R.drawable.ic_mn_more),
+                                    contentDescription = "More actions",
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(18.dp)
                                 )
                             }
-                        }
-
-                        if (config.showMoveToFolderButton) {
-                            IconButton(onClick = onMoveToFolder) {
-                                Icon(
-                                    painter = painterResource(R.drawable.ic_mn_move),
-                                    contentDescription = "Move to folder",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-
-                        if (config.showDownloadButton) {
-                            Box {
-                                IconButton(onClick = onDownloadClick) {
-                                    Icon(
-                                        painter = painterResource(if (!isDownloaded) R.drawable.ic_mn_download else R.drawable.ic_mn_download_done),
-                                        contentDescription = "Download",
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                                downloadMenuContent?.invoke()
-                            }
-                        }
-
-                        if (config.showMarkWatchedButton) {
-                            IconButton(onClick = onMarkWatched) {
-                                Icon(
-                                    painter = painterResource(R.drawable.ic_mn_eye),
-                                    contentDescription = "Set as watched",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-
-                        if (config.showRemoveFromFolderButton) {
-                            IconButton(onClick = onRemoveFromFolder) {
-                                Icon(
-                                    painter = painterResource(R.drawable.ic_mn_close),
-                                    contentDescription = "Remove from folder",
-                                    tint = MaterialTheme.colorScheme.error
-                                )
-                            }
+                            downloadMenuContent?.invoke()
                         }
                     }
                 }
             }
         }
+    }
+
+    if (showActionSheet) {
+        val actions = remember(isFavorite) {
+            listOf(
+                VideoActionItem(
+                    id = "play",
+                    label = "Play Video",
+                    iconRes = R.drawable.ic_mn_play
+                ),
+                VideoActionItem(
+                    id = "folder",
+                    label = "Add to / Move to Folder",
+                    iconRes = R.drawable.ic_mn_folder
+                ),
+                VideoActionItem(
+                    id = "download",
+                    label = "Download / Quality Options",
+                    iconRes = R.drawable.ic_mn_download
+                ),
+                VideoActionItem(
+                    id = "favorite",
+                    label = if (isFavorite) "Remove from Favorites" else "Add to Favorites",
+                    iconRes = R.drawable.ic_mn_heart,
+                    active = isFavorite
+                ),
+                VideoActionItem(
+                    id = "share",
+                    label = "Share URL / File",
+                    iconRes = R.drawable.ic_mn_share
+                ),
+                VideoActionItem(
+                    id = "delete",
+                    label = "Delete / Remove Video",
+                    iconRes = R.drawable.ic_mn_trash,
+                    destructive = true
+                )
+            )
+        }
+
+        VideoActionBottomSheet(
+            title = title,
+            channelName = channelName,
+            thumbnailUrl = thumbnailUrl,
+            durationSeconds = durationSeconds,
+            actions = actions,
+            onAction = { actionId ->
+                showActionSheet = false
+                when (actionId) {
+                    "play" -> onClick()
+                    "folder" -> onMoveToFolder()
+                    "download" -> onDownloadClick()
+                    "favorite" -> onFavoriteToggle()
+                    "share" -> { /* share = no-op */ }
+                    "delete" -> onRemoveFromFolder()
+                }
+            },
+            onDismiss = { showActionSheet = false }
+        )
     }
 }
 
@@ -451,6 +469,7 @@ fun UnifiedVideoRow(
     mediaType: String = "VIDEO"
 ) {
     var isTitleExpanded by remember { mutableStateOf(false) }
+    var showActionSheet by remember { mutableStateOf(false) }
 
     GlassCard(
         modifier = modifier
@@ -651,79 +670,90 @@ fun UnifiedVideoRow(
                     }
                 }
 
-                // Action buttons row (if selection mode is disabled)
-                if (!config.showSelectionCheckbox &&
-                    (config.showFavoriteButton || config.showMoveToFolderButton || config.showRemoveFromFolderButton || config.showDownloadButton || config.showMarkWatchedButton)
-                ) {
+                // Action 3-dot button (if selection mode is disabled)
+                if (!config.showSelectionCheckbox && config.showMoreButton) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.End,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        if (config.showFavoriteButton) {
-                            IconToggleButton(
-                                checked = isFavorite,
-                                onCheckedChange = { onFavoriteToggle() }
+                        Box {
+                            IconButton(
+                                onClick = { showActionSheet = true },
+                                modifier = Modifier.size(32.dp)
                             ) {
                                 Icon(
-                                    painter = painterResource(R.drawable.ic_mn_heart),
-                                    contentDescription = "Favorite",
-                                    tint = if (isFavorite) MediaNestColors.Accent else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                        }
-
-                        if (config.showMoveToFolderButton) {
-                            IconButton(onClick = onMoveToFolder, modifier = Modifier.size(32.dp)) {
-                                Icon(
-                                    painter = painterResource(R.drawable.ic_mn_move),
-                                    contentDescription = "Move to folder",
+                                    painter = painterResource(R.drawable.ic_mn_more),
+                                    contentDescription = "More actions",
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(20.dp)
+                                    modifier = Modifier.size(18.dp)
                                 )
                             }
-                        }
-
-                        if (config.showDownloadButton) {
-                            Box {
-                                IconButton(onClick = onDownloadClick, modifier = Modifier.size(32.dp)) {
-                                    Icon(
-                                        painter = painterResource(if (!isDownloaded) R.drawable.ic_mn_download else R.drawable.ic_mn_download_done),
-                                        contentDescription = "Download",
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-                                downloadMenuContent?.invoke()
-                            }
-                        }
-
-                        if (config.showMarkWatchedButton) {
-                            IconButton(onClick = onMarkWatched, modifier = Modifier.size(32.dp)) {
-                                Icon(
-                                    painter = painterResource(R.drawable.ic_mn_eye),
-                                    contentDescription = "Set as watched",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                        }
-
-                        if (config.showRemoveFromFolderButton) {
-                            IconButton(onClick = onRemoveFromFolder, modifier = Modifier.size(32.dp)) {
-                                Icon(
-                                    painter = painterResource(R.drawable.ic_mn_close),
-                                    contentDescription = "Remove from folder",
-                                    tint = MaterialTheme.colorScheme.error,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
+                            downloadMenuContent?.invoke()
                         }
                     }
                 }
             }
         }
+    }
+
+    if (showActionSheet) {
+        val actions = remember(isFavorite) {
+            listOf(
+                VideoActionItem(
+                    id = "play",
+                    label = "Play Video",
+                    iconRes = R.drawable.ic_mn_play
+                ),
+                VideoActionItem(
+                    id = "folder",
+                    label = "Add to / Move to Folder",
+                    iconRes = R.drawable.ic_mn_folder
+                ),
+                VideoActionItem(
+                    id = "download",
+                    label = "Download / Quality Options",
+                    iconRes = R.drawable.ic_mn_download
+                ),
+                VideoActionItem(
+                    id = "favorite",
+                    label = if (isFavorite) "Remove from Favorites" else "Add to Favorites",
+                    iconRes = R.drawable.ic_mn_heart,
+                    active = isFavorite
+                ),
+                VideoActionItem(
+                    id = "share",
+                    label = "Share URL / File",
+                    iconRes = R.drawable.ic_mn_share
+                ),
+                VideoActionItem(
+                    id = "delete",
+                    label = "Delete / Remove Video",
+                    iconRes = R.drawable.ic_mn_trash,
+                    destructive = true
+                )
+            )
+        }
+
+        VideoActionBottomSheet(
+            title = title,
+            channelName = channelName,
+            thumbnailUrl = thumbnailUrl,
+            durationSeconds = durationSeconds,
+            actions = actions,
+            onAction = { actionId ->
+                showActionSheet = false
+                when (actionId) {
+                    "play" -> onClick()
+                    "folder" -> onMoveToFolder()
+                    "download" -> onDownloadClick()
+                    "favorite" -> onFavoriteToggle()
+                    "share" -> { /* share = no-op */ }
+                    "delete" -> onRemoveFromFolder()
+                }
+            },
+            onDismiss = { showActionSheet = false }
+        )
     }
 }
 
