@@ -84,6 +84,7 @@ class PlayerViewModel @Inject constructor(
 
     private var sessionTotalWatchTime: Long = 0L
     private var countedThisSession: Boolean = false
+    private var autoMarkWatched: Boolean = true
 
     private var pendingInit: (() -> Unit)? = null
     private var maxSavedPositionMs: Long = 0L
@@ -110,6 +111,12 @@ class PlayerViewModel @Inject constructor(
     }
 
     init {
+        viewModelScope.launch {
+            playbackPreferences.autoMarkWatched.collect { enabled ->
+                autoMarkWatched = enabled
+            }
+        }
+
         val sessionToken = SessionToken(context, ComponentName(context, PlaybackService::class.java))
         val future = MediaController.Builder(context, sessionToken).buildAsync()
         controllerFuture = future
@@ -393,7 +400,7 @@ class PlayerViewModel @Inject constructor(
 
     private fun checkAndMarkWatched(pos: Long, duration: Long) {
         val videoId = currentVideoId ?: return
-        if (!countedThisSession && duration > 0 && (duration - pos) <= 60000L) {
+        if (autoMarkWatched && !countedThisSession && duration > 0 && (duration - pos) <= 60000L) {
             countedThisSession = true
             viewModelScope.launch {
                 ensureVideoExists(videoId)
