@@ -377,7 +377,8 @@ data class ParsedProgressInfo(
     val speedText: String?,
     val etaText: String?,
     val statusText: String,
-    val percentage: Int
+    val percentage: Int,
+    val elapsedText: String? = null
 )
 
 fun parseDownloadProgress(download: DownloadEntity): ParsedProgressInfo {
@@ -393,7 +394,8 @@ fun parseDownloadProgress(download: DownloadEntity): ParsedProgressInfo {
                 speedText = null,
                 etaText = null,
                 statusText = "Waiting in queue...",
-                percentage = 0
+                percentage = 0,
+                elapsedText = null
             )
         }
         DownloadStatus.PAUSED -> {
@@ -412,7 +414,8 @@ fun parseDownloadProgress(download: DownloadEntity): ParsedProgressInfo {
                 speedText = null,
                 etaText = null,
                 statusText = statusText,
-                percentage = pct
+                percentage = pct,
+                elapsedText = null
             )
         }
         DownloadStatus.FAILED -> {
@@ -423,7 +426,8 @@ fun parseDownloadProgress(download: DownloadEntity): ParsedProgressInfo {
                 speedText = null,
                 etaText = null,
                 statusText = if (msg.isNotBlank()) msg else "Download failed",
-                percentage = pct
+                percentage = pct,
+                elapsedText = null
             )
         }
         DownloadStatus.CANCELED -> {
@@ -434,7 +438,8 @@ fun parseDownloadProgress(download: DownloadEntity): ParsedProgressInfo {
                 speedText = null,
                 etaText = null,
                 statusText = "Canceled",
-                percentage = pct
+                percentage = pct,
+                elapsedText = null
             )
         }
         DownloadStatus.COMPLETED -> {
@@ -446,7 +451,8 @@ fun parseDownloadProgress(download: DownloadEntity): ParsedProgressInfo {
                     speedText = null,
                     etaText = null,
                     statusText = "Source file missing",
-                    percentage = 100
+                    percentage = 100,
+                    elapsedText = null
                 )
             }
             return ParsedProgressInfo(
@@ -456,7 +462,8 @@ fun parseDownloadProgress(download: DownloadEntity): ParsedProgressInfo {
                 speedText = null,
                 etaText = null,
                 statusText = "Completed · %.1f MB".format(download.fileSizeBytes / (1024f * 1024f)),
-                percentage = 100
+                percentage = 100,
+                elapsedText = null
             )
         }
         DownloadStatus.DOWNLOADING -> {
@@ -467,6 +474,7 @@ fun parseDownloadProgress(download: DownloadEntity): ParsedProgressInfo {
                 val vTotal = parts.getOrNull(2)?.toLongOrNull() ?: 0L
                 val aTotal = parts.getOrNull(3)?.toLongOrNull() ?: 0L
                 val speedRaw = parts.getOrNull(4)
+                val elapsedMs = parts.getOrNull(5)?.toLongOrNull()
                 val remainingMs = parts.getOrNull(6)?.toLongOrNull()
 
                 val totalSize = vTotal + aTotal
@@ -474,6 +482,7 @@ fun parseDownloadProgress(download: DownloadEntity): ParsedProgressInfo {
                 val totalMb = if (totalSize > 0) totalSize / (1024f * 1024f) else (download.fileSizeBytes / (1024f * 1024f))
 
                 val speedText = formatSpeed(speedRaw)
+                val elapsedText = elapsedMs?.takeIf { it >= 0 }?.let { compactDuration(it) }
                 val etaText = remainingMs?.takeIf { it > 0 }?.let { "${compactDuration(it)} left" }
                 val statusText = "Downloading Video · %.1f MB / %.1f MB".format(downloadedMb, totalMb)
 
@@ -484,13 +493,15 @@ fun parseDownloadProgress(download: DownloadEntity): ParsedProgressInfo {
                     speedText = speedText,
                     etaText = etaText,
                     statusText = statusText,
-                    percentage = pct
+                    percentage = pct,
+                    elapsedText = elapsedText
                 )
             } else if (msg.startsWith("downloading_audio")) {
                 val aDownloaded = parts.getOrNull(1)?.toLongOrNull() ?: 0L
                 val aTotal = parts.getOrNull(2)?.toLongOrNull() ?: 0L
                 val vTotal = parts.getOrNull(3)?.toLongOrNull() ?: 0L
                 val speedRaw = parts.getOrNull(4)
+                val elapsedMs = parts.getOrNull(5)?.toLongOrNull()
                 val remainingMs = parts.getOrNull(6)?.toLongOrNull()
 
                 val totalSize = vTotal + aTotal
@@ -499,6 +510,7 @@ fun parseDownloadProgress(download: DownloadEntity): ParsedProgressInfo {
                 val totalMb = if (totalSize > 0) totalSize / (1024f * 1024f) else (download.fileSizeBytes / (1024f * 1024f))
 
                 val speedText = formatSpeed(speedRaw)
+                val elapsedText = elapsedMs?.takeIf { it >= 0 }?.let { compactDuration(it) }
                 val etaText = remainingMs?.takeIf { it > 0 }?.let { "${compactDuration(it)} left" }
                 val statusText = "Downloading Audio · %.1f MB / %.1f MB".format(downloadedMb, totalMb)
 
@@ -510,13 +522,16 @@ fun parseDownloadProgress(download: DownloadEntity): ParsedProgressInfo {
                     speedText = speedText,
                     etaText = etaText,
                     statusText = statusText,
-                    percentage = pct
+                    percentage = pct,
+                    elapsedText = elapsedText
                 )
             } else if (msg.startsWith("merging")) {
                 val pctPart = parts.getOrNull(1)?.toIntOrNull()
-                val speedRaw = parts.getOrNull(4)
+                val elapsedMs = parts.getOrNull(2)?.toLongOrNull()
                 val remainingMs = parts.getOrNull(3)?.toLongOrNull()
+                val speedRaw = parts.getOrNull(4)
                 val speedText = formatSpeed(speedRaw)
+                val elapsedText = elapsedMs?.takeIf { it >= 0 }?.let { compactDuration(it) }
                 val etaText = remainingMs?.takeIf { it > 0 }?.let { "${compactDuration(it)} left" }
                 val statusText = if (pctPart != null) "Merging Video & Audio ($pctPart%)" else "Merging Video & Audio..."
 
@@ -527,10 +542,13 @@ fun parseDownloadProgress(download: DownloadEntity): ParsedProgressInfo {
                     speedText = speedText,
                     etaText = etaText,
                     statusText = statusText,
-                    percentage = pctPart ?: pct
+                    percentage = pctPart ?: pct,
+                    elapsedText = elapsedText
                 )
             } else if (download.format == "audio_extracted" || msg.startsWith("extracting")) {
-                val remainingMs = parts.getOrNull(1)?.toLongOrNull()
+                val elapsedMs = parts.getOrNull(1)?.toLongOrNull()
+                val remainingMs = parts.getOrNull(2)?.toLongOrNull()
+                val elapsedText = elapsedMs?.takeIf { it >= 0 }?.let { compactDuration(it) }
                 val etaText = remainingMs?.takeIf { it > 0 }?.let { "${compactDuration(it)} left" }
                 return ParsedProgressInfo(
                     stage = DownloadProgressStage.EXTRACTING,
@@ -539,12 +557,15 @@ fun parseDownloadProgress(download: DownloadEntity): ParsedProgressInfo {
                     speedText = null,
                     etaText = etaText,
                     statusText = "Extracting Audio ($pct%)",
-                    percentage = pct
+                    percentage = pct,
+                    elapsedText = elapsedText
                 )
             } else if (msg.startsWith("downloading|")) {
                 val speedRaw = parts.getOrNull(1)
+                val elapsedMs = parts.getOrNull(2)?.toLongOrNull()
                 val remainingMs = parts.getOrNull(3)?.toLongOrNull()
                 val speedText = formatSpeed(speedRaw)
+                val elapsedText = elapsedMs?.takeIf { it >= 0 }?.let { compactDuration(it) }
                 val etaText = remainingMs?.takeIf { it > 0 }?.let { "${compactDuration(it)} left" }
                 val downloadedMb = (download.progress * download.fileSizeBytes) / (1024f * 1024f)
                 val totalMb = download.fileSizeBytes / (1024f * 1024f)
@@ -558,7 +579,8 @@ fun parseDownloadProgress(download: DownloadEntity): ParsedProgressInfo {
                     speedText = speedText,
                     etaText = etaText,
                     statusText = statusText,
-                    percentage = pct
+                    percentage = pct,
+                    elapsedText = elapsedText
                 )
             } else {
                 val downloadedMb = (download.progress * download.fileSizeBytes) / (1024f * 1024f)
@@ -572,7 +594,8 @@ fun parseDownloadProgress(download: DownloadEntity): ParsedProgressInfo {
                     speedText = null,
                     etaText = null,
                     statusText = statusText,
-                    percentage = pct
+                    percentage = pct,
+                    elapsedText = null
                 )
             }
         }
@@ -2025,6 +2048,7 @@ private fun ActiveDownloadCard(
                 percentage = parsedInfo.percentage,
                 downloadSpeed = parsedInfo.speedText,
                 eta = parsedInfo.etaText,
+                elapsed = parsedInfo.elapsedText,
                 isIndeterminate = (download.errorMessage == "merging"),
                 modifier = Modifier.fillMaxWidth()
             )
@@ -2234,7 +2258,6 @@ private fun CompletedDownloadCard(
     isPlaying: Boolean,
     defaultResolution: String = DownloadPreferences.DEFAULT_RESOLUTION
 ) {
-    val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val playbackHistory by viewModel.playbackHistory.collectAsStateWithLifecycle()
 
@@ -2344,13 +2367,13 @@ private fun CompletedDownloadCard(
                                 .padding(3.dp)
                                 .clip(CircleShape)
                                 .background(MediaNestColors.GlassStrong)
-                                .padding(2.dp)
+                                .padding(3.dp)
                         ) {
                             Icon(
                                 painter = painterResource(R.drawable.ic_mn_check_circle),
                                 contentDescription = "Completed",
                                 tint = MediaNestColors.Success,
-                                modifier = Modifier.size(12.dp)
+                                modifier = Modifier.size(10.dp)
                             )
                         }
 
@@ -2392,7 +2415,7 @@ private fun CompletedDownloadCard(
                         }
                     }
 
-                    Spacer(Modifier.width(12.dp))
+                    Spacer(Modifier.width(10.dp))
 
                     // Title & Metadata
                     Column(
@@ -2515,19 +2538,6 @@ private fun CompletedDownloadCard(
                                     )
                                 }
                             }
-                        )
-                    }
-
-                    // Share Button
-                    MediaNestIconButton(
-                        onClick = { shareDownloadFile(context, download) },
-                        size = MediaNestIconButtonSize.Small,
-                        tint = MediaNestColors.TextSecondary
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_mn_share),
-                            contentDescription = "Share",
-                            modifier = Modifier.size(16.dp)
                         )
                     }
 

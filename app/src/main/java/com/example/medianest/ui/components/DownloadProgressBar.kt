@@ -88,6 +88,7 @@ fun DownloadProgressBar(
     percentage: Int? = null,
     downloadSpeed: String? = null,
     eta: String? = null,
+    elapsed: String? = null,
     isIndeterminate: Boolean = false,
     showMetadata: Boolean = true,
     barHeight: Dp = 6.dp,
@@ -187,15 +188,16 @@ fun DownloadProgressBar(
         }
 
         // Footer Row: Speed and ETA metadata
-        if (showMetadata && (downloadSpeed != null || eta != null)) {
+        if (showMetadata && (downloadSpeed != null || eta != null || elapsed != null)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                if (downloadSpeed != null) {
+                val startInfo = listOfNotNull(elapsed, downloadSpeed).joinToString(" · ")
+                if (startInfo.isNotEmpty()) {
                     Text(
-                        text = downloadSpeed,
+                        text = startInfo,
                         style = MaterialTheme.typography.labelSmall,
                         color = MediaNestColors.TextSecondary
                     )
