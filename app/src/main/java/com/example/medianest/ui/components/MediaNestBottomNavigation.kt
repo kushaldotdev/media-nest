@@ -93,7 +93,7 @@ object MediaNestBottomNavDefaults {
  * Characteristics:
  * - Background: [MediaNestColors.NavigationBar] (#241417)
  * - Top border: [MediaNestColors.Border] (#4B2B33)
- * - Active pill indicator: [MediaNestColors.NavigationActive] (#682B38)
+ * - Active top indicator: [MediaNestColors.Accent] (#FFB1B6)
  * - Active icon & text: [MediaNestColors.Accent] (#FFB1B6)
  * - Inactive icon & text: [MediaNestColors.TextSecondary] (#C8AEB4)
  * - 4 main destinations: Home, Collections, Downloads, Settings
@@ -160,7 +160,7 @@ fun MediaNestBottomNavigation(
 }
 
 /**
- * Individual Navigation Item composable with active pill indicator and top active bar.
+ * Individual Navigation Item composable with top active indicator bar and Accent tint.
  */
 @Composable
 fun MediaNestBottomNavigationItemView(
@@ -182,10 +182,10 @@ fun MediaNestBottomNavigationItemView(
         label = "navLabelColor"
     )
 
-    val pillAlpha by animateFloatAsState(
+    val indicatorAlpha by animateFloatAsState(
         targetValue = if (selected) 1f else 0f,
         animationSpec = tween(durationMillis = 250, easing = FastOutSlowInEasing),
-        label = "navPillAlpha"
+        label = "navIndicatorAlpha"
     )
 
     val scale by animateFloatAsState(
@@ -211,19 +211,15 @@ fun MediaNestBottomNavigationItemView(
             modifier = Modifier
                 .width(40.dp)
                 .height(3.dp)
-                .graphicsLayer { alpha = pillAlpha }
+                .graphicsLayer { alpha = indicatorAlpha }
                 .clip(RoundedCornerShape(bottomStart = 3.dp, bottomEnd = 3.dp))
                 .background(MediaNestColors.Accent)
         )
 
-        Spacer(Modifier.height(3.dp))
+        Spacer(Modifier.height(4.dp))
 
-        // Icon Container with Pill Indicator
+        // Icon with Badge
         Box(
-            modifier = Modifier
-                .size(width = 54.dp, height = 28.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(MediaNestColors.NavigationActive.copy(alpha = pillAlpha)),
             contentAlignment = Alignment.Center
         ) {
             Icon(
@@ -244,7 +240,7 @@ fun MediaNestBottomNavigationItemView(
                 Box(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
-                        .offset(x = 4.dp, y = (-3).dp)
+                        .offset(x = 6.dp, y = (-4).dp)
                         .widthIn(min = 16.dp)
                         .height(16.dp)
                         .clip(RoundedCornerShape(8.dp))

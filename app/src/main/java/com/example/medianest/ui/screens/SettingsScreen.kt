@@ -2953,11 +2953,15 @@ private fun customTextFieldColors() = OutlinedTextFieldDefaults.colors(
 
 @Composable
 private fun customSwitchColors() = SwitchDefaults.colors(
-    checkedThumbColor = MediaNestColors.OnAccent,
-    checkedTrackColor = MediaNestColors.Accent,
-    uncheckedThumbColor = MediaNestColors.TextSecondary,
-    uncheckedTrackColor = MediaNestColors.Raised,
-    uncheckedBorderColor = MediaNestColors.Border
+    checkedTrackColor = MediaNestColors.AccentDeep,
+    checkedThumbColor = Color.White,
+    uncheckedTrackColor = MediaNestColors.ProgressTrack,
+    uncheckedThumbColor = Color.White,
+    uncheckedBorderColor = MediaNestColors.Border,
+    disabledCheckedTrackColor = MediaNestColors.Border.copy(alpha = 0.4f),
+    disabledUncheckedTrackColor = MediaNestColors.Border.copy(alpha = 0.4f),
+    disabledCheckedThumbColor = MediaNestColors.TextSecondary.copy(alpha = 0.6f),
+    disabledUncheckedThumbColor = MediaNestColors.TextSecondary.copy(alpha = 0.6f)
 )
 
 private fun getPathFromUri(context: Context, uri: Uri): String? {

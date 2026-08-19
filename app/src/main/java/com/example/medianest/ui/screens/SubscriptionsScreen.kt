@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.res.painterResource
 import com.example.medianest.R
 import com.example.medianest.ui.theme.MediaNestColors
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -31,7 +32,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -42,6 +45,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontStyle
@@ -77,6 +81,7 @@ fun SubscriptionsScreen(
         subscriptionsPreferences ?: SubscriptionsPreferences(context.applicationContext)
     }
     val showShorts by prefs.showShorts.collectAsStateWithLifecycle(initialValue = SubscriptionsPreferences.DEFAULT_SHOW_SHORTS)
+    var pendingUnsubscribe by remember { mutableStateOf<SubscriptionEntity?>(null) }
 
     val filtered = subscriptions.filter { 
         it.sourceType == sourceType && 
@@ -106,6 +111,13 @@ fun SubscriptionsScreen(
                             prefs.setShowShorts(checked)
                         }
                     },
+                    colors = SwitchDefaults.colors(
+                        checkedTrackColor = MediaNestColors.AccentDeep,
+                        checkedThumbColor = Color.White,
+                        uncheckedTrackColor = MediaNestColors.ProgressTrack,
+                        uncheckedThumbColor = Color.White,
+                        uncheckedBorderColor = MediaNestColors.Border
+                    ),
                     modifier = Modifier.scale(0.8f)
                 )
             }
@@ -148,12 +160,7 @@ fun SubscriptionsScreen(
                                         snackbarHostState.showSnackbar(msg)
                                     }
                                 },
-                                onUnsubscribe = { 
-                                    viewModel.unsubscribe(sub.id) 
-                                    coroutineScope.launch {
-                                        snackbarHostState.showSnackbar("Unsubscribed from ${sub.name}")
-                                    }
-                                },
+                                onUnsubscribe = { pendingUnsubscribe = sub },
                                 onClick = { onSubscriptionClick(sub.sourceType, sub.sourceId) }
                             )
                         }
@@ -197,12 +204,7 @@ fun SubscriptionsScreen(
                                         snackbarHostState.showSnackbar(msg)
                                     }
                                 },
-                                onUnsubscribe = { 
-                                    viewModel.unsubscribe(sub.id) 
-                                    coroutineScope.launch {
-                                        snackbarHostState.showSnackbar("Unsubscribed from ${sub.name}")
-                                    }
-                                },
+                                onUnsubscribe = { pendingUnsubscribe = sub },
                                 onClick = { onSubscriptionClick(sub.sourceType, sub.sourceId) }
                             )
                         }
@@ -233,6 +235,50 @@ fun SubscriptionsScreen(
                 .align(Alignment.BottomCenter)
                 .padding(bottom = 80.dp)
         )
+
+        pendingUnsubscribe?.let { sub ->
+            AlertDialog(
+                onDismissRequest = { pendingUnsubscribe = null },
+                title = {
+                    Text(
+                        text = "Remove?",
+                        color = MediaNestColors.TextPrimary
+                    )
+                },
+                text = {
+                    Text(
+                        text = "Are you sure you want to remove \"${sub.name}\"?",
+                        color = MediaNestColors.TextSecondary
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            val subToRemove = sub
+                            pendingUnsubscribe = null
+                            viewModel.unsubscribe(subToRemove.id)
+                            coroutineScope.launch {
+                                snackbarHostState.showSnackbar("Unsubscribed from ${subToRemove.name}")
+                            }
+                        }
+                    ) {
+                        Text(
+                            text = "Remove",
+                            color = MediaNestColors.Destructive
+                        )
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { pendingUnsubscribe = null }) {
+                        Text(
+                            text = "Cancel",
+                            color = MediaNestColors.TextSecondary
+                        )
+                    }
+                },
+                containerColor = MediaNestColors.Raised
+            )
+        }
     }
 }
 
@@ -300,6 +346,13 @@ private fun SubscriptionCard(
                         Switch(
                             checked = subscription.autoDownload,
                             onCheckedChange = { onAutoDownloadChange(it, subscription.audioOnly) },
+                            colors = SwitchDefaults.colors(
+                                checkedTrackColor = MediaNestColors.AccentDeep,
+                                checkedThumbColor = Color.White,
+                                uncheckedTrackColor = MediaNestColors.ProgressTrack,
+                                uncheckedThumbColor = Color.White,
+                                uncheckedBorderColor = MediaNestColors.Border
+                            ),
                             modifier = Modifier.scale(0.8f)
                         )
                     }
@@ -315,6 +368,13 @@ private fun SubscriptionCard(
                         Switch(
                             checked = subscription.audioOnly,
                             onCheckedChange = { onAutoDownloadChange(subscription.autoDownload, it) },
+                            colors = SwitchDefaults.colors(
+                                checkedTrackColor = MediaNestColors.AccentDeep,
+                                checkedThumbColor = Color.White,
+                                uncheckedTrackColor = MediaNestColors.ProgressTrack,
+                                uncheckedThumbColor = Color.White,
+                                uncheckedBorderColor = MediaNestColors.Border
+                            ),
                             modifier = Modifier.scale(0.8f)
                         )
                     }
