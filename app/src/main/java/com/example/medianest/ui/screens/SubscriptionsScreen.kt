@@ -59,6 +59,7 @@ import com.example.medianest.data.local.entity.SubscriptionEntity
 import com.example.medianest.data.preferences.SubscriptionsPreferences
 import com.example.medianest.ui.components.GlassCard
 import com.example.medianest.ui.components.EndOfListIndicator
+import com.example.medianest.ui.components.MediaNestSnackbarHost
 import com.example.medianest.ui.viewmodel.SubscriptionsViewModel
 import com.example.medianest.ui.viewmodel.ViewMode
 import kotlinx.coroutines.launch
@@ -229,7 +230,7 @@ fun SubscriptionsScreen(
             }
         }
 
-        SnackbarHost(
+        MediaNestSnackbarHost(
             hostState = snackbarHostState,
             modifier = Modifier
                 .align(Alignment.BottomCenter)

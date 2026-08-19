@@ -54,6 +54,7 @@ import com.example.medianest.data.repository.FolderRepository
 import com.example.medianest.data.repository.FolderTreeNode
 import com.example.medianest.data.repository.flattenWithDepth
 import com.example.medianest.ui.components.*
+import com.example.medianest.ui.components.MediaNestSnackbarHost
 import com.example.medianest.ui.components.NotificationBellAction
 import com.example.medianest.ui.theme.MediaNestColors
 import com.example.medianest.ui.theme.MediaNestShapes
@@ -211,18 +212,7 @@ fun LibraryScreen(
     ) {
         Scaffold(
             snackbarHost = {
-                SnackbarHost(
-                    hostState = snackbarHostState,
-                    snackbar = { data ->
-                        Snackbar(
-                            snackbarData = data,
-                            containerColor = MediaNestColors.Raised,
-                            contentColor = MediaNestColors.TextPrimary,
-                            actionColor = MediaNestColors.Accent,
-                            shape = RoundedCornerShape(12.dp)
-                        )
-                    }
-                )
+                MediaNestSnackbarHost(hostState = snackbarHostState)
             },
             containerColor = MediaNestColors.Background,
             topBar = {

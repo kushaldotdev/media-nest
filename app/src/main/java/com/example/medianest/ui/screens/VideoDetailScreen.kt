@@ -70,6 +70,7 @@ import com.example.medianest.data.local.entity.VideoEntity
 import com.example.medianest.data.model.ExtractedVideoInfo
 import com.example.medianest.data.model.StreamSource
 import com.example.medianest.ui.components.EndOfListIndicator
+import com.example.medianest.ui.components.MediaNestSnackbarHost
 import com.example.medianest.ui.components.MediaNestTopAppBar
 import com.example.medianest.ui.components.WatchCountDialog
 import com.example.medianest.ui.components.YoutubeSubscribeButton
@@ -134,7 +135,7 @@ fun VideoDetailScreen(
     }
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = { MediaNestSnackbarHost(snackbarHostState) },
         containerColor = MediaNestColors.Background,
         contentColor = MediaNestColors.TextPrimary,
         topBar = {

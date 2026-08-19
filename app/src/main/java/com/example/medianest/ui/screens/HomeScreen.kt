@@ -93,6 +93,7 @@ import com.example.medianest.data.model.ExtractedPlaylistInfo
 import com.example.medianest.data.model.ExtractedVideoInfo
 import com.example.medianest.data.model.StreamSource
 import com.example.medianest.ui.components.EndOfListIndicator
+import com.example.medianest.ui.components.MediaNestSnackbarHost
 import com.example.medianest.ui.components.NotificationBellAction
 import com.example.medianest.ui.components.WatchCountDialog
 import com.example.medianest.ui.theme.MediaNestColors
@@ -190,7 +191,7 @@ fun HomeScreen(
     Scaffold(
         containerColor = MediaNestColors.Background,
         contentColor = MediaNestColors.TextPrimary,
-        snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
+        snackbarHost = { MediaNestSnackbarHost(hostState = snackbarHostState) }
     ) { paddingValues ->
         LazyColumn(
             state = listState,

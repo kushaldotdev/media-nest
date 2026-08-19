@@ -65,6 +65,7 @@ import com.example.medianest.data.model.ChannelInfo
 import com.example.medianest.data.model.ExtractedPlaylistInfo
 import com.example.medianest.data.model.ExtractedVideoInfo
 import com.example.medianest.ui.components.GlassCard
+import com.example.medianest.ui.components.MediaNestSnackbarHost
 import com.example.medianest.ui.components.QuickDownloadMenu
 import com.example.medianest.ui.components.WatchCountDialog
 import com.example.medianest.ui.components.YoutubeSubscribeButton
@@ -156,7 +157,7 @@ fun InlineSubscriptionScreen(
     }
 
     Scaffold(
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = { MediaNestSnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = {

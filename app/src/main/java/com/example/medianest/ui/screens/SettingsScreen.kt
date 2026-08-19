@@ -49,6 +49,7 @@ import com.example.medianest.ui.components.MediaNestButtonVariant
 import com.example.medianest.ui.components.MediaNestChip
 import com.example.medianest.ui.components.MediaNestIconButton
 import com.example.medianest.ui.components.MediaNestIconButtonSize
+import com.example.medianest.ui.components.MediaNestSnackbarHost
 import com.example.medianest.ui.components.MediaNestTopAppBar
 import com.example.medianest.ui.components.NotificationBellAction
 import com.example.medianest.ui.components.MnNoteBox
@@ -186,7 +187,7 @@ fun SettingsScreen(
                 }
             )
         },
-        snackbarHost = { SnackbarHost(snackbarHostState) },
+        snackbarHost = { MediaNestSnackbarHost(snackbarHostState) },
         containerColor = MediaNestColors.Background
     ) { padding ->
         Column(
