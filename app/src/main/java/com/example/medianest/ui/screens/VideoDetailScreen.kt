@@ -25,6 +25,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -102,6 +103,7 @@ fun VideoDetailScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
     var showWatchCountDialog by remember { mutableStateOf(false) }
+    var showResetConfirm by remember { mutableStateOf(false) }
     val completedDownloads = remember(downloads) { downloads.filter { it.status == DownloadStatus.COMPLETED } }
     var downloadedLimit by remember { mutableStateOf(10) }
     var watchSessionsLimit by remember { mutableStateOf(10) }
@@ -138,7 +140,7 @@ fun VideoDetailScreen(
         topBar = {
             Column {
                 MediaNestTopAppBar(
-                    title = videoInfo.title,
+                    title = "Details",
                     onNavigateBack = onBack,
                     actions = {
                         IconToggleButton(
@@ -1056,7 +1058,7 @@ fun VideoDetailScreen(
                                     if (videoHistory != null && videoHistory.positionMillis > 0) {
                                         Spacer(Modifier.height(12.dp))
                                         Button(
-                                            onClick = onResetWatchPosition,
+                                            onClick = { showResetConfirm = true },
                                             colors = ButtonDefaults.buttonColors(
                                                 containerColor = MediaNestColors.Raised,
                                                 contentColor = MediaNestColors.TextPrimary
@@ -1203,6 +1205,48 @@ fun VideoDetailScreen(
             onDismiss = { showWatchCountDialog = false },
             onConfirm = { newCount ->
                 onMarkWatched(newCount)
+            }
+        )
+    }
+
+    if (showResetConfirm) {
+        AlertDialog(
+            onDismissRequest = { showResetConfirm = false },
+            containerColor = MediaNestColors.Raised,
+            title = {
+                Text(
+                    text = "Reset watch position?",
+                    color = MediaNestColors.TextPrimary
+                )
+            },
+            text = {
+                Text(
+                    text = "This clears your saved playback position for this video.",
+                    color = MediaNestColors.TextSecondary
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onResetWatchPosition()
+                        showResetConfirm = false
+                    }
+                ) {
+                    Text(
+                        text = "Reset",
+                        color = MediaNestColors.Destructive
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { showResetConfirm = false }
+                ) {
+                    Text(
+                        text = "Cancel",
+                        color = MediaNestColors.TextSecondary
+                    )
+                }
             }
         )
     }
