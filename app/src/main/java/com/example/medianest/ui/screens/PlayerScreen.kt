@@ -644,94 +644,7 @@ fun PlayerScreen(
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = {
-                        Column {
-                            Text(
-                                text = state.title,
-                                maxLines = if (isTitleExpanded) Int.MAX_VALUE else 1,
-                                overflow = TextOverflow.Ellipsis,
-                                style = MaterialTheme.typography.titleMedium,
-                                modifier = Modifier.clickable { isTitleExpanded = !isTitleExpanded }
-                            )
-                            val quality = state.videoQuality
-                            val qualityText = if (!quality.isNullOrEmpty()) {
-                                if (state.isLocal) "$quality • Local" else "$quality • Stream"
-                            } else {
-                                if (state.isLocal) "Local" else "Stream"
-                            }
-                            if (state.channelName.isNotEmpty() || qualityText.isNotEmpty() || state.watchCount > 0) {
-                                BoxWithConstraints {
-                                    val isNarrow = maxWidth < 280.dp
-                                    val displayQualityText = if (isNarrow && !quality.isNullOrEmpty()) {
-                                        if (state.isLocal) "$quality • Local" else quality
-                                    } else {
-                                        qualityText
-                                    }
-
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        if (state.channelName.isNotEmpty()) {
-                                            Text(
-                                                text = state.channelName,
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis,
-                                                modifier = Modifier.weight(1f, fill = false)
-                                            )
-                                        }
-                                        if (state.channelName.isNotEmpty() && (displayQualityText.isNotEmpty() || state.watchCount > 0)) {
-                                            Text(
-                                                text = " • ",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                        if (displayQualityText.isNotEmpty()) {
-                                            Surface(
-                                                color = MaterialTheme.colorScheme.secondaryContainer,
-                                                shape = MaterialTheme.shapes.extraSmall
-                                            ) {
-                                                Text(
-                                                    text = displayQualityText,
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
-                                                    maxLines = 1
-                                                )
-                                            }
-                                        }
-                                        val watchCount = state.watchCount
-                                        if (watchCount > 0) {
-                                            if (displayQualityText.isNotEmpty()) {
-                                                Text(
-                                                    text = " • ",
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                )
-                                            }
-                                            Row(
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                            ) {
-                                                Icon(
-                                                    painter = painterResource(R.drawable.ic_mn_eye),
-                                                    contentDescription = null,
-                                                    tint = MediaNestColors.Accent,
-                                                    modifier = Modifier.size(12.dp)
-                                                )
-                                                Text(
-                                                    text = "$watchCount",
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    maxLines = 1
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    },
+                    title = {},
                     navigationIcon = {
                         IconButton(onClick = onBack) {
                             Icon(painter = painterResource(R.drawable.ic_mn_back), contentDescription = "Back", tint = MediaNestColors.TextPrimary)
@@ -1036,6 +949,96 @@ fun PlayerScreen(
                             .fillMaxWidth()
                             .padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 4.dp)
                     ) {
+                        // Meta block: Title, Channel, Quality/Stream tag, Watch count
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 6.dp)
+                        ) {
+                            Text(
+                                text = state.title,
+                                maxLines = if (isTitleExpanded) Int.MAX_VALUE else 2,
+                                overflow = TextOverflow.Ellipsis,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { isTitleExpanded = !isTitleExpanded }
+                            )
+                            val quality = state.videoQuality
+                            val qualityText = if (!quality.isNullOrEmpty()) {
+                                if (state.isLocal) "$quality • Local" else "$quality • Stream"
+                            } else {
+                                if (state.isLocal) "Local" else "Stream"
+                            }
+                            if (state.channelName.isNotEmpty() || qualityText.isNotEmpty() || state.watchCount > 0) {
+                                Spacer(Modifier.height(4.dp))
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    if (state.channelName.isNotEmpty()) {
+                                        Text(
+                                            text = state.channelName,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.weight(1f, fill = false)
+                                        )
+                                    }
+                                    if (state.channelName.isNotEmpty() && (qualityText.isNotEmpty() || state.watchCount > 0)) {
+                                        Text(
+                                            text = "•",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    if (qualityText.isNotEmpty()) {
+                                        Surface(
+                                            color = MaterialTheme.colorScheme.secondaryContainer,
+                                            shape = MaterialTheme.shapes.extraSmall
+                                        ) {
+                                            Text(
+                                                text = qualityText,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
+                                                maxLines = 1
+                                            )
+                                        }
+                                    }
+                                    val watchCount = state.watchCount
+                                    if (watchCount > 0) {
+                                        if (qualityText.isNotEmpty()) {
+                                            Text(
+                                                text = "•",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Icon(
+                                                painter = painterResource(R.drawable.ic_mn_eye),
+                                                contentDescription = null,
+                                                tint = MediaNestColors.Accent,
+                                                modifier = Modifier.size(12.dp)
+                                            )
+                                            Text(
+                                                text = "$watchCount",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                maxLines = 1
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
 
                         Box(
                             modifier = Modifier.fillMaxWidth(),
@@ -1344,38 +1347,40 @@ fun PlayerScreen(
                                     }
                                 }
 
-                                // Divider between Quality (or Speed) and Queue
-                                androidx.compose.material3.VerticalDivider(
-                                    modifier = Modifier.height(24.dp),
-                                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
-                                )
+                                if (hasQueueContext) {
+                                    // Divider between Quality (or Speed) and Queue
+                                    androidx.compose.material3.VerticalDivider(
+                                        modifier = Modifier.height(24.dp),
+                                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                                    )
 
-                                // Queue Selector
-                                Box(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .fillMaxSize()
-                                        .clickable {
-                                            isQueueExpanded = !isQueueExpanded
-                                        },
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    // Queue Selector
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .fillMaxSize()
+                                            .clickable {
+                                                isQueueExpanded = !isQueueExpanded
+                                            },
+                                        contentAlignment = Alignment.Center
                                     ) {
-                                        Icon(
-                                            painter = painterResource(R.drawable.ic_mn_playlist),
-                                            contentDescription = "Up Next queue",
-                                            tint = if (hasQueueContext && isQueueExpanded) MediaNestColors.Accent else MediaNestColors.TextSecondary,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                        Text(
-                                            text = if (currentQueue.isNotEmpty()) "Queue (${currentQueue.size})" else "Queue",
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            fontWeight = if (hasQueueContext && isQueueExpanded) FontWeight.SemiBold else FontWeight.Normal,
-                                            color = if (hasQueueContext && isQueueExpanded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                                        )
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Icon(
+                                                painter = painterResource(R.drawable.ic_mn_playlist),
+                                                contentDescription = "Up Next queue",
+                                                tint = if (isQueueExpanded) MediaNestColors.Accent else MediaNestColors.TextSecondary,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                            Text(
+                                                text = if (currentQueue.isNotEmpty()) "Queue (${currentQueue.size})" else "Queue",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                fontWeight = if (isQueueExpanded) FontWeight.SemiBold else FontWeight.Normal,
+                                                color = if (isQueueExpanded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                            )
+                                        }
                                     }
                                 }
                             }
