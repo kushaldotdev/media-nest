@@ -316,136 +316,25 @@ fun LibraryScreen(
                 }
             }
         ) { padding ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .pointerInput(Unit) {
-                        detectTapGestures(onTap = { focusManager.clearFocus() })
-                    }
-            ) {
-                // Collection Sub-Tabs Row with PillTabRow
-                val tabs = listOf(
-                    LibraryTab.HISTORY,
-                    LibraryTab.WATCHED,
-                    LibraryTab.FOLDERS,
-                    LibraryTab.FAVORITES,
-                    LibraryTab.PLAYLISTS,
-                    LibraryTab.SUBSCRIPTIONS
-                )
+            val showSecondaryFilters = uiState.currentTab in listOf(
+                LibraryTab.HISTORY,
+                LibraryTab.FAVORITES,
+                LibraryTab.WATCHED
+            ) || (uiState.currentTab == LibraryTab.FOLDERS && (uiState.selectedFolder != null || folderVideos.isNotEmpty()))
 
-                PillTabRow(
-                    items = tabs,
-                    selected = uiState.currentTab,
-                    onSelect = { tab -> viewModel.setTab(tab) },
-                    label = { it.label },
-                    iconRes = { tab ->
-                        when (tab) {
-                            LibraryTab.HISTORY -> R.drawable.ic_mn_history
-                            LibraryTab.WATCHED -> R.drawable.ic_mn_watched
-                            LibraryTab.FOLDERS -> R.drawable.ic_mn_folder
-                            LibraryTab.FAVORITES -> R.drawable.ic_mn_heart
-                            LibraryTab.PLAYLISTS -> R.drawable.ic_mn_playlist
-                            LibraryTab.SUBSCRIPTIONS -> R.drawable.ic_mn_channel
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp)
-                )
-
-                // Search Bar
-                LibrarySearchBar(
-                    query = uiState.searchQuery,
-                    onQueryChange = { viewModel.setSearchQuery(it) },
-                    placeholder = "Search ${uiState.currentTab.label.lowercase()}...",
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
-                )
-
-                // Secondary Filter Controls Bar (Media Type & Sort for media tabs)
-                val showSecondaryFilters = uiState.currentTab in listOf(
-                    LibraryTab.HISTORY,
-                    LibraryTab.FAVORITES,
-                    LibraryTab.WATCHED
-                ) || (uiState.currentTab == LibraryTab.FOLDERS && (uiState.selectedFolder != null || folderVideos.isNotEmpty()))
-
-                if (showSecondaryFilters) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 6.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // Media Type Segmented Pills
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            listOf(
-                                MediaTypeFilter.ALL,
-                                MediaTypeFilter.VIDEO,
-                                MediaTypeFilter.AUDIO
-                            ).forEach { filter ->
-                                val isFilterSelected = uiState.mediaTypeFilter == filter
-                                MediaNestChip(
-                                    label = filter.label,
-                                    selected = isFilterSelected,
-                                    onClick = { viewModel.setMediaTypeFilter(filter) },
-                                    shape = RoundedCornerShape(12.dp),
-                                    leadingIcon = when (filter) {
-                                        MediaTypeFilter.VIDEO -> ({
-                                            Icon(
-                                                painter = painterResource(R.drawable.ic_mn_video),
-                                                contentDescription = null,
-                                                tint = if (isFilterSelected) MediaNestColors.TextPrimary else MediaNestColors.TextSecondary,
-                                                modifier = Modifier.size(13.dp)
-                                            )
-                                        })
-                                        MediaTypeFilter.AUDIO -> ({
-                                            Icon(
-                                                painter = painterResource(R.drawable.ic_mn_music),
-                                                contentDescription = null,
-                                                tint = if (isFilterSelected) MediaNestColors.TextPrimary else MediaNestColors.TextSecondary,
-                                                modifier = Modifier.size(13.dp)
-                                            )
-                                        })
-                                        else -> null
-                                    }
-                                )
-                            }
-                        }
-
-                        // Sort Button
-                        val sortLabel = when (uiState.sortCategory) {
-                            SortCategory.DATE -> "Date"
-                            SortCategory.NAME -> "Name"
-                            SortCategory.DURATION -> "Duration"
-                            SortCategory.SIZE -> "Size"
-                        }
-                        val sortDirectionSymbol = if (uiState.sortDirection == SortDirection.ASC) "↑" else "↓"
-
-                        MediaNestChip(
-                            label = "$sortLabel $sortDirectionSymbol",
-                            selected = false,
-                            onClick = { showSortBottomSheet = true },
-                            shape = RoundedCornerShape(12.dp),
-                            leadingIcon = {
-                                Icon(
-                                    painter = painterResource(R.drawable.ic_mn_sort),
-                                    contentDescription = "Sort",
-                                    tint = MediaNestColors.TextSecondary,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                            }
-                        )
-                    }
-                }
-
-                // Scoped Summary Metadata Line
-                LibraryStatsLine(
-                    tab = uiState.currentTab,
-                    historyCount = historyStats.first,
-                    historyWatchTimeMs = historyStats.second,
+            val headerContent: @Composable () -> Unit = {
+                LibraryHeaderBlock(
+                    currentTab = uiState.currentTab,
+                    searchQuery = uiState.searchQuery,
+                    onTabSelect = { tab -> viewModel.setTab(tab) },
+                    onSearchQueryChange = { viewModel.setSearchQuery(it) },
+                    showSecondaryFilters = showSecondaryFilters,
+                    mediaTypeFilter = uiState.mediaTypeFilter,
+                    onMediaTypeFilterChange = { viewModel.setMediaTypeFilter(it) },
+                    sortCategory = uiState.sortCategory,
+                    sortDirection = uiState.sortDirection,
+                    onSortClick = { showSortBottomSheet = true },
+                    historyStats = historyStats,
                     watchedCount = watchedCount,
                     favoritesCount = favoritesCount,
                     rootFoldersCount = rootFolders.size,
@@ -453,240 +342,53 @@ fun LibraryScreen(
                     folderVideosCount = folderVideos.size,
                     selectedFolder = uiState.selectedFolder,
                     playlistsCount = playlistsCount,
-                    channelsCount = channelsCount
+                    channelsCount = channelsCount,
+                    folderStack = uiState.folderStack,
+                    onCrumbClick = { index -> viewModel.navigateToFolderCrumb(index) },
+                    onNavigateBackFromFolder = { viewModel.navigateBackFromFolder() },
+                    onCreateSubfolderClick = { showCreateFolderDialog = true }
                 )
+            }
 
-                // Active Folder Breadcrumb Navigation
-                if (uiState.currentTab == LibraryTab.FOLDERS && uiState.selectedFolder != null) {
-                    FolderBreadcrumbs(
-                        stack = uiState.folderStack,
-                        onCrumbClick = { index -> viewModel.navigateToFolderCrumb(index) },
-                        onNavigateBack = { viewModel.navigateBackFromFolder() },
-                        onCreateSubfolder = { showCreateFolderDialog = true }
-                    )
-                }
-
-                // Main Tab Content
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                ) {
-                    when (uiState.currentTab) {
-                        LibraryTab.HISTORY -> {
-                            if (videos.isEmpty()) {
-                                EmptyState(
-                                    title = if (uiState.searchQuery.isNotEmpty()) "No Results Found" else "No Watch History",
-                                    message = if (uiState.searchQuery.isNotEmpty()) "No history items matched \"${uiState.searchQuery}\"" else "Videos you stream or play will appear here for fast replay.",
-                                    iconContent = {
-                                        Icon(
-                                            painter = painterResource(if (uiState.searchQuery.isNotEmpty()) R.drawable.ic_mn_search else R.drawable.ic_mn_history),
-                                            contentDescription = null,
-                                            tint = MediaNestColors.TextSecondary,
-                                            modifier = Modifier.size(32.dp)
-                                        )
-                                    },
-                                    actionText = if (uiState.searchQuery.isNotEmpty()) "Clear Search" else null,
-                                    onActionClick = if (uiState.searchQuery.isNotEmpty()) { { viewModel.setSearchQuery("") } } else null
-                                )
-                            } else {
-                                VideoListLayout(
-                                    videos = videos,
-                                    videoFolderMap = videoFolderMap,
-                                    viewMode = uiState.viewMode,
-                                    isSelectionMode = uiState.isSelectionMode,
-                                    selectedIds = uiState.selectedVideoIds,
-                                    expandedDownloadVideoId = expandedDownloadVideoId,
-                                    fetchingStreamsFor = fetchingStreamsFor,
-                                    fetchedStreams = fetchedStreams,
-                                    allDownloads = allDownloads,
-                                    playbackHistory = playbackHistory,
-                                    showContinueWatching = true,
-                                    isEndReached = videos.isNotEmpty() && videos.size < historyLimit,
-                                    onVideoClick = onVideoClick,
-                                    onVideoLongClick = { videoId ->
-                                        if (!uiState.isSelectionMode) {
-                                            viewModel.toggleSelectionMode()
-                                        }
-                                        viewModel.toggleVideoSelection(videoId)
-                                    },
-                                    onToggleSelection = { viewModel.toggleVideoSelection(it) },
-                                    onFavoriteToggle = { video ->
-                                        viewModel.toggleFavorite(video.id, video.favorite)
-                                        coroutineScope.launch {
-                                            snackbarHostState.showSnackbar(if (video.favorite) "Removed from Favorites" else "Added to Favorites")
-                                        }
-                                    },
-                                    onDownloadIconClick = { videoId ->
-                                        expandedDownloadVideoId = videoId
-                                        viewModel.fetchStreamsFor(videoId)
-                                    },
-                                    onDismissDownloadMenu = { expandedDownloadVideoId = null },
-                                    onEnqueueDownload = { info, stream -> viewModel.enqueueDownload(info, stream) },
-                                    onDeleteDownload = { entity -> viewModel.deleteDownload(entity) },
-                                    onExtractAudio = { entity ->
-                                        viewModel.extractAudio(entity)
-                                        coroutineScope.launch { snackbarHostState.showSnackbar("Audio extraction queued") }
-                                    },
-                                    onLoadMore = viewModel::loadMoreHistory,
-                                    onMarkWatched = { videoId ->
-                                        val video = videos.find { it.id == videoId }
-                                        if (video != null) {
-                                            watchCountTargetVideoId = videoId
-                                            watchCountTargetTitle = video.title
-                                            watchCountTargetInitialCount = video.watchCount
-                                            showWatchCountDialog = true
-                                        }
-                                    }
-                                )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .pointerInput(Unit) {
+                        detectTapGestures(onTap = { focusManager.clearFocus() })
+                    }
+            ) {
+                when (uiState.currentTab) {
+                    LibraryTab.HISTORY -> {
+                        if (videos.isEmpty()) {
+                            LazyColumn(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(horizontal = 12.dp)
+                            ) {
+                                item { headerContent() }
+                                item {
+                                    EmptyState(
+                                        title = if (uiState.searchQuery.isNotEmpty()) "No Results Found" else "No Watch History",
+                                        message = if (uiState.searchQuery.isNotEmpty()) "No history items matched \"${uiState.searchQuery}\"" else "Videos you stream or play will appear here for fast replay.",
+                                        iconContent = {
+                                            Icon(
+                                                painter = painterResource(if (uiState.searchQuery.isNotEmpty()) R.drawable.ic_mn_search else R.drawable.ic_mn_history),
+                                                contentDescription = null,
+                                                tint = MediaNestColors.TextSecondary,
+                                                modifier = Modifier.size(32.dp)
+                                            )
+                                        },
+                                        actionText = if (uiState.searchQuery.isNotEmpty()) "Clear Search" else null,
+                                        onActionClick = if (uiState.searchQuery.isNotEmpty()) { { viewModel.setSearchQuery("") } } else null,
+                                        modifier = Modifier.padding(top = 48.dp)
+                                    )
+                                }
                             }
-                        }
-
-                        LibraryTab.FAVORITES -> {
-                            if (favoriteVideos.isEmpty()) {
-                                EmptyState(
-                                    title = if (uiState.searchQuery.isNotEmpty()) "No Results Found" else "No Favorites Yet",
-                                    message = if (uiState.searchQuery.isNotEmpty()) "No favorite items matched \"${uiState.searchQuery}\"" else "Tap the heart icon on any media item to save it here.",
-                                    iconContent = {
-                                        Icon(
-                                            painter = painterResource(if (uiState.searchQuery.isNotEmpty()) R.drawable.ic_mn_search else R.drawable.ic_mn_heart),
-                                            contentDescription = null,
-                                            tint = MediaNestColors.TextSecondary,
-                                            modifier = Modifier.size(32.dp)
-                                        )
-                                    },
-                                    actionText = if (uiState.searchQuery.isNotEmpty()) "Clear Search" else null,
-                                    onActionClick = if (uiState.searchQuery.isNotEmpty()) { { viewModel.setSearchQuery("") } } else null
-                                )
-                            } else {
-                                VideoListLayout(
-                                    videos = favoriteVideos,
-                                    videoFolderMap = videoFolderMap,
-                                    viewMode = uiState.viewMode,
-                                    isSelectionMode = uiState.isSelectionMode,
-                                    selectedIds = uiState.selectedVideoIds,
-                                    expandedDownloadVideoId = expandedDownloadVideoId,
-                                    fetchingStreamsFor = fetchingStreamsFor,
-                                    fetchedStreams = fetchedStreams,
-                                    allDownloads = allDownloads,
-                                    playbackHistory = playbackHistory,
-                                    isEndReached = favoriteVideos.isNotEmpty() && favoriteVideos.size < favoritesLimit,
-                                    onVideoClick = onVideoClick,
-                                    onVideoLongClick = { videoId ->
-                                        if (!uiState.isSelectionMode) {
-                                            viewModel.toggleSelectionMode()
-                                        }
-                                        viewModel.toggleVideoSelection(videoId)
-                                    },
-                                    onToggleSelection = { viewModel.toggleVideoSelection(it) },
-                                    onFavoriteToggle = { video ->
-                                        viewModel.toggleFavorite(video.id, video.favorite)
-                                        coroutineScope.launch {
-                                            snackbarHostState.showSnackbar(if (video.favorite) "Removed from Favorites" else "Added to Favorites")
-                                        }
-                                    },
-                                    onDownloadIconClick = { videoId ->
-                                        expandedDownloadVideoId = videoId
-                                        viewModel.fetchStreamsFor(videoId)
-                                    },
-                                    onDismissDownloadMenu = { expandedDownloadVideoId = null },
-                                    onEnqueueDownload = { info, stream -> viewModel.enqueueDownload(info, stream) },
-                                    onDeleteDownload = { entity -> viewModel.deleteDownload(entity) },
-                                    onExtractAudio = { entity ->
-                                        viewModel.extractAudio(entity)
-                                        coroutineScope.launch { snackbarHostState.showSnackbar("Audio extraction queued") }
-                                    },
-                                    onLoadMore = viewModel::loadMoreFavorites,
-                                    onMarkWatched = { videoId ->
-                                        val video = favoriteVideos.find { it.id == videoId }
-                                        if (video != null) {
-                                            watchCountTargetVideoId = videoId
-                                            watchCountTargetTitle = video.title
-                                            watchCountTargetInitialCount = video.watchCount
-                                            showWatchCountDialog = true
-                                        }
-                                    }
-                                )
-                            }
-                        }
-
-                        LibraryTab.WATCHED -> {
-                            if (watchedVideos.isEmpty()) {
-                                EmptyState(
-                                    title = if (uiState.searchQuery.isNotEmpty()) "No Results Found" else "No Watched Videos",
-                                    message = if (uiState.searchQuery.isNotEmpty()) "No watched items matched \"${uiState.searchQuery}\"" else "Completed and marked videos will be archived here.",
-                                    iconContent = {
-                                        Icon(
-                                            painter = painterResource(if (uiState.searchQuery.isNotEmpty()) R.drawable.ic_mn_search else R.drawable.ic_mn_watched),
-                                            contentDescription = null,
-                                            tint = MediaNestColors.TextSecondary,
-                                            modifier = Modifier.size(32.dp)
-                                        )
-                                    },
-                                    actionText = if (uiState.searchQuery.isNotEmpty()) "Clear Search" else null,
-                                    onActionClick = if (uiState.searchQuery.isNotEmpty()) { { viewModel.setSearchQuery("") } } else null
-                                )
-                            } else {
-                                VideoListLayout(
-                                    videos = watchedVideos,
-                                    videoFolderMap = videoFolderMap,
-                                    viewMode = uiState.viewMode,
-                                    isSelectionMode = uiState.isSelectionMode,
-                                    selectedIds = uiState.selectedVideoIds,
-                                    expandedDownloadVideoId = expandedDownloadVideoId,
-                                    fetchingStreamsFor = fetchingStreamsFor,
-                                    fetchedStreams = fetchedStreams,
-                                    allDownloads = allDownloads,
-                                    playbackHistory = playbackHistory,
-                                    isEndReached = watchedVideos.isNotEmpty() && watchedVideos.size < watchedLimit,
-                                    onVideoClick = onVideoClick,
-                                    onVideoLongClick = { videoId ->
-                                        if (!uiState.isSelectionMode) {
-                                            viewModel.toggleSelectionMode()
-                                        }
-                                        viewModel.toggleVideoSelection(videoId)
-                                    },
-                                    onToggleSelection = { viewModel.toggleVideoSelection(it) },
-                                    onFavoriteToggle = { video ->
-                                        viewModel.toggleFavorite(video.id, video.favorite)
-                                        coroutineScope.launch {
-                                            snackbarHostState.showSnackbar(if (video.favorite) "Removed from Favorites" else "Added to Favorites")
-                                        }
-                                    },
-                                    onDownloadIconClick = { videoId ->
-                                        expandedDownloadVideoId = videoId
-                                        viewModel.fetchStreamsFor(videoId)
-                                    },
-                                    onDismissDownloadMenu = { expandedDownloadVideoId = null },
-                                    onEnqueueDownload = { info, stream -> viewModel.enqueueDownload(info, stream) },
-                                    onDeleteDownload = { entity -> viewModel.deleteDownload(entity) },
-                                    onExtractAudio = { entity ->
-                                        viewModel.extractAudio(entity)
-                                        coroutineScope.launch { snackbarHostState.showSnackbar("Audio extraction queued") }
-                                    },
-                                    onLoadMore = viewModel::loadMoreWatched,
-                                    onMarkWatched = { videoId ->
-                                        val video = watchedVideos.find { it.id == videoId }
-                                        if (video != null) {
-                                            watchCountTargetVideoId = videoId
-                                            watchCountTargetTitle = video.title
-                                            watchCountTargetInitialCount = video.watchCount
-                                            showWatchCountDialog = true
-                                        }
-                                    }
-                                )
-                            }
-                        }
-
-                        LibraryTab.FOLDERS -> {
-                            FolderContent(
-                                folders = rootFolders,
-                                childFolders = childFolders,
-                                folderVideos = folderVideos,
+                        } else {
+                            VideoListLayout(
+                                videos = videos,
                                 videoFolderMap = videoFolderMap,
-                                folderStatsMap = folderStatsMap,
-                                selectedFolder = uiState.selectedFolder,
-                                searchQuery = uiState.searchQuery,
                                 viewMode = uiState.viewMode,
                                 isSelectionMode = uiState.isSelectionMode,
                                 selectedIds = uiState.selectedVideoIds,
@@ -695,18 +397,8 @@ fun LibraryScreen(
                                 fetchedStreams = fetchedStreams,
                                 allDownloads = allDownloads,
                                 playbackHistory = playbackHistory,
-                                isEndReached = folderVideos.isNotEmpty() && folderVideos.size < folderVideosLimit,
-                                onFolderClick = { viewModel.selectFolder(it) },
-                                onCreateFolderClick = { showCreateFolderDialog = true },
-                                onRenameFolder = { folder ->
-                                    folderToRename = folder
-                                    renameFolderName = folder.name
-                                },
-                                onDeleteFolder = { folder ->
-                                    folderToDelete = folder
-                                    deleteDownloadsWithFolder = false
-                                },
-                                onNavigateBack = { viewModel.navigateBackFromFolder() },
+                                showContinueWatching = true,
+                                isEndReached = videos.isNotEmpty() && videos.size < historyLimit,
                                 onVideoClick = onVideoClick,
                                 onVideoLongClick = { videoId ->
                                     if (!uiState.isSelectionMode) {
@@ -721,9 +413,84 @@ fun LibraryScreen(
                                         snackbarHostState.showSnackbar(if (video.favorite) "Removed from Favorites" else "Added to Favorites")
                                     }
                                 },
-                                onRemoveFromFolder = { videoId, folderId ->
-                                    viewModel.removeVideoFromFolder(videoId, folderId)
-                                    coroutineScope.launch { snackbarHostState.showSnackbar("Removed from folder") }
+                                onDownloadIconClick = { videoId ->
+                                    expandedDownloadVideoId = videoId
+                                    viewModel.fetchStreamsFor(videoId)
+                                },
+                                onDismissDownloadMenu = { expandedDownloadVideoId = null },
+                                onEnqueueDownload = { info, stream -> viewModel.enqueueDownload(info, stream) },
+                                onDeleteDownload = { entity -> viewModel.deleteDownload(entity) },
+                                onExtractAudio = { entity ->
+                                    viewModel.extractAudio(entity)
+                                    coroutineScope.launch { snackbarHostState.showSnackbar("Audio extraction queued") }
+                                },
+                                onLoadMore = viewModel::loadMoreHistory,
+                                onMarkWatched = { videoId ->
+                                    val video = videos.find { it.id == videoId }
+                                    if (video != null) {
+                                        watchCountTargetVideoId = videoId
+                                        watchCountTargetTitle = video.title
+                                        watchCountTargetInitialCount = video.watchCount
+                                        showWatchCountDialog = true
+                                    }
+                                },
+                                headerContent = headerContent
+                            )
+                        }
+                    }
+
+                    LibraryTab.FAVORITES -> {
+                        if (favoriteVideos.isEmpty()) {
+                            LazyColumn(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(horizontal = 12.dp)
+                            ) {
+                                item { headerContent() }
+                                item {
+                                    EmptyState(
+                                        title = if (uiState.searchQuery.isNotEmpty()) "No Results Found" else "No Favorites Yet",
+                                        message = if (uiState.searchQuery.isNotEmpty()) "No favorite items matched \"${uiState.searchQuery}\"" else "Tap the heart icon on any media item to save it here.",
+                                        iconContent = {
+                                            Icon(
+                                                painter = painterResource(if (uiState.searchQuery.isNotEmpty()) R.drawable.ic_mn_search else R.drawable.ic_mn_heart),
+                                                contentDescription = null,
+                                                tint = MediaNestColors.TextSecondary,
+                                                modifier = Modifier.size(32.dp)
+                                            )
+                                        },
+                                        actionText = if (uiState.searchQuery.isNotEmpty()) "Clear Search" else null,
+                                        onActionClick = if (uiState.searchQuery.isNotEmpty()) { { viewModel.setSearchQuery("") } } else null,
+                                        modifier = Modifier.padding(top = 48.dp)
+                                    )
+                                }
+                            }
+                        } else {
+                            VideoListLayout(
+                                videos = favoriteVideos,
+                                videoFolderMap = videoFolderMap,
+                                viewMode = uiState.viewMode,
+                                isSelectionMode = uiState.isSelectionMode,
+                                selectedIds = uiState.selectedVideoIds,
+                                expandedDownloadVideoId = expandedDownloadVideoId,
+                                fetchingStreamsFor = fetchingStreamsFor,
+                                fetchedStreams = fetchedStreams,
+                                allDownloads = allDownloads,
+                                playbackHistory = playbackHistory,
+                                isEndReached = favoriteVideos.isNotEmpty() && favoriteVideos.size < favoritesLimit,
+                                onVideoClick = onVideoClick,
+                                onVideoLongClick = { videoId ->
+                                    if (!uiState.isSelectionMode) {
+                                        viewModel.toggleSelectionMode()
+                                    }
+                                    viewModel.toggleVideoSelection(videoId)
+                                },
+                                onToggleSelection = { viewModel.toggleVideoSelection(it) },
+                                onFavoriteToggle = { video ->
+                                    viewModel.toggleFavorite(video.id, video.favorite)
+                                    coroutineScope.launch {
+                                        snackbarHostState.showSnackbar(if (video.favorite) "Removed from Favorites" else "Added to Favorites")
+                                    }
                                 },
                                 onDownloadIconClick = { videoId ->
                                     expandedDownloadVideoId = videoId
@@ -736,20 +503,179 @@ fun LibraryScreen(
                                     viewModel.extractAudio(entity)
                                     coroutineScope.launch { snackbarHostState.showSnackbar("Audio extraction queued") }
                                 },
-                                onLoadMoreVideos = viewModel::loadMoreFolderVideos,
+                                onLoadMore = viewModel::loadMoreFavorites,
                                 onMarkWatched = { videoId ->
-                                    val video = folderVideos.find { it.id == videoId }
+                                    val video = favoriteVideos.find { it.id == videoId }
                                     if (video != null) {
                                         watchCountTargetVideoId = videoId
                                         watchCountTargetTitle = video.title
                                         watchCountTargetInitialCount = video.watchCount
                                         showWatchCountDialog = true
                                     }
-                                }
+                                },
+                                headerContent = headerContent
                             )
                         }
+                    }
 
-                        LibraryTab.PLAYLISTS -> {
+                    LibraryTab.WATCHED -> {
+                        if (watchedVideos.isEmpty()) {
+                            LazyColumn(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(horizontal = 12.dp)
+                            ) {
+                                item { headerContent() }
+                                item {
+                                    EmptyState(
+                                        title = if (uiState.searchQuery.isNotEmpty()) "No Results Found" else "No Watched Videos",
+                                        message = if (uiState.searchQuery.isNotEmpty()) "No watched items matched \"${uiState.searchQuery}\"" else "Completed and marked videos will be archived here.",
+                                        iconContent = {
+                                            Icon(
+                                                painter = painterResource(if (uiState.searchQuery.isNotEmpty()) R.drawable.ic_mn_search else R.drawable.ic_mn_watched),
+                                                contentDescription = null,
+                                                tint = MediaNestColors.TextSecondary,
+                                                modifier = Modifier.size(32.dp)
+                                            )
+                                        },
+                                        actionText = if (uiState.searchQuery.isNotEmpty()) "Clear Search" else null,
+                                        onActionClick = if (uiState.searchQuery.isNotEmpty()) { { viewModel.setSearchQuery("") } } else null,
+                                        modifier = Modifier.padding(top = 48.dp)
+                                    )
+                                }
+                            }
+                        } else {
+                            VideoListLayout(
+                                videos = watchedVideos,
+                                videoFolderMap = videoFolderMap,
+                                viewMode = uiState.viewMode,
+                                isSelectionMode = uiState.isSelectionMode,
+                                selectedIds = uiState.selectedVideoIds,
+                                expandedDownloadVideoId = expandedDownloadVideoId,
+                                fetchingStreamsFor = fetchingStreamsFor,
+                                fetchedStreams = fetchedStreams,
+                                allDownloads = allDownloads,
+                                playbackHistory = playbackHistory,
+                                isEndReached = watchedVideos.isNotEmpty() && watchedVideos.size < watchedLimit,
+                                onVideoClick = onVideoClick,
+                                onVideoLongClick = { videoId ->
+                                    if (!uiState.isSelectionMode) {
+                                        viewModel.toggleSelectionMode()
+                                    }
+                                    viewModel.toggleVideoSelection(videoId)
+                                },
+                                onToggleSelection = { viewModel.toggleVideoSelection(it) },
+                                onFavoriteToggle = { video ->
+                                    viewModel.toggleFavorite(video.id, video.favorite)
+                                    coroutineScope.launch {
+                                        snackbarHostState.showSnackbar(if (video.favorite) "Removed from Favorites" else "Added to Favorites")
+                                    }
+                                },
+                                onDownloadIconClick = { videoId ->
+                                    expandedDownloadVideoId = videoId
+                                    viewModel.fetchStreamsFor(videoId)
+                                },
+                                onDismissDownloadMenu = { expandedDownloadVideoId = null },
+                                onEnqueueDownload = { info, stream -> viewModel.enqueueDownload(info, stream) },
+                                onDeleteDownload = { entity -> viewModel.deleteDownload(entity) },
+                                onExtractAudio = { entity ->
+                                    viewModel.extractAudio(entity)
+                                    coroutineScope.launch { snackbarHostState.showSnackbar("Audio extraction queued") }
+                                },
+                                onLoadMore = viewModel::loadMoreWatched,
+                                onMarkWatched = { videoId ->
+                                    val video = watchedVideos.find { it.id == videoId }
+                                    if (video != null) {
+                                        watchCountTargetVideoId = videoId
+                                        watchCountTargetTitle = video.title
+                                        watchCountTargetInitialCount = video.watchCount
+                                        showWatchCountDialog = true
+                                    }
+                                },
+                                headerContent = headerContent
+                            )
+                        }
+                    }
+
+                    LibraryTab.FOLDERS -> {
+                        FolderContent(
+                            folders = rootFolders,
+                            childFolders = childFolders,
+                            folderVideos = folderVideos,
+                            videoFolderMap = videoFolderMap,
+                            folderStatsMap = folderStatsMap,
+                            selectedFolder = uiState.selectedFolder,
+                            searchQuery = uiState.searchQuery,
+                            viewMode = uiState.viewMode,
+                            isSelectionMode = uiState.isSelectionMode,
+                            selectedIds = uiState.selectedVideoIds,
+                            expandedDownloadVideoId = expandedDownloadVideoId,
+                            fetchingStreamsFor = fetchingStreamsFor,
+                            fetchedStreams = fetchedStreams,
+                            allDownloads = allDownloads,
+                            playbackHistory = playbackHistory,
+                            isEndReached = folderVideos.isNotEmpty() && folderVideos.size < folderVideosLimit,
+                            onFolderClick = { viewModel.selectFolder(it) },
+                            onCreateFolderClick = { showCreateFolderDialog = true },
+                            onRenameFolder = { folder ->
+                                folderToRename = folder
+                                renameFolderName = folder.name
+                            },
+                            onDeleteFolder = { folder ->
+                                folderToDelete = folder
+                                deleteDownloadsWithFolder = false
+                            },
+                            onNavigateBack = { viewModel.navigateBackFromFolder() },
+                            onVideoClick = onVideoClick,
+                            onVideoLongClick = { videoId ->
+                                if (!uiState.isSelectionMode) {
+                                    viewModel.toggleSelectionMode()
+                                }
+                                viewModel.toggleVideoSelection(videoId)
+                            },
+                            onToggleSelection = { viewModel.toggleVideoSelection(it) },
+                            onFavoriteToggle = { video ->
+                                viewModel.toggleFavorite(video.id, video.favorite)
+                                coroutineScope.launch {
+                                    snackbarHostState.showSnackbar(if (video.favorite) "Removed from Favorites" else "Added to Favorites")
+                                }
+                            },
+                            onRemoveFromFolder = { videoId, folderId ->
+                                viewModel.removeVideoFromFolder(videoId, folderId)
+                                coroutineScope.launch { snackbarHostState.showSnackbar("Removed from folder") }
+                            },
+                            onDownloadIconClick = { videoId ->
+                                expandedDownloadVideoId = videoId
+                                viewModel.fetchStreamsFor(videoId)
+                            },
+                            onDismissDownloadMenu = { expandedDownloadVideoId = null },
+                            onEnqueueDownload = { info, stream -> viewModel.enqueueDownload(info, stream) },
+                            onDeleteDownload = { entity -> viewModel.deleteDownload(entity) },
+                            onExtractAudio = { entity ->
+                                viewModel.extractAudio(entity)
+                                coroutineScope.launch { snackbarHostState.showSnackbar("Audio extraction queued") }
+                            },
+                            onLoadMoreVideos = viewModel::loadMoreFolderVideos,
+                            onMarkWatched = { videoId ->
+                                val video = folderVideos.find { it.id == videoId }
+                                if (video != null) {
+                                    watchCountTargetVideoId = videoId
+                                    watchCountTargetTitle = video.title
+                                    watchCountTargetInitialCount = video.watchCount
+                                    showWatchCountDialog = true
+                                }
+                            },
+                            headerContent = headerContent
+                        )
+                    }
+
+                    LibraryTab.PLAYLISTS -> {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 12.dp)
+                        ) {
+                            headerContent()
                             SubscriptionsScreen(
                                 sourceType = "playlist",
                                 searchQuery = uiState.searchQuery,
@@ -760,8 +686,15 @@ fun LibraryScreen(
                                 }
                             )
                         }
+                    }
 
-                        LibraryTab.SUBSCRIPTIONS -> {
+                    LibraryTab.SUBSCRIPTIONS -> {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(horizontal = 12.dp)
+                        ) {
+                            headerContent()
                             SubscriptionsScreen(
                                 sourceType = "channel",
                                 searchQuery = uiState.searchQuery,
@@ -1298,6 +1231,208 @@ fun LibraryScreen(
 /**
  * Design 2.0 Pill Search Bar for MediaNest Library.
  */
+/**
+ * Leading header block containing PillTabRow, SearchBar, Secondary Filter controls, stats line, and breadcrumbs.
+ * This is rendered as the leading item in Lazy lists/grids so it scrolls with the content.
+ */
+@Composable
+private fun LibraryHeaderBlock(
+    currentTab: LibraryTab,
+    searchQuery: String,
+    onTabSelect: (LibraryTab) -> Unit,
+    onSearchQueryChange: (String) -> Unit,
+    showSecondaryFilters: Boolean,
+    mediaTypeFilter: MediaTypeFilter,
+    onMediaTypeFilterChange: (MediaTypeFilter) -> Unit,
+    sortCategory: SortCategory,
+    sortDirection: SortDirection,
+    onSortClick: () -> Unit,
+    historyStats: Pair<Int, Long>,
+    watchedCount: Int,
+    favoritesCount: Int,
+    rootFoldersCount: Int,
+    childFoldersCount: Int,
+    folderVideosCount: Int,
+    selectedFolder: FolderEntity?,
+    playlistsCount: Int,
+    channelsCount: Int,
+    folderStack: List<FolderEntity>,
+    onCrumbClick: (Int) -> Unit,
+    onNavigateBackFromFolder: () -> Unit,
+    onCreateSubfolderClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier.fillMaxWidth()
+    ) {
+        val tabs = listOf(
+            LibraryTab.HISTORY,
+            LibraryTab.WATCHED,
+            LibraryTab.FOLDERS,
+            LibraryTab.FAVORITES,
+            LibraryTab.PLAYLISTS,
+            LibraryTab.SUBSCRIPTIONS
+        )
+
+        PillTabRow(
+            items = tabs,
+            selected = currentTab,
+            onSelect = onTabSelect,
+            label = { it.label },
+            iconRes = { tab ->
+                when (tab) {
+                    LibraryTab.HISTORY -> R.drawable.ic_mn_history
+                    LibraryTab.WATCHED -> R.drawable.ic_mn_watched
+                    LibraryTab.FOLDERS -> R.drawable.ic_mn_folder
+                    LibraryTab.FAVORITES -> R.drawable.ic_mn_heart
+                    LibraryTab.PLAYLISTS -> R.drawable.ic_mn_playlist
+                    LibraryTab.SUBSCRIPTIONS -> R.drawable.ic_mn_channel
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
+        )
+
+        LibrarySearchBar(
+            query = searchQuery,
+            onQueryChange = onSearchQueryChange,
+            placeholder = "Search ${currentTab.label.lowercase()}...",
+            modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp)
+        )
+
+        if (showSecondaryFilters) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 4.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    listOf(
+                        MediaTypeFilter.ALL,
+                        MediaTypeFilter.VIDEO,
+                        MediaTypeFilter.AUDIO
+                    ).forEach { filter ->
+                        val isFilterSelected = mediaTypeFilter == filter
+                        MediaNestChip(
+                            label = filter.label,
+                            selected = isFilterSelected,
+                            onClick = { onMediaTypeFilterChange(filter) },
+                            shape = RoundedCornerShape(12.dp),
+                            leadingIcon = when (filter) {
+                                MediaTypeFilter.VIDEO -> ({
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_mn_video),
+                                        contentDescription = null,
+                                        tint = if (isFilterSelected) MediaNestColors.TextPrimary else MediaNestColors.TextSecondary,
+                                        modifier = Modifier.size(13.dp)
+                                    )
+                                })
+                                MediaTypeFilter.AUDIO -> ({
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_mn_music),
+                                        contentDescription = null,
+                                        tint = if (isFilterSelected) MediaNestColors.TextPrimary else MediaNestColors.TextSecondary,
+                                        modifier = Modifier.size(13.dp)
+                                    )
+                                })
+                                else -> null
+                            }
+                        )
+                    }
+                }
+
+                val sortLabel = when (sortCategory) {
+                    SortCategory.DATE -> "Date"
+                    SortCategory.NAME -> "Name"
+                    SortCategory.DURATION -> "Duration"
+                    SortCategory.SIZE -> "Size"
+                }
+                val sortDirectionSymbol = if (sortDirection == SortDirection.ASC) "↑" else "↓"
+
+                MediaNestChip(
+                    label = "$sortLabel $sortDirectionSymbol",
+                    selected = false,
+                    onClick = onSortClick,
+                    shape = RoundedCornerShape(12.dp),
+                    leadingIcon = {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_mn_sort),
+                            contentDescription = "Sort",
+                            tint = MediaNestColors.TextSecondary,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                )
+            }
+        }
+
+        LibraryStatsLine(
+            tab = currentTab,
+            historyCount = historyStats.first,
+            historyWatchTimeMs = historyStats.second,
+            watchedCount = watchedCount,
+            favoritesCount = favoritesCount,
+            rootFoldersCount = rootFoldersCount,
+            childFoldersCount = childFoldersCount,
+            folderVideosCount = folderVideosCount,
+            selectedFolder = selectedFolder,
+            playlistsCount = playlistsCount,
+            channelsCount = channelsCount
+        )
+
+        if (currentTab == LibraryTab.FOLDERS && selectedFolder != null) {
+            FolderBreadcrumbs(
+                stack = folderStack,
+                onCrumbClick = onCrumbClick,
+                onNavigateBack = onNavigateBackFromFolder,
+                onCreateSubfolder = onCreateSubfolderClick
+            )
+        }
+    }
+}
+
+@Composable
+private fun RootFolderHeaderRow(
+    count: Int,
+    onCreateFolderClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 4.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = "$count ${if (count == 1) "Folder" else "Folders"}",
+            style = MaterialTheme.typography.titleSmall.copy(
+                fontWeight = FontWeight.SemiBold,
+                color = MediaNestColors.TextSecondary
+            )
+        )
+
+        MediaNestButton(
+            text = "New Folder",
+            onClick = onCreateFolderClick,
+            variant = MediaNestButtonVariant.Primary,
+            size = MediaNestButtonSize.Small,
+            leadingIcon = {
+                Icon(
+                    painter = painterResource(R.drawable.ic_mn_folder_add),
+                    contentDescription = null,
+                    modifier = Modifier.size(15.dp)
+                )
+            }
+        )
+    }
+}
+
 @Composable
 private fun LibrarySearchBar(
     query: String,
@@ -1519,7 +1654,7 @@ private fun FolderBreadcrumbs(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp),
+            .padding(horizontal = 4.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         MediaNestIconButton(
@@ -1820,7 +1955,8 @@ private fun VideoListLayout(
     onLoadMore: (() -> Unit)? = null,
     onMarkWatched: (String) -> Unit = {},
     showContinueWatching: Boolean = false,
-    isEndReached: Boolean = false
+    isEndReached: Boolean = false,
+    headerContent: @Composable () -> Unit = {}
 ) {
     val onMoveToFolderClick = LocalMoveToFolder.current
 
@@ -1886,6 +2022,9 @@ private fun VideoListLayout(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                headerContent()
+            }
             if (continueWatchingList.isNotEmpty()) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
                     ContinueWatchingRow(
@@ -1972,6 +2111,9 @@ private fun VideoListLayout(
                 .padding(horizontal = 12.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
+            item {
+                headerContent()
+            }
             if (continueWatchingList.isNotEmpty()) {
                 item {
                     ContinueWatchingRow(
@@ -2087,7 +2229,8 @@ private fun FolderContent(
     onExtractAudio: (DownloadEntity) -> Unit,
     onLoadMoreVideos: (() -> Unit)? = null,
     onMarkWatched: (String) -> Unit = {},
-    isEndReached: Boolean = false
+    isEndReached: Boolean = false,
+    headerContent: @Composable () -> Unit = {}
 ) {
     val gridState = rememberLazyGridState()
     val listState = rememberLazyListState()
@@ -2108,69 +2251,170 @@ private fun FolderContent(
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 12.dp)
-    ) {
-        // Header when at root folder level
-        if (selectedFolder == null) {
-            Row(
+    if (selectedFolder == null && searchQuery.isEmpty()) {
+        if (folders.isEmpty()) {
+            LazyColumn(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 4.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                    .fillMaxSize()
+                    .padding(horizontal = 12.dp)
             ) {
-                Text(
-                    text = "${folders.size} ${if (folders.size == 1) "Folder" else "Folders"}",
-                    style = MaterialTheme.typography.titleSmall.copy(
-                        fontWeight = FontWeight.SemiBold,
-                        color = MediaNestColors.TextSecondary
+                item { headerContent() }
+                item {
+                    RootFolderHeaderRow(
+                        count = folders.size,
+                        onCreateFolderClick = onCreateFolderClick
                     )
-                )
-
-                MediaNestButton(
-                    text = "New Folder",
-                    onClick = onCreateFolderClick,
-                    variant = MediaNestButtonVariant.Primary,
-                    size = MediaNestButtonSize.Small,
-                    leadingIcon = {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_mn_folder_add),
-                            contentDescription = null,
-                            modifier = Modifier.size(15.dp)
+                }
+                item {
+                    EmptyState(
+                        title = "No Folders Yet",
+                        message = "Create folders to organize videos into custom offline or online collections.",
+                        iconContent = {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_mn_folder),
+                                contentDescription = null,
+                                tint = MediaNestColors.TextSecondary,
+                                modifier = Modifier.size(32.dp)
+                            )
+                        },
+                        actionText = "Create Folder",
+                        onActionClick = onCreateFolderClick,
+                        modifier = Modifier.padding(top = 48.dp)
+                    )
+                }
+            }
+        } else {
+            if (viewMode == ViewMode.GRID) {
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(2),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        headerContent()
+                    }
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        RootFolderHeaderRow(
+                            count = folders.size,
+                            onCreateFolderClick = onCreateFolderClick
                         )
                     }
-                )
+                    items(folders, key = { it.id }) { folder ->
+                        FolderCard(
+                            folder = folder,
+                            stats = folderStatsMap[folder.id],
+                            onClick = { onFolderClick(folder) },
+                            onRename = { onRenameFolder(folder) },
+                            onDelete = { onDeleteFolder(folder) }
+                        )
+                    }
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        EndOfListIndicator()
+                    }
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    item {
+                        headerContent()
+                    }
+                    item {
+                        RootFolderHeaderRow(
+                            count = folders.size,
+                            onCreateFolderClick = onCreateFolderClick
+                        )
+                    }
+                    items(folders, key = { it.id }) { folder ->
+                        FolderRow(
+                            folder = folder,
+                            stats = folderStatsMap[folder.id],
+                            onClick = { onFolderClick(folder) },
+                            onRename = { onRenameFolder(folder) },
+                            onDelete = { onDeleteFolder(folder) }
+                        )
+                    }
+                    item {
+                        EndOfListIndicator()
+                    }
+                }
             }
         }
+    } else {
+        val currentFolders = if (selectedFolder == null) folders else childFolders
+        val currentVideos = folderVideos
 
-        if (selectedFolder == null && searchQuery.isEmpty()) {
-            if (folders.isEmpty()) {
-                EmptyState(
-                    title = "No Folders Yet",
-                    message = "Create folders to organize videos into custom offline or online collections.",
-                    iconContent = {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_mn_folder),
-                            contentDescription = null,
-                            tint = MediaNestColors.TextSecondary,
-                            modifier = Modifier.size(32.dp)
+        if (currentFolders.isEmpty() && currentVideos.isEmpty()) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 12.dp)
+            ) {
+                item { headerContent() }
+                if (selectedFolder == null) {
+                    item {
+                        RootFolderHeaderRow(
+                            count = folders.size,
+                            onCreateFolderClick = onCreateFolderClick
                         )
-                    },
-                    actionText = "Create Folder",
-                    onActionClick = onCreateFolderClick
-                )
-            } else {
-                if (viewMode == ViewMode.GRID) {
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(2),
-                        modifier = Modifier.fillMaxSize(),
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        items(folders, key = { it.id }) { folder ->
+                    }
+                }
+                item {
+                    EmptyState(
+                        title = if (searchQuery.isNotEmpty()) "No Results Found" else "Folder is Empty",
+                        message = if (searchQuery.isNotEmpty()) "No items matching \"$searchQuery\" in this folder." else "Add videos to this folder from the video action menus.",
+                        iconContent = {
+                            Icon(
+                                painter = painterResource(if (searchQuery.isNotEmpty()) R.drawable.ic_mn_search else R.drawable.ic_mn_folder),
+                                contentDescription = null,
+                                tint = MediaNestColors.TextSecondary,
+                                modifier = Modifier.size(32.dp)
+                            )
+                        },
+                        modifier = Modifier.padding(top = 48.dp)
+                    )
+                }
+            }
+        } else {
+            if (viewMode == ViewMode.GRID) {
+                LazyVerticalGrid(
+                    state = gridState,
+                    columns = GridCells.Fixed(2),
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 12.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        headerContent()
+                    }
+                    if (selectedFolder == null) {
+                        item(span = { GridItemSpan(maxLineSpan) }) {
+                            RootFolderHeaderRow(
+                                count = folders.size,
+                                onCreateFolderClick = onCreateFolderClick
+                            )
+                        }
+                    }
+                    if (currentFolders.isNotEmpty()) {
+                        item(span = { GridItemSpan(maxLineSpan) }) {
+                            Text(
+                                text = if (searchQuery.isNotEmpty()) "Folders" else "Subfolders",
+                                style = MaterialTheme.typography.titleSmall.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MediaNestColors.TextPrimary
+                                ),
+                                modifier = Modifier.padding(vertical = 4.dp)
+                            )
+                        }
+                        items(currentFolders, key = { "folder_${it.id}" }) { folder ->
                             FolderCard(
                                 folder = folder,
                                 stats = folderStatsMap[folder.id],
@@ -2179,14 +2423,113 @@ private fun FolderContent(
                                 onDelete = { onDeleteFolder(folder) }
                             )
                         }
-                        item { EndOfListIndicator() }
                     }
-                } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        items(folders, key = { it.id }) { folder ->
+
+                    if (currentVideos.isNotEmpty()) {
+                        item(span = { GridItemSpan(maxLineSpan) }) {
+                            Text(
+                                text = "Videos (${currentVideos.size})",
+                                style = MaterialTheme.typography.titleSmall.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MediaNestColors.TextPrimary
+                                ),
+                                modifier = Modifier.padding(vertical = 4.dp)
+                            )
+                        }
+                        items(currentVideos, key = { "video_${it.id}" }) { video ->
+                            val history = playbackHistory.find { it.videoId == video.id }
+                            val positionMillis = history?.positionMillis ?: 0L
+                            val progressFraction = if (video.durationSeconds > 0 && positionMillis > 0) {
+                                ((positionMillis.toFloat() / 1000f) / video.durationSeconds.toFloat()).coerceIn(0f, 1f)
+                            } else 0f
+                            val onMoveToFolderClick = LocalMoveToFolder.current
+
+                            UnifiedVideoCard(
+                                title = video.title,
+                                channelName = video.channelName,
+                                thumbnailUrl = video.thumbnailUrl,
+                                durationSeconds = video.durationSeconds,
+                                uploadDate = video.uploadDate,
+                                isFavorite = video.favorite,
+                                isDownloaded = video.localFilePath.isNotEmpty() && File(video.localFilePath).exists(),
+                                isSelected = selectedIds.contains(video.id),
+                                playbackProgressFraction = progressFraction,
+                                watchCount = video.watchCount,
+                                folders = videoFolderMap[video.id] ?: emptyList(),
+                                mediaType = video.mediaType,
+                                config = VideoCardConfig(
+                                    showFavoriteButton = !isSelectionMode,
+                                    showMoveToFolderButton = !isSelectionMode,
+                                    showRemoveFromFolderButton = !isSelectionMode && selectedFolder != null,
+                                    showDownloadButton = !isSelectionMode,
+                                    showSelectionCheckbox = isSelectionMode,
+                                    showFolderBadges = true,
+                                    showPlaybackProgress = true,
+                                    showDownloadedBadge = true,
+                                    showMarkWatchedButton = !isSelectionMode,
+                                    showMediaTypeBadge = true
+                                ),
+                                onClick = { if (isSelectionMode) onToggleSelection(video.id) else onVideoClick(video.id) },
+                                onLongClick = { onVideoLongClick(video.id) },
+                                onFavoriteToggle = { onFavoriteToggle(video) },
+                                onMoveToFolder = { onMoveToFolderClick(video.id) },
+                                onRemoveFromFolder = { selectedFolder?.let { onRemoveFromFolder(video.id, it.id) } },
+                                onDownloadClick = { onDownloadIconClick(video.id) },
+                                onMarkWatched = { onMarkWatched(video.id) },
+                                onSelectionToggle = { onToggleSelection(video.id) },
+                                downloadMenuContent = {
+                                    QuickDownloadMenu(
+                                        isExpanded = expandedDownloadVideoId == video.id,
+                                        onDismiss = onDismissDownloadMenu,
+                                        isFetching = fetchingStreamsFor == video.id,
+                                        fetchedStreams = fetchedStreams,
+                                        allDownloads = allDownloads,
+                                        videoId = video.id,
+                                        onEnqueueDownload = onEnqueueDownload,
+                                        onDeleteDownload = onDeleteDownload,
+                                        onExtractAudio = onExtractAudio
+                                    )
+                                }
+                            )
+                        }
+                    }
+                    if (isEndReached) {
+                        item(span = { GridItemSpan(maxLineSpan) }) {
+                            EndOfListIndicator()
+                        }
+                    }
+                }
+            } else {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    item {
+                        headerContent()
+                    }
+                    if (selectedFolder == null) {
+                        item {
+                            RootFolderHeaderRow(
+                                count = folders.size,
+                                onCreateFolderClick = onCreateFolderClick
+                            )
+                        }
+                    }
+                    if (currentFolders.isNotEmpty()) {
+                        item {
+                            Text(
+                                text = if (searchQuery.isNotEmpty()) "Folders" else "Subfolders",
+                                style = MaterialTheme.typography.titleSmall.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MediaNestColors.TextPrimary
+                                ),
+                                modifier = Modifier.padding(vertical = 4.dp)
+                            )
+                        }
+                        items(currentFolders, key = { "folder_${it.id}" }) { folder ->
                             FolderRow(
                                 folder = folder,
                                 stats = folderStatsMap[folder.id],
@@ -2195,232 +2538,79 @@ private fun FolderContent(
                                 onDelete = { onDeleteFolder(folder) }
                             )
                         }
-                        item { EndOfListIndicator() }
                     }
-                }
-            }
-        } else {
-            val currentFolders = if (selectedFolder == null) folders else childFolders
-            val currentVideos = folderVideos
 
-            if (currentFolders.isEmpty() && currentVideos.isEmpty()) {
-                EmptyState(
-                    title = if (searchQuery.isNotEmpty()) "No Results Found" else "Folder is Empty",
-                    message = if (searchQuery.isNotEmpty()) "No items matching \"$searchQuery\" in this folder." else "Add videos to this folder from the video action menus.",
-                    iconContent = {
-                        Icon(
-                            painter = painterResource(if (searchQuery.isNotEmpty()) R.drawable.ic_mn_search else R.drawable.ic_mn_folder),
-                            contentDescription = null,
-                            tint = MediaNestColors.TextSecondary,
-                            modifier = Modifier.size(32.dp)
-                        )
-                    }
-                )
-            } else {
-                if (viewMode == ViewMode.GRID) {
-                    LazyVerticalGrid(
-                        state = gridState,
-                        columns = GridCells.Fixed(2),
-                        modifier = Modifier.fillMaxSize(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        if (currentFolders.isNotEmpty()) {
-                            item(span = { GridItemSpan(maxLineSpan) }) {
-                                Text(
-                                    text = if (searchQuery.isNotEmpty()) "Folders" else "Subfolders",
-                                    style = MaterialTheme.typography.titleSmall.copy(
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = MediaNestColors.TextPrimary
-                                    ),
-                                    modifier = Modifier.padding(vertical = 4.dp)
-                                )
-                            }
-                            items(currentFolders, key = { "folder_${it.id}" }) { folder ->
-                                FolderCard(
-                                    folder = folder,
-                                    stats = folderStatsMap[folder.id],
-                                    onClick = { onFolderClick(folder) },
-                                    onRename = { onRenameFolder(folder) },
-                                    onDelete = { onDeleteFolder(folder) }
-                                )
-                            }
+                    if (currentVideos.isNotEmpty()) {
+                        item {
+                            Text(
+                                text = "Videos (${currentVideos.size})",
+                                style = MaterialTheme.typography.titleSmall.copy(
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MediaNestColors.TextPrimary
+                                ),
+                                modifier = Modifier.padding(vertical = 4.dp)
+                            )
                         }
+                        items(currentVideos, key = { "video_${it.id}" }) { video ->
+                            val history = playbackHistory.find { it.videoId == video.id }
+                            val positionMillis = history?.positionMillis ?: 0L
+                            val progressFraction = if (video.durationSeconds > 0 && positionMillis > 0) {
+                                ((positionMillis.toFloat() / 1000f) / video.durationSeconds.toFloat()).coerceIn(0f, 1f)
+                            } else 0f
+                            val onMoveToFolderClick = LocalMoveToFolder.current
 
-                        if (currentVideos.isNotEmpty()) {
-                            item(span = { GridItemSpan(maxLineSpan) }) {
-                                Text(
-                                    text = "Videos (${currentVideos.size})",
-                                    style = MaterialTheme.typography.titleSmall.copy(
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = MediaNestColors.TextPrimary
-                                    ),
-                                    modifier = Modifier.padding(vertical = 4.dp)
-                                )
-                            }
-                            items(currentVideos, key = { "video_${it.id}" }) { video ->
-                                val history = playbackHistory.find { it.videoId == video.id }
-                                val positionMillis = history?.positionMillis ?: 0L
-                                val progressFraction = if (video.durationSeconds > 0 && positionMillis > 0) {
-                                    ((positionMillis.toFloat() / 1000f) / video.durationSeconds.toFloat()).coerceIn(0f, 1f)
-                                } else 0f
-                                val onMoveToFolderClick = LocalMoveToFolder.current
-
-                                UnifiedVideoCard(
-                                    title = video.title,
-                                    channelName = video.channelName,
-                                    thumbnailUrl = video.thumbnailUrl,
-                                    durationSeconds = video.durationSeconds,
-                                    uploadDate = video.uploadDate,
-                                    isFavorite = video.favorite,
-                                    isDownloaded = video.localFilePath.isNotEmpty() && File(video.localFilePath).exists(),
-                                    isSelected = selectedIds.contains(video.id),
-                                    playbackProgressFraction = progressFraction,
-                                    watchCount = video.watchCount,
-                                    folders = videoFolderMap[video.id] ?: emptyList(),
-                                    mediaType = video.mediaType,
-                                    config = VideoCardConfig(
-                                        showFavoriteButton = !isSelectionMode,
-                                        showMoveToFolderButton = !isSelectionMode,
-                                        showRemoveFromFolderButton = !isSelectionMode && selectedFolder != null,
-                                        showDownloadButton = !isSelectionMode,
-                                        showSelectionCheckbox = isSelectionMode,
-                                        showFolderBadges = true,
-                                        showPlaybackProgress = true,
-                                        showDownloadedBadge = true,
-                                        showMarkWatchedButton = !isSelectionMode,
-                                        showMediaTypeBadge = true
-                                    ),
-                                    onClick = { if (isSelectionMode) onToggleSelection(video.id) else onVideoClick(video.id) },
-                                    onLongClick = { onVideoLongClick(video.id) },
-                                    onFavoriteToggle = { onFavoriteToggle(video) },
-                                    onMoveToFolder = { onMoveToFolderClick(video.id) },
-                                    onRemoveFromFolder = { selectedFolder?.let { onRemoveFromFolder(video.id, it.id) } },
-                                    onDownloadClick = { onDownloadIconClick(video.id) },
-                                    onMarkWatched = { onMarkWatched(video.id) },
-                                    onSelectionToggle = { onToggleSelection(video.id) },
-                                    downloadMenuContent = {
-                                        QuickDownloadMenu(
-                                            isExpanded = expandedDownloadVideoId == video.id,
-                                            onDismiss = onDismissDownloadMenu,
-                                            isFetching = fetchingStreamsFor == video.id,
-                                            fetchedStreams = fetchedStreams,
-                                            allDownloads = allDownloads,
-                                            videoId = video.id,
-                                            onEnqueueDownload = onEnqueueDownload,
-                                            onDeleteDownload = onDeleteDownload,
-                                            onExtractAudio = onExtractAudio
-                                        )
-                                    }
-                                )
-                            }
-                        }
-                        if (isEndReached) {
-                            item(span = { GridItemSpan(maxLineSpan) }) {
-                                EndOfListIndicator()
-                            }
+                            UnifiedVideoRow(
+                                title = video.title,
+                                channelName = video.channelName,
+                                thumbnailUrl = video.thumbnailUrl,
+                                durationSeconds = video.durationSeconds,
+                                uploadDate = video.uploadDate,
+                                isFavorite = video.favorite,
+                                isDownloaded = video.localFilePath.isNotEmpty() && File(video.localFilePath).exists(),
+                                isSelected = selectedIds.contains(video.id),
+                                playbackProgressFraction = progressFraction,
+                                watchCount = video.watchCount,
+                                folders = videoFolderMap[video.id] ?: emptyList(),
+                                mediaType = video.mediaType,
+                                config = VideoCardConfig(
+                                    showFavoriteButton = !isSelectionMode,
+                                    showMoveToFolderButton = !isSelectionMode,
+                                    showRemoveFromFolderButton = !isSelectionMode && selectedFolder != null,
+                                    showDownloadButton = !isSelectionMode,
+                                    showSelectionCheckbox = isSelectionMode,
+                                    showFolderBadges = true,
+                                    showPlaybackProgress = true,
+                                    showDownloadedBadge = true,
+                                    showMarkWatchedButton = !isSelectionMode,
+                                    showMediaTypeBadge = true
+                                ),
+                                onClick = { if (isSelectionMode) onToggleSelection(video.id) else onVideoClick(video.id) },
+                                onLongClick = { onVideoLongClick(video.id) },
+                                onFavoriteToggle = { onFavoriteToggle(video) },
+                                onMoveToFolder = { onMoveToFolderClick(video.id) },
+                                onRemoveFromFolder = { selectedFolder?.let { onRemoveFromFolder(video.id, it.id) } },
+                                onDownloadClick = { onDownloadIconClick(video.id) },
+                                onMarkWatched = { onMarkWatched(video.id) },
+                                onSelectionToggle = { onToggleSelection(video.id) },
+                                downloadMenuContent = {
+                                    QuickDownloadMenu(
+                                        isExpanded = expandedDownloadVideoId == video.id,
+                                        onDismiss = onDismissDownloadMenu,
+                                        isFetching = fetchingStreamsFor == video.id,
+                                        fetchedStreams = fetchedStreams,
+                                        allDownloads = allDownloads,
+                                        videoId = video.id,
+                                        onEnqueueDownload = onEnqueueDownload,
+                                        onDeleteDownload = onDeleteDownload,
+                                        onExtractAudio = onExtractAudio
+                                    )
+                                }
+                            )
                         }
                     }
-                } else {
-                    LazyColumn(
-                        state = listState,
-                        modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        if (currentFolders.isNotEmpty()) {
-                            item {
-                                Text(
-                                    text = if (searchQuery.isNotEmpty()) "Folders" else "Subfolders",
-                                    style = MaterialTheme.typography.titleSmall.copy(
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = MediaNestColors.TextPrimary
-                                    ),
-                                    modifier = Modifier.padding(vertical = 4.dp)
-                                )
-                            }
-                            items(currentFolders, key = { "folder_${it.id}" }) { folder ->
-                                FolderRow(
-                                    folder = folder,
-                                    stats = folderStatsMap[folder.id],
-                                    onClick = { onFolderClick(folder) },
-                                    onRename = { onRenameFolder(folder) },
-                                    onDelete = { onDeleteFolder(folder) }
-                                )
-                            }
-                        }
-
-                        if (currentVideos.isNotEmpty()) {
-                            item {
-                                Text(
-                                    text = "Videos (${currentVideos.size})",
-                                    style = MaterialTheme.typography.titleSmall.copy(
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = MediaNestColors.TextPrimary
-                                    ),
-                                    modifier = Modifier.padding(vertical = 4.dp)
-                                )
-                            }
-                            items(currentVideos, key = { "video_${it.id}" }) { video ->
-                                val history = playbackHistory.find { it.videoId == video.id }
-                                val positionMillis = history?.positionMillis ?: 0L
-                                val progressFraction = if (video.durationSeconds > 0 && positionMillis > 0) {
-                                    ((positionMillis.toFloat() / 1000f) / video.durationSeconds.toFloat()).coerceIn(0f, 1f)
-                                } else 0f
-                                val onMoveToFolderClick = LocalMoveToFolder.current
-
-                                UnifiedVideoRow(
-                                    title = video.title,
-                                    channelName = video.channelName,
-                                    thumbnailUrl = video.thumbnailUrl,
-                                    durationSeconds = video.durationSeconds,
-                                    uploadDate = video.uploadDate,
-                                    isFavorite = video.favorite,
-                                    isDownloaded = video.localFilePath.isNotEmpty() && File(video.localFilePath).exists(),
-                                    isSelected = selectedIds.contains(video.id),
-                                    playbackProgressFraction = progressFraction,
-                                    watchCount = video.watchCount,
-                                    folders = videoFolderMap[video.id] ?: emptyList(),
-                                    mediaType = video.mediaType,
-                                    config = VideoCardConfig(
-                                        showFavoriteButton = !isSelectionMode,
-                                        showMoveToFolderButton = !isSelectionMode,
-                                        showRemoveFromFolderButton = !isSelectionMode && selectedFolder != null,
-                                        showDownloadButton = !isSelectionMode,
-                                        showSelectionCheckbox = isSelectionMode,
-                                        showFolderBadges = true,
-                                        showPlaybackProgress = true,
-                                        showDownloadedBadge = true,
-                                        showMarkWatchedButton = !isSelectionMode,
-                                        showMediaTypeBadge = true
-                                    ),
-                                    onClick = { if (isSelectionMode) onToggleSelection(video.id) else onVideoClick(video.id) },
-                                    onLongClick = { onVideoLongClick(video.id) },
-                                    onFavoriteToggle = { onFavoriteToggle(video) },
-                                    onMoveToFolder = { onMoveToFolderClick(video.id) },
-                                    onRemoveFromFolder = { selectedFolder?.let { onRemoveFromFolder(video.id, it.id) } },
-                                    onDownloadClick = { onDownloadIconClick(video.id) },
-                                    onMarkWatched = { onMarkWatched(video.id) },
-                                    onSelectionToggle = { onToggleSelection(video.id) },
-                                    downloadMenuContent = {
-                                        QuickDownloadMenu(
-                                            isExpanded = expandedDownloadVideoId == video.id,
-                                            onDismiss = onDismissDownloadMenu,
-                                            isFetching = fetchingStreamsFor == video.id,
-                                            fetchedStreams = fetchedStreams,
-                                            allDownloads = allDownloads,
-                                            videoId = video.id,
-                                            onEnqueueDownload = onEnqueueDownload,
-                                            onDeleteDownload = onDeleteDownload,
-                                            onExtractAudio = onExtractAudio
-                                        )
-                                    }
-                                )
-                            }
-                        }
-                        if (isEndReached) {
-                            item {
-                                EndOfListIndicator()
-                            }
+                    if (isEndReached) {
+                        item {
+                            EndOfListIndicator()
                         }
                     }
                 }
@@ -2727,7 +2917,7 @@ private fun LibraryStatsLine(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
+            .padding(horizontal = 4.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {

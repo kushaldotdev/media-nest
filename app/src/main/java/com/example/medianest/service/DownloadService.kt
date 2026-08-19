@@ -14,11 +14,13 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import com.example.medianest.MainActivity
 import com.example.medianest.data.local.dao.VideoDao
+import com.example.medianest.data.local.entity.AppNotificationEntity
 import com.example.medianest.data.local.entity.DownloadEntity
 import com.example.medianest.data.local.entity.DownloadStatus
 import com.example.medianest.data.local.entity.VideoEntity
 import com.example.medianest.data.preferences.DownloadPreferences
 import com.example.medianest.data.repository.DownloadRepository
+import com.example.medianest.data.repository.NotificationRepository
 import com.example.medianest.extraction.YouTubeExtractor
 import com.example.medianest.service.DownloadPathResolver
 import dagger.hilt.android.AndroidEntryPoint
@@ -163,6 +165,7 @@ class DownloadService : Service() {
     @Inject lateinit var okHttpClient: OkHttpClient
     @Inject lateinit var videoDao: VideoDao
     @Inject lateinit var audioExtractor: AudioExtractor
+    @Inject lateinit var notificationRepository: NotificationRepository
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -274,11 +277,35 @@ class DownloadService : Service() {
     private suspend fun markDownloadCompleted(id: Long, fileSizeBytes: Long, filePath: String) {
         repository.markCompleted(id, fileSizeBytes, filePath)
         pausedDownloads.remove(id)
+        val download = repository.getDownloadById(id)
+        if (download != null) {
+            notificationRepository.insert(
+                AppNotificationEntity(
+                    type = AppNotificationEntity.TYPE_DOWNLOAD,
+                    title = "Download complete",
+                    message = "${download.title} is ready to play",
+                    targetVideoId = download.videoId,
+                    targetDownloadId = id
+                )
+            )
+        }
     }
 
     private suspend fun markDownloadFailed(id: Long, errorMessage: String, retryCount: Int) {
         repository.markFailed(id, errorMessage, retryCount)
         pausedDownloads.remove(id)
+        val download = repository.getDownloadById(id)
+        if (download != null) {
+            notificationRepository.insert(
+                AppNotificationEntity(
+                    type = AppNotificationEntity.TYPE_DOWNLOAD,
+                    title = "Download failed",
+                    message = errorMessage.ifBlank { "Download failed" },
+                    targetVideoId = download.videoId,
+                    targetDownloadId = id
+                )
+            )
+        }
     }
 
     private fun processQueue() {
