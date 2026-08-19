@@ -117,8 +117,6 @@ fun HomeScreen(
     viewModel: HomeViewModel = hiltViewModel(),
     onVideoSelected: (String) -> Unit = {},
     onSubscribe: (sourceType: String, sourceId: String, name: String, thumbnailUrl: String?) -> Unit = { _, _, _, _ -> },
-    onNavigateToSearch: () -> Unit = {},
-    onNavigateToSettings: () -> Unit = {},
     onNavigateToNotifications: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -204,8 +202,6 @@ fun HomeScreen(
             // 1. Top Bar / App Header
             item {
                 HomeTopBar(
-                    onSearchClick = onNavigateToSearch,
-                    onSettingsClick = onNavigateToSettings,
                     onNotificationsClick = onNavigateToNotifications
                 )
             }
@@ -248,7 +244,7 @@ fun HomeScreen(
                 }
             }
 
-            // 3. Hero URL Extraction Panel (Offline-first, Search/Paste pill, Demo chips)
+            // 3. Hero URL Extraction Panel (Offline-first, Search/Paste pill)
             item {
                 HeroExtractionPanel(
                     urlValue = urlInput,
@@ -257,20 +253,6 @@ fun HomeScreen(
                         keyboardController?.hide()
                         focusManager.clearFocus()
                         viewModel.onUrlSubmitted(urlInput.trim())
-                    },
-                    onDemoPlaylistClick = {
-                        val demoUrl = "https://www.youtube.com/playlist?list=PL_demo_mix"
-                        urlInput = demoUrl
-                        keyboardController?.hide()
-                        focusManager.clearFocus()
-                        viewModel.onUrlSubmitted(demoUrl)
-                    },
-                    onDemoChannelClick = {
-                        val demoUrl = "https://www.youtube.com/@LofiGirl"
-                        urlInput = demoUrl
-                        keyboardController?.hide()
-                        focusManager.clearFocus()
-                        viewModel.onUrlSubmitted(demoUrl)
                     },
                     isLoading = uiState is HomeUiState.Loading,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
@@ -1130,8 +1112,6 @@ fun HomeScreen(
 
 @Composable
 fun HomeTopBar(
-    onSearchClick: () -> Unit,
-    onSettingsClick: () -> Unit,
     onNotificationsClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -1150,14 +1130,14 @@ fun HomeTopBar(
             Box(
                 modifier = Modifier
                     .size(34.dp)
-                    .background(MediaNestColors.YouTubeRed, RoundedCornerShape(10.dp)),
+                    .background(MediaNestColors.Card, RoundedCornerShape(10.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
-                    painter = painterResource(R.drawable.ic_mn_youtube),
+                    painter = painterResource(R.drawable.ic_launcher_foreground),
                     contentDescription = null,
                     tint = MediaNestColors.TextPrimary,
-                    modifier = Modifier.size(18.dp)
+                    modifier = Modifier.size(24.dp)
                 )
             }
             Column {
@@ -1181,37 +1161,7 @@ fun HomeTopBar(
             }
         }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(
-                onClick = onSearchClick,
-                modifier = Modifier
-                    .size(38.dp)
-                    .background(MediaNestColors.Card, CircleShape)
-                    .border(1.dp, MediaNestColors.Border, CircleShape)
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_mn_search),
-                    contentDescription = "Search",
-                    tint = MediaNestColors.TextPrimary,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-            NotificationBellAction(onClick = onNotificationsClick)
-            IconButton(
-                onClick = onSettingsClick,
-                modifier = Modifier
-                    .size(38.dp)
-                    .background(MediaNestColors.Card, CircleShape)
-                    .border(1.dp, MediaNestColors.Border, CircleShape)
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_mn_settings),
-                    contentDescription = "Settings",
-                    tint = MediaNestColors.TextPrimary,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-        }
+        NotificationBellAction(onClick = onNotificationsClick)
     }
 }
 
@@ -1368,8 +1318,6 @@ fun HeroExtractionPanel(
     urlValue: String,
     onUrlChange: (String) -> Unit,
     onExtractClick: () -> Unit,
-    onDemoPlaylistClick: () -> Unit,
-    onDemoChannelClick: () -> Unit,
     isLoading: Boolean,
     modifier: Modifier = Modifier
 ) {
@@ -1432,27 +1380,6 @@ fun HeroExtractionPanel(
                     onExtractClick = onExtractClick,
                     isLoading = isLoading
                 )
-
-                Spacer(Modifier.height(12.dp))
-
-                // Demo Chips Row
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    DemoChip(
-                        label = "Demo: Playlist",
-                        iconRes = R.drawable.ic_mn_playlist,
-                        onClick = onDemoPlaylistClick,
-                        modifier = Modifier.weight(1f)
-                    )
-                    DemoChip(
-                        label = "Demo: Channel",
-                        iconRes = R.drawable.ic_mn_channel,
-                        onClick = onDemoChannelClick,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
             }
         }
     }
@@ -1573,47 +1500,6 @@ fun QuickPasteSearchPill(
                     )
                 }
             }
-        }
-    }
-}
-
-@Composable
-fun DemoChip(
-    label: String,
-    iconRes: Int,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Surface(
-        shape = RoundedCornerShape(16.dp),
-        color = MediaNestColors.Card,
-        border = androidx.compose.foundation.BorderStroke(1.dp, MediaNestColors.Border),
-        modifier = modifier
-            .height(34.dp)
-            .clickable { onClick() }
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
-        ) {
-            Icon(
-                painter = painterResource(iconRes),
-                contentDescription = null,
-                tint = MediaNestColors.Accent,
-                modifier = Modifier.size(14.dp)
-            )
-            Spacer(Modifier.width(6.dp))
-            Text(
-                text = label,
-                style = TextStyle(
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = MediaNestColors.TextSecondary
-                ),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
         }
     }
 }
