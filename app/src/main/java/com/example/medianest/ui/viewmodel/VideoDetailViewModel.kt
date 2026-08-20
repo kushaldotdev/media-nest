@@ -365,8 +365,8 @@ class VideoDetailViewModel @Inject constructor(
         }
     }
 
-    fun deleteDownload(download: DownloadEntity) {
-        DownloadService.delete(context, download.id, deleteFiles = true)
+    fun deleteDownload(download: DownloadEntity, deleteFile: Boolean = true) {
+        DownloadService.delete(context, download.id, deleteFiles = deleteFile)
     }
 
     fun updateWatchCount(newCount: Int) {

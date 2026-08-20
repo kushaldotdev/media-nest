@@ -70,11 +70,15 @@ import com.example.medianest.data.local.entity.VideoEntity
 import com.example.medianest.data.model.ExtractedVideoInfo
 import com.example.medianest.data.model.StreamSource
 import com.example.medianest.ui.components.EndOfListIndicator
+import com.example.medianest.ui.components.MediaNestButton
+import com.example.medianest.ui.components.MediaNestButtonSize
+import com.example.medianest.ui.components.MediaNestButtonVariant
 import com.example.medianest.ui.components.MediaNestSnackbarHost
 import com.example.medianest.ui.components.MediaNestTopAppBar
 import com.example.medianest.ui.components.WatchCountDialog
 import com.example.medianest.ui.components.YoutubeSubscribeButton
 import com.example.medianest.ui.theme.MediaNestColors
+import com.example.medianest.ui.theme.MediaNestShapes
 import com.example.medianest.ui.utils.UiUtils
 import kotlinx.coroutines.launch
 
@@ -86,7 +90,7 @@ fun VideoDetailScreen(
     downloads: List<DownloadEntity> = emptyList(),
     onPlay: (StreamSource) -> Unit,
     onPlayDownload: (DownloadEntity) -> Unit = {},
-    onDeleteDownload: (DownloadEntity) -> Unit = {},
+    onDeleteDownload: (DownloadEntity, Boolean) -> Unit = { _, _ -> },
     onDownload: (StreamSource) -> Unit,
     onBack: () -> Unit,
     onToggleFavorite: () -> Unit = {},
@@ -105,6 +109,7 @@ fun VideoDetailScreen(
     val coroutineScope = rememberCoroutineScope()
     var showWatchCountDialog by remember { mutableStateOf(false) }
     var showResetConfirm by remember { mutableStateOf(false) }
+    var showDeleteDownloadDialogFor by remember { mutableStateOf<DownloadEntity?>(null) }
     val completedDownloads = remember(downloads) { downloads.filter { it.status == DownloadStatus.COMPLETED } }
     var downloadedLimit by remember { mutableStateOf(10) }
     var watchSessionsLimit by remember { mutableStateOf(10) }
@@ -632,10 +637,7 @@ fun VideoDetailScreen(
                                                 }
                                                 IconButton(
                                                     onClick = {
-                                                        onDeleteDownload(cdl)
-                                                        coroutineScope.launch {
-                                                            snackbarHostState.showSnackbar("Download deleted")
-                                                        }
+                                                        showDeleteDownloadDialogFor = cdl
                                                     },
                                                     modifier = Modifier.size(36.dp)
                                                 ) {
@@ -661,9 +663,6 @@ fun VideoDetailScreen(
                                                 color = MediaNestColors.Accent
                                             )
                                         }
-                                    } else {
-                                        Spacer(Modifier.height(4.dp))
-                                        EndOfListIndicator()
                                     }
                                 }
                             }
@@ -1248,6 +1247,88 @@ fun VideoDetailScreen(
                         color = MediaNestColors.TextSecondary
                     )
                 }
+            }
+        )
+    }
+
+    if (showDeleteDownloadDialogFor != null) {
+        val download = showDeleteDownloadDialogFor!!
+        val isActive = download.status == DownloadStatus.DOWNLOADING || download.status == DownloadStatus.QUEUED
+        val displayTitle = download.title.ifEmpty { download.quality }
+
+        AlertDialog(
+            onDismissRequest = { showDeleteDownloadDialogFor = null },
+            containerColor = MediaNestColors.Raised,
+            titleContentColor = MediaNestColors.TextPrimary,
+            textContentColor = MediaNestColors.TextSecondary,
+            shape = MediaNestShapes.Hero,
+            title = {
+                Text(
+                    text = if (isActive) "Cancel Download" else "Delete Download",
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
+                )
+            },
+            text = {
+                Text(
+                    text = if (isActive) {
+                        "Are you sure you want to cancel downloading \"$displayTitle\"?"
+                    } else {
+                        "Choose how you want to delete \"$displayTitle\"."
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MediaNestColors.TextSecondary
+                )
+            },
+            confirmButton = {
+                if (isActive) {
+                    MediaNestButton(
+                        text = "Cancel Download",
+                        onClick = {
+                            onDeleteDownload(download, true)
+                            showDeleteDownloadDialogFor = null
+                        },
+                        variant = MediaNestButtonVariant.DangerSolid,
+                        size = MediaNestButtonSize.Small
+                    )
+                } else {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        MediaNestButton(
+                            text = "List Only",
+                            onClick = {
+                                onDeleteDownload(download, false)
+                                coroutineScope.launch {
+                                    snackbarHostState.showSnackbar("Removed from downloads list")
+                                }
+                                showDeleteDownloadDialogFor = null
+                            },
+                            variant = MediaNestButtonVariant.Secondary,
+                            size = MediaNestButtonSize.Small
+                        )
+                        MediaNestButton(
+                            text = "Delete File & List",
+                            onClick = {
+                                onDeleteDownload(download, true)
+                                coroutineScope.launch {
+                                    snackbarHostState.showSnackbar("Download deleted")
+                                }
+                                showDeleteDownloadDialogFor = null
+                            },
+                            variant = MediaNestButtonVariant.DangerSolid,
+                            size = MediaNestButtonSize.Small
+                        )
+                    }
+                }
+            },
+            dismissButton = {
+                MediaNestButton(
+                    text = "Keep",
+                    onClick = { showDeleteDownloadDialogFor = null },
+                    variant = MediaNestButtonVariant.Ghost,
+                    size = MediaNestButtonSize.Small
+                )
             }
         )
     }

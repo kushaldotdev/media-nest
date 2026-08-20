@@ -205,410 +205,7 @@ fun SettingsScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // =========================================================================
-            // 1. VPS SYNC & CLOUD
-            // =========================================================================
-            SettingsSectionHeader(
-                title = "VPS Sync & Cloud",
-                iconRes = R.drawable.ic_mn_cloud,
-                subtitle = "Cross-device synchronization server"
-            )
-
-            GlassCard(modifier = Modifier.fillMaxWidth()) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    MnNoteBox(
-                        title = "VPS Cloud Sync",
-                        variant = NoteBoxVariant.STANDARD,
-                        iconPainter = painterResource(R.drawable.ic_mn_cloud)
-                    ) {
-                        Text(
-                            "Synchronize watch history, favorites, custom folders, playlists, and subscription channels across your devices using your private self-hosted VPS server instance. Media files are stored locally and not transmitted over sync."
-                        )
-                    }
-
-                    val serverUrl by viewModel.serverUrl.collectAsStateWithLifecycle()
-                    val apiKey by viewModel.apiKey.collectAsStateWithLifecycle()
-
-                    OutlinedTextField(
-                        value = serverUrl,
-                        onValueChange = { viewModel.setServerUrl(it) },
-                        label = { Text("VPS Server URL") },
-                        placeholder = { Text("https://your-vps-ip:8000") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = customTextFieldColors(),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-
-                    OutlinedTextField(
-                        value = apiKey,
-                        onValueChange = { viewModel.setApiKey(it) },
-                        label = { Text("API Key") },
-                        singleLine = true,
-                        visualTransformation = PasswordVisualTransformation(),
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = customTextFieldColors(),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        MediaNestButton(
-                            text = "Register Device",
-                            onClick = { viewModel.registerDevice(serverUrl) },
-                            enabled = serverUrl.isNotBlank(),
-                            variant = MediaNestButtonVariant.Deep,
-                            modifier = Modifier.weight(1f),
-                            leadingIcon = {
-                                Icon(
-                                    painter = painterResource(R.drawable.ic_mn_device),
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                        )
-
-                        MediaNestButton(
-                            text = "Sync Now",
-                            onClick = { viewModel.triggerSync() },
-                            enabled = serverUrl.isNotBlank() && apiKey.isNotBlank(),
-                            variant = MediaNestButtonVariant.Primary,
-                            modifier = Modifier.weight(1f),
-                            leadingIcon = {
-                                Icon(
-                                    painter = painterResource(R.drawable.ic_mn_cloud_up),
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                        )
-                    }
-
-                    // Auto-sync interval dropdown
-                    val interval by viewModel.syncIntervalHours.collectAsStateWithLifecycle()
-                    val intervalOptions = listOf(0, 1, 2, 6, 12, 24)
-                    var intervalExpanded by remember { mutableStateOf(false) }
-
-                    ExposedDropdownMenuBox(
-                        expanded = intervalExpanded,
-                        onExpandedChange = { intervalExpanded = it }
-                    ) {
-                        OutlinedTextField(
-                            value = when (interval) {
-                                0 -> "Manual only"
-                                1 -> "Every 1 hour"
-                                else -> "Every $interval hours"
-                            },
-                            onValueChange = {},
-                            readOnly = true,
-                            label = { Text("Auto-sync interval") },
-                            trailingIcon = {
-                                Icon(
-                                    painter = painterResource(if (intervalExpanded) R.drawable.ic_mn_chevron_up else R.drawable.ic_mn_chevron_down),
-                                    contentDescription = null,
-                                    tint = MediaNestColors.TextSecondary,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .menuAnchor(
-                                    ExposedDropdownMenuAnchorType.PrimaryNotEditable,
-                                    enabled = true
-                                ),
-                            colors = customTextFieldColors(),
-                            shape = RoundedCornerShape(12.dp),
-                            singleLine = true
-                        )
-                        ExposedDropdownMenu(
-                            expanded = intervalExpanded,
-                            onDismissRequest = { intervalExpanded = false },
-                            containerColor = MediaNestColors.Card
-                        ) {
-                            intervalOptions.forEach { option ->
-                                val label = when (option) {
-                                    0 -> "Manual only"
-                                    1 -> "Every 1 hour"
-                                    else -> "Every $option hours"
-                                }
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(
-                                            label,
-                                            color = if (option == interval) MediaNestColors.Accent else MediaNestColors.TextPrimary
-                                        )
-                                    },
-                                    onClick = {
-                                        viewModel.setSyncIntervalHours(option)
-                                        intervalExpanded = false
-                                    }
-                                )
-                            }
-                        }
-                    }
-
-                    // Sync State Feedback
-                    val syncState by viewModel.syncState.collectAsStateWithLifecycle()
-                    LaunchedEffect(syncState) {
-                        if (syncState is SyncState.Success || syncState is SyncState.Error) {
-                            delay(3000)
-                            viewModel.resetSyncState()
-                        }
-                    }
-
-                    when (val s = syncState) {
-                        is SyncState.Syncing -> {
-                            Column(modifier = Modifier.fillMaxWidth()) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(14.dp),
-                                        color = MediaNestColors.Accent,
-                                        strokeWidth = 2.dp
-                                    )
-                                    Spacer(Modifier.width(8.dp))
-                                    Text(
-                                        "Syncing with VPS...",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MediaNestColors.Accent
-                                    )
-                                }
-                                Spacer(Modifier.height(6.dp))
-                                LinearProgressIndicator(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(4.dp)
-                                        .clip(RoundedCornerShape(2.dp)),
-                                    color = MediaNestColors.Accent,
-                                    trackColor = MediaNestColors.ProgressTrack
-                                )
-                            }
-                        }
-                        is SyncState.Success -> {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    painter = painterResource(R.drawable.ic_mn_check_circle),
-                                    contentDescription = null,
-                                    tint = MediaNestColors.Success,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(Modifier.width(6.dp))
-                                Text(
-                                    s.message,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MediaNestColors.Success
-                                )
-                            }
-                        }
-                        is SyncState.Error -> {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    painter = painterResource(R.drawable.ic_mn_warning),
-                                    contentDescription = null,
-                                    tint = MediaNestColors.Destructive,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(Modifier.width(6.dp))
-                                Text(
-                                    s.message,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MediaNestColors.Destructive
-                                )
-                            }
-                        }
-                        else -> {}
-                    }
-
-                    // Metadata details (Last sync, Device ID with copy button)
-                    val lastSyncAt by viewModel.lastSyncAt.collectAsStateWithLifecycle()
-                    if (lastSyncAt > 0) {
-                        val date = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(lastSyncAt))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                painter = painterResource(R.drawable.ic_mn_history),
-                                contentDescription = null,
-                                modifier = Modifier.size(14.dp),
-                                tint = MediaNestColors.TextSecondary
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                "Last synced: $date",
-                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
-                                color = MediaNestColors.TextSecondary
-                            )
-                        }
-                    }
-
-                    val deviceId by viewModel.deviceId.collectAsStateWithLifecycle()
-                    if (deviceId.isNotBlank()) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Icon(
-                                    painter = painterResource(R.drawable.ic_mn_device),
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp),
-                                    tint = MediaNestColors.TextSecondary
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Column {
-                                    Text(
-                                        "Device ID",
-                                        style = MaterialTheme.typography.bodyMedium.copy(
-                                            fontSize = 13.sp,
-                                            fontWeight = FontWeight.Medium
-                                        ),
-                                        color = MediaNestColors.TextPrimary
-                                    )
-                                    Text(
-                                        deviceId,
-                                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
-                                        color = MediaNestColors.TextSecondary,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-                            }
-                            MediaNestIconButton(
-                                onClick = {
-                                    try {
-                                        val clipboardManager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                        val clip = ClipData.newPlainText("Device ID", deviceId)
-                                        clipboardManager.setPrimaryClip(clip)
-                                        coroutineScope.launch {
-                                            snackbarHostState.showSnackbar("Device ID copied to clipboard")
-                                        }
-                                    } catch (_: Exception) {
-                                        coroutineScope.launch {
-                                            snackbarHostState.showSnackbar("Failed to copy Device ID")
-                                        }
-                                    }
-                                },
-                                size = MediaNestIconButtonSize.Small,
-                                contentDescription = "Copy Device ID"
-                            ) {
-                                Icon(
-                                    painter = painterResource(R.drawable.ic_mn_copy),
-                                    contentDescription = "Copy",
-                                    tint = MediaNestColors.Accent,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            // VPS Sync Activity Log Card
-            var logExpanded by remember { mutableStateOf(false) }
-            GlassCard(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                painter = painterResource(R.drawable.ic_mn_history),
-                                contentDescription = null,
-                                tint = MediaNestColors.Accent,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                "Sync Activity Log",
-                                style = MaterialTheme.typography.titleSmall.copy(
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                ),
-                                color = MediaNestColors.TextPrimary
-                            )
-                        }
-
-                        Row {
-                            if (logExpanded && viewModel.syncLog.value.isNotEmpty()) {
-                                TextButton(onClick = { viewModel.clearSyncLog() }) {
-                                    Text("Clear", style = MaterialTheme.typography.bodySmall, color = MediaNestColors.Destructive)
-                                }
-                            }
-                            TextButton(onClick = { logExpanded = !logExpanded }) {
-                                Text(
-                                    if (logExpanded) "Hide" else "Show",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MediaNestColors.Accent
-                                )
-                            }
-                        }
-                    }
-
-                    if (logExpanded) {
-                        Spacer(Modifier.height(8.dp))
-                        val log by viewModel.syncLog.collectAsStateWithLifecycle()
-                        if (log.isEmpty()) {
-                            Text(
-                                "No sync activity recorded yet.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MediaNestColors.TextSecondary
-                            )
-                        } else {
-                            LazyColumn(modifier = Modifier.fillMaxWidth().height(150.dp)) {
-                                items(log.take(50)) { entry ->
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(
-                                            entry.formattedTime,
-                                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.5.sp),
-                                            modifier = Modifier.width(52.dp),
-                                            color = MediaNestColors.TextSecondary
-                                        )
-                                        val iconRes = when (entry.type) {
-                                            "error" -> R.drawable.ic_mn_warning
-                                            "push" -> R.drawable.ic_mn_cloud_up
-                                            "pull" -> R.drawable.ic_mn_cloud_down
-                                            "apply" -> R.drawable.ic_mn_edit
-                                            else -> R.drawable.ic_mn_info
-                                        }
-                                        val tint = when (entry.type) {
-                                            "error" -> MediaNestColors.Destructive
-                                            "apply" -> MediaNestColors.Success
-                                            else -> MediaNestColors.TextSecondary
-                                        }
-                                        Icon(
-                                            painter = painterResource(iconRes),
-                                            contentDescription = null,
-                                            modifier = Modifier.size(12.dp),
-                                            tint = tint
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(
-                                            (entry.table?.let { "[$it] " } ?: "") + entry.summary,
-                                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
-                                            color = MediaNestColors.TextPrimary,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-
-            // =========================================================================
-            // 2. DOWNLOADS & NETWORK
+            // 1. DOWNLOADS & NETWORK
             // =========================================================================
             SettingsSectionHeader(
                 title = "Downloads & Network",
@@ -888,7 +485,7 @@ fun SettingsScreen(
             }
 
             // =========================================================================
-            // 3. PREFERENCES
+            // 2. PREFERENCES
             // =========================================================================
             SettingsSectionHeader(
                 title = "Preferences",
@@ -1143,7 +740,7 @@ fun SettingsScreen(
             }
 
             // =========================================================================
-            // 4. DATA MANAGEMENT & STORAGE
+            // 3. DATA MANAGEMENT & STORAGE
             // =========================================================================
             SettingsSectionHeader(
                 title = "Data Management & Storage",
@@ -1927,7 +1524,7 @@ fun SettingsScreen(
             }
 
             // =========================================================================
-            // 5. ABOUT & UPDATES
+            // 4. ABOUT & UPDATES
             // =========================================================================
             SettingsSectionHeader(
                 title = "About & Updates",
@@ -2359,6 +1956,409 @@ fun SettingsScreen(
                                         size = MediaNestButtonSize.Small,
                                         fullWidth = true
                                     )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // =========================================================================
+            // 5. VPS SYNC & CLOUD
+            // =========================================================================
+            SettingsSectionHeader(
+                title = "VPS Sync & Cloud",
+                iconRes = R.drawable.ic_mn_cloud,
+                subtitle = "Cross-device synchronization server"
+            )
+
+            GlassCard(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    MnNoteBox(
+                        title = "VPS Cloud Sync",
+                        variant = NoteBoxVariant.STANDARD,
+                        iconPainter = painterResource(R.drawable.ic_mn_cloud)
+                    ) {
+                        Text(
+                            "Synchronize watch history, favorites, custom folders, playlists, and subscription channels across your devices using your private self-hosted VPS server instance. Media files are stored locally and not transmitted over sync."
+                        )
+                    }
+
+                    val serverUrl by viewModel.serverUrl.collectAsStateWithLifecycle()
+                    val apiKey by viewModel.apiKey.collectAsStateWithLifecycle()
+
+                    OutlinedTextField(
+                        value = serverUrl,
+                        onValueChange = { viewModel.setServerUrl(it) },
+                        label = { Text("VPS Server URL") },
+                        placeholder = { Text("https://your-vps-ip:8000") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = customTextFieldColors(),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+
+                    OutlinedTextField(
+                        value = apiKey,
+                        onValueChange = { viewModel.setApiKey(it) },
+                        label = { Text("API Key") },
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = customTextFieldColors(),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        MediaNestButton(
+                            text = "Register Device",
+                            onClick = { viewModel.registerDevice(serverUrl) },
+                            enabled = serverUrl.isNotBlank(),
+                            variant = MediaNestButtonVariant.Deep,
+                            modifier = Modifier.weight(1f),
+                            leadingIcon = {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_mn_device),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        )
+
+                        MediaNestButton(
+                            text = "Sync Now",
+                            onClick = { viewModel.triggerSync() },
+                            enabled = serverUrl.isNotBlank() && apiKey.isNotBlank(),
+                            variant = MediaNestButtonVariant.Primary,
+                            modifier = Modifier.weight(1f),
+                            leadingIcon = {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_mn_cloud_up),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        )
+                    }
+
+                    // Auto-sync interval dropdown
+                    val interval by viewModel.syncIntervalHours.collectAsStateWithLifecycle()
+                    val intervalOptions = listOf(0, 1, 2, 6, 12, 24)
+                    var intervalExpanded by remember { mutableStateOf(false) }
+
+                    ExposedDropdownMenuBox(
+                        expanded = intervalExpanded,
+                        onExpandedChange = { intervalExpanded = it }
+                    ) {
+                        OutlinedTextField(
+                            value = when (interval) {
+                                0 -> "Manual only"
+                                1 -> "Every 1 hour"
+                                else -> "Every $interval hours"
+                            },
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Auto-sync interval") },
+                            trailingIcon = {
+                                Icon(
+                                    painter = painterResource(if (intervalExpanded) R.drawable.ic_mn_chevron_up else R.drawable.ic_mn_chevron_down),
+                                    contentDescription = null,
+                                    tint = MediaNestColors.TextSecondary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .menuAnchor(
+                                    ExposedDropdownMenuAnchorType.PrimaryNotEditable,
+                                    enabled = true
+                                ),
+                            colors = customTextFieldColors(),
+                            shape = RoundedCornerShape(12.dp),
+                            singleLine = true
+                        )
+                        ExposedDropdownMenu(
+                            expanded = intervalExpanded,
+                            onDismissRequest = { intervalExpanded = false },
+                            containerColor = MediaNestColors.Card
+                        ) {
+                            intervalOptions.forEach { option ->
+                                val label = when (option) {
+                                    0 -> "Manual only"
+                                    1 -> "Every 1 hour"
+                                    else -> "Every $option hours"
+                                }
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            label,
+                                            color = if (option == interval) MediaNestColors.Accent else MediaNestColors.TextPrimary
+                                        )
+                                    },
+                                    onClick = {
+                                        viewModel.setSyncIntervalHours(option)
+                                        intervalExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    // Sync State Feedback
+                    val syncState by viewModel.syncState.collectAsStateWithLifecycle()
+                    LaunchedEffect(syncState) {
+                        if (syncState is SyncState.Success || syncState is SyncState.Error) {
+                            delay(3000)
+                            viewModel.resetSyncState()
+                        }
+                    }
+
+                    when (val s = syncState) {
+                        is SyncState.Syncing -> {
+                            Column(modifier = Modifier.fillMaxWidth()) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(14.dp),
+                                        color = MediaNestColors.Accent,
+                                        strokeWidth = 2.dp
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(
+                                        "Syncing with VPS...",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MediaNestColors.Accent
+                                    )
+                                }
+                                Spacer(Modifier.height(6.dp))
+                                LinearProgressIndicator(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(4.dp)
+                                        .clip(RoundedCornerShape(2.dp)),
+                                    color = MediaNestColors.Accent,
+                                    trackColor = MediaNestColors.ProgressTrack
+                                )
+                            }
+                        }
+                        is SyncState.Success -> {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_mn_check_circle),
+                                    contentDescription = null,
+                                    tint = MediaNestColors.Success,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    s.message,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MediaNestColors.Success
+                                )
+                            }
+                        }
+                        is SyncState.Error -> {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_mn_warning),
+                                    contentDescription = null,
+                                    tint = MediaNestColors.Destructive,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    s.message,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MediaNestColors.Destructive
+                                )
+                            }
+                        }
+                        else -> {}
+                    }
+
+                    // Metadata details (Last sync, Device ID with copy button)
+                    val lastSyncAt by viewModel.lastSyncAt.collectAsStateWithLifecycle()
+                    if (lastSyncAt > 0) {
+                        val date = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(lastSyncAt))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_mn_history),
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp),
+                                tint = MediaNestColors.TextSecondary
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                "Last synced: $date",
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
+                                color = MediaNestColors.TextSecondary
+                            )
+                        }
+                    }
+
+                    val deviceId by viewModel.deviceId.collectAsStateWithLifecycle()
+                    if (deviceId.isNotBlank()) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_mn_device),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp),
+                                    tint = MediaNestColors.TextSecondary
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Column {
+                                    Text(
+                                        "Device ID",
+                                        style = MaterialTheme.typography.bodyMedium.copy(
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Medium
+                                        ),
+                                        color = MediaNestColors.TextPrimary
+                                    )
+                                    Text(
+                                        deviceId,
+                                        style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                                        color = MediaNestColors.TextSecondary,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                            MediaNestIconButton(
+                                onClick = {
+                                    try {
+                                        val clipboardManager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                        val clip = ClipData.newPlainText("Device ID", deviceId)
+                                        clipboardManager.setPrimaryClip(clip)
+                                        coroutineScope.launch {
+                                            snackbarHostState.showSnackbar("Device ID copied to clipboard")
+                                        }
+                                    } catch (_: Exception) {
+                                        coroutineScope.launch {
+                                            snackbarHostState.showSnackbar("Failed to copy Device ID")
+                                        }
+                                    }
+                                },
+                                size = MediaNestIconButtonSize.Small,
+                                contentDescription = "Copy Device ID"
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_mn_copy),
+                                    contentDescription = "Copy",
+                                    tint = MediaNestColors.Accent,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // VPS Sync Activity Log Card
+            var logExpanded by remember { mutableStateOf(false) }
+            GlassCard(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_mn_history),
+                                contentDescription = null,
+                                tint = MediaNestColors.Accent,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                "Sync Activity Log",
+                                style = MaterialTheme.typography.titleSmall.copy(
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                ),
+                                color = MediaNestColors.TextPrimary
+                            )
+                        }
+
+                        Row {
+                            if (logExpanded && viewModel.syncLog.value.isNotEmpty()) {
+                                TextButton(onClick = { viewModel.clearSyncLog() }) {
+                                    Text("Clear", style = MaterialTheme.typography.bodySmall, color = MediaNestColors.Destructive)
+                                }
+                            }
+                            TextButton(onClick = { logExpanded = !logExpanded }) {
+                                Text(
+                                    if (logExpanded) "Hide" else "Show",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MediaNestColors.Accent
+                                )
+                            }
+                        }
+                    }
+
+                    if (logExpanded) {
+                        Spacer(Modifier.height(8.dp))
+                        val log by viewModel.syncLog.collectAsStateWithLifecycle()
+                        if (log.isEmpty()) {
+                            Text(
+                                "No sync activity recorded yet.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MediaNestColors.TextSecondary
+                            )
+                        } else {
+                            LazyColumn(modifier = Modifier.fillMaxWidth().height(150.dp)) {
+                                items(log.take(50)) { entry ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            entry.formattedTime,
+                                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.5.sp),
+                                            modifier = Modifier.width(52.dp),
+                                            color = MediaNestColors.TextSecondary
+                                        )
+                                        val iconRes = when (entry.type) {
+                                            "error" -> R.drawable.ic_mn_warning
+                                            "push" -> R.drawable.ic_mn_cloud_up
+                                            "pull" -> R.drawable.ic_mn_cloud_down
+                                            "apply" -> R.drawable.ic_mn_edit
+                                            else -> R.drawable.ic_mn_info
+                                        }
+                                        val tint = when (entry.type) {
+                                            "error" -> MediaNestColors.Destructive
+                                            "apply" -> MediaNestColors.Success
+                                            else -> MediaNestColors.TextSecondary
+                                        }
+                                        Icon(
+                                            painter = painterResource(iconRes),
+                                            contentDescription = null,
+                                            modifier = Modifier.size(12.dp),
+                                            tint = tint
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            (entry.table?.let { "[$it] " } ?: "") + entry.summary,
+                                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
+                                            color = MediaNestColors.TextPrimary,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
                                 }
                             }
                         }

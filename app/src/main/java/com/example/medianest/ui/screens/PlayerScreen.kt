@@ -40,7 +40,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import com.example.medianest.ui.components.MediaNestTopAppBar
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -646,14 +646,19 @@ fun PlayerScreen(
         val videoAspect = if (state.videoWidth > 0 && state.videoHeight > 0) state.videoWidth.toFloat() / state.videoHeight.toFloat() else 16f / 9f
         Scaffold(
             topBar = {
-                TopAppBar(
-                    title = {},
-                    navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(painter = painterResource(R.drawable.ic_mn_back), contentDescription = "Back", tint = MediaNestColors.TextPrimary)
+                MediaNestTopAppBar(
+                    title = state.title.ifBlank { "Now Playing" },
+                    subtitle = state.channelName.ifBlank { "Player" },
+                    onNavigateBack = onBack,
+                    actions = {
+                        IconButton(onClick = { isFullScreen = true }) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_mn_fullscreen),
+                                contentDescription = "Fullscreen",
+                                tint = MediaNestColors.TextPrimary
+                            )
                         }
-                    },
-                    actions = {}
+                    }
                 )
             }
         ) { padding ->
@@ -881,72 +886,6 @@ fun PlayerScreen(
                                 )
                             }
                         }
-
-                        // Floating Alerts Column
-                        Column(
-                            modifier = Modifier
-                                .align(Alignment.BottomCenter)
-                                .fillMaxWidth()
-                                .padding(12.dp)
-                        ) {
-                            if (state.historyPositionMs > 5000L && state.historyPositionMs < state.durationMs - 10000L && showResumeButton) {
-                                Surface(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(bottom = 8.dp),
-                                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.95f),
-                                    shape = MaterialTheme.shapes.small,
-                                    shadowElevation = 4.dp
-                                ) {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(
-                                            text = "Last watched: ${formatDuration(state.historyPositionMs)}",
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                            modifier = Modifier.weight(1f)
-                                        )
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            modifier = Modifier.padding(start = 4.dp)
-                                        ) {
-                                            TextButton(onClick = {
-                                                viewModel.seekTo(state.historyPositionMs)
-                                                showResumeButton = false
-                                                viewModel.clearHistoryPosition()
-                                            }) {
-                                                Text("Resume", color = MaterialTheme.colorScheme.primary)
-                                            }
-                                            Spacer(Modifier.width(4.dp))
-                                            TextButton(onClick = {
-                                                viewModel.forceSaveCurrentPosition()
-                                                showResumeButton = false
-                                            }) {
-                                                Text("Update", color = MaterialTheme.colorScheme.primary)
-                                            }
-                                            Spacer(Modifier.width(4.dp))
-                                            IconButton(onClick = {
-                                                showResumeButton = false
-                                                viewModel.clearHistoryPosition()
-                                            }) {
-                                                Icon(
-                                                    painter = painterResource(R.drawable.ic_mn_close),
-                                                    contentDescription = "Dismiss",
-                                                    tint = MediaNestColors.TextSecondary
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-
-                        }
                     }
 
                     Column(
@@ -1098,17 +1037,7 @@ fun PlayerScreen(
                                 text = displayTime,
                                 modifier = Modifier.clickable { timeDisplayMode = (timeDisplayMode + 1) % 3 }
                             )
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(formatDuration(state.durationMs))
-                                Spacer(Modifier.width(8.dp))
-                                IconButton(onClick = { isFullScreen = true }) {
-                                    Icon(
-                                        painter = painterResource(R.drawable.ic_mn_fullscreen),
-                                        contentDescription = "Fullscreen",
-                                        tint = MediaNestColors.TextPrimary
-                                    )
-                                }
-                            }
+                            Text(formatDuration(state.durationMs))
                         }
 
                         Spacer(Modifier.height(4.dp))
@@ -1475,6 +1404,70 @@ fun PlayerScreen(
                                                 }
                                             )
                                         }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Floating Alerts Column
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .padding(12.dp)
+                ) {
+                    if (state.historyPositionMs > 5000L && state.historyPositionMs < state.durationMs - 10000L && showResumeButton) {
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 8.dp),
+                            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.95f),
+                            shape = MaterialTheme.shapes.small,
+                            shadowElevation = 4.dp
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "Last watched: ${formatDuration(state.historyPositionMs)}",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.padding(start = 4.dp)
+                                ) {
+                                    TextButton(onClick = {
+                                        viewModel.seekTo(state.historyPositionMs)
+                                        showResumeButton = false
+                                        viewModel.clearHistoryPosition()
+                                    }) {
+                                        Text("Resume", color = MaterialTheme.colorScheme.primary)
+                                    }
+                                    Spacer(Modifier.width(4.dp))
+                                    TextButton(onClick = {
+                                        viewModel.forceSaveCurrentPosition()
+                                        showResumeButton = false
+                                    }) {
+                                        Text("Update", color = MaterialTheme.colorScheme.primary)
+                                    }
+                                    Spacer(Modifier.width(4.dp))
+                                    IconButton(onClick = {
+                                        showResumeButton = false
+                                        viewModel.clearHistoryPosition()
+                                    }) {
+                                        Icon(
+                                            painter = painterResource(R.drawable.ic_mn_close),
+                                            contentDescription = "Dismiss",
+                                            tint = MediaNestColors.TextSecondary
+                                        )
                                     }
                                 }
                             }

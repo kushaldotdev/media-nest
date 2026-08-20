@@ -208,7 +208,7 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
                         onPlayDownload = { download ->
                             navController.navigate("downloads/player/${download.videoId}?downloadId=${download.id}")
                         },
-                        onDeleteDownload = { download -> detailViewModel.deleteDownload(download) },
+                        onDeleteDownload = { download, deleteFile -> detailViewModel.deleteDownload(download, deleteFile) },
                         onDownload = { stream ->
                             detailViewModel.enqueueDownload(info, stream)
                         },

@@ -81,9 +81,10 @@ import com.example.medianest.ui.components.MediaNestChip
 import com.example.medianest.ui.components.MediaNestFilterRow
 import com.example.medianest.ui.components.MediaNestIconButton
 import com.example.medianest.ui.components.MediaNestIconButtonSize
-import com.example.medianest.ui.components.NotificationBellAction
 import com.example.medianest.ui.components.MediaNestSortBottomSheet
 import com.example.medianest.ui.components.MediaNestSortOption
+import com.example.medianest.ui.components.MediaNestTopAppBar
+import com.example.medianest.ui.components.NotificationBellAction
 import com.example.medianest.ui.theme.MediaNestColors
 import com.example.medianest.ui.theme.MediaNestSemanticColors
 import com.example.medianest.ui.theme.MediaNestShapes
@@ -636,7 +637,6 @@ fun DownloadsScreen(
     var showDeleteDialogFor by remember { mutableStateOf<DownloadEntity?>(null) }
     var showRestartDialogFor by remember { mutableStateOf<DownloadEntity?>(null) }
     var pendingDialogId by remember { mutableStateOf<Long?>(null) }
-    var showDeleteAllDialog by remember { mutableStateOf(false) }
     var showBatchDeleteDialog by remember { mutableStateOf(false) }
     var showMaxConcurrentDialog by remember { mutableStateOf(false) }
     var showSortBottomSheet by remember { mutableStateOf(false) }
@@ -686,51 +686,43 @@ fun DownloadsScreen(
         }
     }
 
-    PullToRefreshBox(
-        isRefreshing = isRefreshing,
-        onRefresh = { viewModel.refreshDownloads() },
+    Column(
         modifier = Modifier
             .fillMaxSize()
             .background(MediaNestColors.Background)
     ) {
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-            contentPadding = PaddingValues(top = 16.dp, bottom = 40.dp)
-        ) {
-            // -----------------------------------------------------------------
-            // Top Header & Controls Toolbar
-            // -----------------------------------------------------------------
-            item {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text(
-                                text = "Downloads",
-                                style = MaterialTheme.typography.headlineSmall.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = MediaNestColors.TextPrimary
-                                )
-                            )
-                            if (downloads.isNotEmpty()) {
-                                Text(
-                                    text = "${downloads.size} item${if (downloads.size > 1) "s" else ""}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MediaNestColors.TextSecondary
-                                )
-                            }
-                        }
+        MediaNestTopAppBar(
+            title = "Downloads",
+            subtitle = "Offline downloads & queue",
+            actions = {
+                NotificationBellAction(onClick = onNavigateToNotifications)
+            }
+        )
 
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = { viewModel.refreshDownloads() },
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+        ) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp),
+                contentPadding = PaddingValues(top = 16.dp, bottom = 40.dp)
+            ) {
+                // -----------------------------------------------------------------
+                // Top Header & Controls Toolbar
+                // -----------------------------------------------------------------
+                item {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
                         Row(
+                            modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -769,91 +761,56 @@ fun DownloadsScreen(
                                     )
                                 }
                             )
-
-                            // Batch Select Toggle (when completed items exist)
-                            if (completedDownloads.isNotEmpty()) {
-                                MediaNestIconButton(
-                                    onClick = {
-                                        isBatchMode = !isBatchMode
-                                        if (!isBatchMode) selectedBatchIds = emptySet()
-                                    },
-                                    size = MediaNestIconButtonSize.Small,
-                                    tint = if (isBatchMode) MediaNestColors.Accent else MediaNestColors.TextSecondary,
-                                    containerColor = if (isBatchMode) MediaNestColors.Raised else Color.Transparent
-                                ) {
-                                    Icon(
-                                        painter = painterResource(R.drawable.ic_mn_checkbox),
-                                        contentDescription = "Batch Select Mode",
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-                            }
-
-                            NotificationBellAction(onClick = onNavigateToNotifications)
                         }
-                    }
 
-                    // Secondary Action Controls Row (Pause All / Resume All / Delete All)
-                    if (activeDownloads.isNotEmpty() || downloads.isNotEmpty()) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            if (activeDownloads.any { it.status == DownloadStatus.DOWNLOADING || it.status == DownloadStatus.QUEUED }) {
-                                MediaNestButton(
-                                    text = "Pause All",
-                                    onClick = { viewModel.pauseAllDownloads() },
-                                    variant = MediaNestButtonVariant.Ghost,
-                                    size = MediaNestButtonSize.ExtraSmall,
-                                    leadingIcon = {
-                                        Icon(
-                                            painter = painterResource(R.drawable.ic_mn_pause),
-                                            contentDescription = null,
-                                            tint = MediaNestColors.TextSecondary,
-                                            modifier = Modifier.size(14.dp)
+                        // Secondary Action Controls Row (Pause All / Resume All)
+                        if (downloads.isNotEmpty()) {
+                            val hasPauseable = activeDownloads.any { it.status == DownloadStatus.DOWNLOADING || it.status == DownloadStatus.QUEUED }
+                            val hasResumeable = activeDownloads.any { it.status == DownloadStatus.PAUSED }
+                            if (hasPauseable || hasResumeable) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    if (hasPauseable) {
+                                        MediaNestButton(
+                                            text = "Pause All",
+                                            onClick = { viewModel.pauseAllDownloads() },
+                                            variant = MediaNestButtonVariant.Ghost,
+                                            size = MediaNestButtonSize.ExtraSmall,
+                                            leadingIcon = {
+                                                Icon(
+                                                    painter = painterResource(R.drawable.ic_mn_pause),
+                                                    contentDescription = null,
+                                                    tint = MediaNestColors.TextSecondary,
+                                                    modifier = Modifier.size(14.dp)
+                                                )
+                                            }
                                         )
                                     }
-                                )
-                            }
 
-                            if (activeDownloads.any { it.status == DownloadStatus.PAUSED }) {
-                                MediaNestButton(
-                                    text = "Resume All",
-                                    onClick = { viewModel.resumeAllDownloads() },
-                                    variant = MediaNestButtonVariant.Ghost,
-                                    size = MediaNestButtonSize.ExtraSmall,
-                                    leadingIcon = {
-                                        Icon(
-                                            painter = painterResource(R.drawable.ic_mn_play),
-                                            contentDescription = null,
-                                            tint = MediaNestColors.Accent,
-                                            modifier = Modifier.size(14.dp)
+                                    if (hasResumeable) {
+                                        MediaNestButton(
+                                            text = "Resume All",
+                                            onClick = { viewModel.resumeAllDownloads() },
+                                            variant = MediaNestButtonVariant.Ghost,
+                                            size = MediaNestButtonSize.ExtraSmall,
+                                            leadingIcon = {
+                                                Icon(
+                                                    painter = painterResource(R.drawable.ic_mn_play),
+                                                    contentDescription = null,
+                                                    tint = MediaNestColors.Accent,
+                                                    modifier = Modifier.size(14.dp)
+                                                )
+                                            }
                                         )
                                     }
-                                )
-                            }
-
-                            Spacer(Modifier.weight(1f))
-
-                            MediaNestButton(
-                                text = "Delete All",
-                                onClick = { showDeleteAllDialog = true },
-                                variant = MediaNestButtonVariant.Danger,
-                                size = MediaNestButtonSize.ExtraSmall,
-                                leadingIcon = {
-                                    Icon(
-                                        painter = painterResource(R.drawable.ic_mn_trash),
-                                        contentDescription = null,
-                                        tint = MediaNestColors.Destructive,
-                                        modifier = Modifier.size(14.dp)
-                                    )
                                 }
-                            )
+                            }
                         }
                     }
                 }
-            }
 
             // -----------------------------------------------------------------
             // Download Storage & Status Overview Card
@@ -986,6 +943,23 @@ fun DownloadsScreen(
                                         color = MediaNestColors.TextSecondary
                                     )
                                 }
+                            }
+
+                            // Batch Select Toggle
+                            MediaNestIconButton(
+                                onClick = {
+                                    isBatchMode = !isBatchMode
+                                    if (!isBatchMode) selectedBatchIds = emptySet()
+                                },
+                                size = MediaNestIconButtonSize.Small,
+                                tint = if (isBatchMode) MediaNestColors.Accent else MediaNestColors.TextSecondary,
+                                containerColor = if (isBatchMode) MediaNestColors.Raised else Color.Transparent
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_mn_checkbox),
+                                    contentDescription = "Batch Select Mode",
+                                    modifier = Modifier.size(18.dp)
+                                )
                             }
                         }
 
@@ -1165,6 +1139,7 @@ fun DownloadsScreen(
                 }
             }
         }
+    }
     }
 
     // -------------------------------------------------------------------------
@@ -1360,63 +1335,6 @@ fun DownloadsScreen(
                 MediaNestButton(
                     text = "Keep",
                     onClick = { showDeleteDialogFor = null },
-                    variant = MediaNestButtonVariant.Ghost,
-                    size = MediaNestButtonSize.Small
-                )
-            }
-        )
-    }
-
-    // Delete All Downloads Confirmation Dialog
-    if (showDeleteAllDialog) {
-        AlertDialog(
-            onDismissRequest = { showDeleteAllDialog = false },
-            containerColor = MediaNestColors.Raised,
-            titleContentColor = MediaNestColors.TextPrimary,
-            textContentColor = MediaNestColors.TextSecondary,
-            shape = MediaNestShapes.Hero,
-            title = {
-                Text(
-                    text = "Delete All Downloads",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)
-                )
-            },
-            text = {
-                Text(
-                    text = "This will cancel active downloads and remove every entry from the list. Choose how to proceed:",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MediaNestColors.TextSecondary
-                )
-            },
-            confirmButton = {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    MediaNestButton(
-                        text = "List Only",
-                        onClick = {
-                            viewModel.deleteAllDownloads(deleteFiles = false)
-                            showDeleteAllDialog = false
-                        },
-                        variant = MediaNestButtonVariant.Secondary,
-                        size = MediaNestButtonSize.Small
-                    )
-                    MediaNestButton(
-                        text = "Delete Files & List",
-                        onClick = {
-                            viewModel.deleteAllDownloads(deleteFiles = true)
-                            showDeleteAllDialog = false
-                        },
-                        variant = MediaNestButtonVariant.DangerSolid,
-                        size = MediaNestButtonSize.Small
-                    )
-                }
-            },
-            dismissButton = {
-                MediaNestButton(
-                    text = "Cancel",
-                    onClick = { showDeleteAllDialog = false },
                     variant = MediaNestButtonVariant.Ghost,
                     size = MediaNestButtonSize.Small
                 )

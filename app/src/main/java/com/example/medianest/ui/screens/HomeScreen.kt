@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.text.format.Formatter
 import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -95,6 +96,7 @@ import com.example.medianest.data.model.ExtractedVideoInfo
 import com.example.medianest.data.model.StreamSource
 import com.example.medianest.ui.components.EndOfListIndicator
 import com.example.medianest.ui.components.MediaNestSnackbarHost
+import com.example.medianest.ui.components.MediaNestTopAppBar
 import com.example.medianest.ui.components.NotificationBellAction
 import com.example.medianest.ui.components.WatchCountDialog
 import com.example.medianest.ui.theme.MediaNestColors
@@ -190,6 +192,11 @@ fun HomeScreen(
     }
 
     Scaffold(
+        topBar = {
+            HomeTopBar(
+                onNotificationsClick = onNavigateToNotifications
+            )
+        },
         containerColor = MediaNestColors.Background,
         contentColor = MediaNestColors.TextPrimary,
         snackbarHost = { MediaNestSnackbarHost(hostState = snackbarHostState) }
@@ -201,14 +208,7 @@ fun HomeScreen(
                 .padding(paddingValues),
             contentPadding = PaddingValues(bottom = 96.dp)
         ) {
-            // 1. Top Bar / App Header
-            item {
-                HomeTopBar(
-                    onNotificationsClick = onNavigateToNotifications
-                )
-            }
-
-            // 2. Continue Watching Section (horizontal LazyRow carousel of ~220dp cards)
+            // Continue Watching Section (horizontal LazyRow carousel of ~220dp cards)
             if (continueWatchingVideos.isNotEmpty() && uiState is HomeUiState.Idle) {
                 item {
                     Column(
@@ -1117,54 +1117,47 @@ fun HomeTopBar(
     onNotificationsClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(60.dp)
-            .padding(horizontal = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(34.dp)
-                    .background(MediaNestColors.Card, RoundedCornerShape(10.dp)),
-                contentAlignment = Alignment.Center
+    MediaNestTopAppBar(
+        title = "MediaNest",
+        subtitle = "Offline Media Hub",
+        modifier = modifier,
+        titleContent = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_launcher_foreground),
-                    contentDescription = null,
-                    tint = MediaNestColors.TextPrimary,
-                    modifier = Modifier.size(24.dp)
+                Image(
+                    painter = painterResource(R.mipmap.ic_launcher_foreground),
+                    contentDescription = "MediaNest Icon",
+                    modifier = Modifier
+                        .size(34.dp)
+                        .clip(RoundedCornerShape(8.dp))
                 )
-            }
-            Column {
-                Text(
-                    text = "MediaNest",
-                    style = TextStyle(
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MediaNestColors.TextPrimary,
-                        letterSpacing = (-0.3).sp
+                Column {
+                    Text(
+                        text = "MediaNest",
+                        style = TextStyle(
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MediaNestColors.TextPrimary,
+                            letterSpacing = (-0.3).sp
+                        )
                     )
-                )
-                Text(
-                    text = "Offline Media Hub",
-                    style = TextStyle(
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Normal,
-                        color = MediaNestColors.TextSecondary
+                    Text(
+                        text = "Offline Media Hub",
+                        style = TextStyle(
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Normal,
+                            color = MediaNestColors.TextSecondary
+                        )
                     )
-                )
+                }
             }
+        },
+        actions = {
+            NotificationBellAction(onClick = onNotificationsClick)
         }
-
-        NotificationBellAction(onClick = onNotificationsClick)
-    }
+    )
 }
 
 @Composable
