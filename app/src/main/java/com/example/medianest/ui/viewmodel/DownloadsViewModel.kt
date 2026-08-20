@@ -23,7 +23,6 @@ import com.example.medianest.data.local.entity.HistoryEntity
 import com.example.medianest.data.sync.SyncManager
 import com.example.medianest.service.AudioExtractor
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.combine
 import com.example.medianest.service.DownloadPathResolver
 import com.example.medianest.service.DownloadService
 import com.example.medianest.service.PlaybackService
@@ -140,44 +139,6 @@ class DownloadsViewModel @Inject constructor(
 
     val playbackHistory: StateFlow<List<HistoryEntity>> = historyDao.getAllHistory()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    val lastWatchedVideo: StateFlow<VideoEntity?> = combine(
-        videoRepository.getAllVideos(),
-        downloads
-    ) { allVideos, downloadsList ->
-        val completedIds = downloadsList.filter { it.status == DownloadStatus.COMPLETED }.map { it.videoId }.toSet()
-        allVideos.filter { it.id in completedIds && it.lastPlayedAt != null }
-            .maxByOrNull { it.lastPlayedAt!! }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
-
-    val lastWatchedDownload: StateFlow<DownloadEntity?> = combine(
-        lastWatchedVideo,
-        downloads
-    ) { video, downloadsList ->
-        if (video == null) null
-        else downloadsList.find { it.videoId == video.id && it.status == DownloadStatus.COMPLETED }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
-
-    val lastWatchedProgress: StateFlow<Float> = combine(
-        lastWatchedVideo,
-        playbackHistory
-    ) { video, historyList ->
-        if (video == null) return@combine 0f
-        val history = historyList.find { it.videoId == video.id }
-        val positionMillis = history?.positionMillis ?: 0L
-        if (video.durationSeconds > 0 && positionMillis > 0) {
-            ((positionMillis.toFloat() / 1000f) / video.durationSeconds.toFloat()).coerceIn(0f, 1f)
-        } else 0f
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0f)
-
-    val lastWatchedPositionMs: StateFlow<Long> = combine(
-        lastWatchedVideo,
-        playbackHistory
-    ) { video, historyList ->
-        if (video == null) return@combine 0L
-        val history = historyList.find { it.videoId == video.id }
-        history?.positionMillis ?: 0L
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0L)
 
     fun refreshDownloads() {
         viewModelScope.launch {

@@ -194,7 +194,6 @@ fun MediaNestAppBarAction(
     Box(
         modifier = modifier
             .size(40.dp)
-            .clip(CircleShape)
             .clickable(
                 enabled = enabled,
                 interactionSource = remember { MutableInteractionSource() },
@@ -215,7 +214,7 @@ fun MediaNestAppBarAction(
                 count = badgeCount,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .offset(x = 2.dp, y = (-2).dp)
+                    .offset(y = (-2).dp)
             )
         }
     }

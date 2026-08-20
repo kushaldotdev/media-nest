@@ -67,7 +67,6 @@ import coil.compose.AsyncImage
 import com.example.medianest.R
 import com.example.medianest.data.local.entity.DownloadEntity
 import com.example.medianest.data.local.entity.DownloadStatus
-import com.example.medianest.data.local.entity.HistoryEntity
 import com.example.medianest.data.local.entity.VideoEntity
 import com.example.medianest.data.preferences.DownloadPreferences
 import com.example.medianest.ui.components.DownloadProgressBar
@@ -632,9 +631,6 @@ fun DownloadsScreen(
     val isPlaying by viewModel.isPlaying.collectAsStateWithLifecycle()
     val videosMap by viewModel.videosMap.collectAsStateWithLifecycle()
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
-    val lastWatchedDownload by viewModel.lastWatchedDownload.collectAsStateWithLifecycle()
-    val lastWatchedProgress by viewModel.lastWatchedProgress.collectAsStateWithLifecycle()
-    val lastWatchedPositionMs by viewModel.lastWatchedPositionMs.collectAsStateWithLifecycle()
 
     // Dialog and interactive states
     var showDeleteDialogFor by remember { mutableStateOf<DownloadEntity?>(null) }
@@ -865,136 +861,6 @@ fun DownloadsScreen(
             if (downloads.isNotEmpty()) {
                 item {
                     DownloadStatsCard(downloads = downloads)
-                }
-            }
-
-            // -----------------------------------------------------------------
-            // Resume Watching Hero Card
-            // -----------------------------------------------------------------
-            lastWatchedDownload?.let { download ->
-                item {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            text = "Resume Watching",
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontWeight = FontWeight.SemiBold,
-                                color = MediaNestColors.Accent
-                            )
-                        )
-
-                        GlassCard(
-                            onClick = { onPlayDownload(download) },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = MediaNestShapes.Card
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .padding(12.dp)
-                                    .fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                // 16:9 Thumbnail with Overlay & Red Watch Progress Bar
-                                Box(
-                                    modifier = Modifier
-                                        .size(124.dp, 70.dp)
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(MediaNestColors.Raised)
-                                ) {
-                                    AsyncImage(
-                                        model = download.thumbnailUrl,
-                                        contentDescription = null,
-                                        contentScale = ContentScale.Crop,
-                                        modifier = Modifier.fillMaxSize()
-                                    )
-
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxSize()
-                                            .background(MediaNestColors.PlayerSurface.copy(alpha = 0.35f)),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(34.dp)
-                                                .clip(CircleShape)
-                                                .background(MediaNestColors.GlassStrong),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Icon(
-                                                painter = painterResource(R.drawable.ic_mn_play),
-                                                contentDescription = "Play",
-                                                tint = MediaNestColors.TextPrimary,
-                                                modifier = Modifier.size(18.dp)
-                                            )
-                                        }
-                                    }
-
-                                    if (lastWatchedProgress > 0f) {
-                                        Box(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .height(3.dp)
-                                                .align(Alignment.BottomCenter)
-                                                .background(MediaNestColors.ProgressTrack)
-                                        ) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .fillMaxWidth(lastWatchedProgress)
-                                                    .height(3.dp)
-                                                    .background(MediaNestColors.YouTubeRed)
-                                            )
-                                        }
-                                    }
-                                }
-
-                                Spacer(Modifier.width(12.dp))
-
-                                Column(modifier = Modifier.weight(1f)) {
-                                    val effectiveQuality = download.quality.ifEmpty { resolveDownloadResolution(null, defaultResolution) }
-                                    Text(
-                                        text = download.title.ifEmpty { effectiveQuality },
-                                        style = MaterialTheme.typography.titleSmall.copy(
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = MediaNestColors.TextPrimary
-                                        ),
-                                        maxLines = 2,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-
-                                    Spacer(Modifier.height(4.dp))
-
-                                    Row(
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                    ) {
-                                        Text(
-                                            text = if (lastWatchedPositionMs > 0) {
-                                                "Left off at ${UiUtils.formatDuration(lastWatchedPositionMs / 1000L)}"
-                                            } else {
-                                                "Not started"
-                                            },
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MediaNestColors.TextSecondary
-                                        )
-
-                                        Text(
-                                            text = "·",
-                                            color = MediaNestColors.Border
-                                        )
-
-                                        Text(
-                                            text = effectiveQuality,
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MediaNestColors.Accent
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
                 }
             }
 

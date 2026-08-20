@@ -9,6 +9,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.VideoSize
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.example.medianest.data.local.dao.HistoryDao
@@ -56,7 +57,9 @@ data class PlayerUiState(
     val watchCount: Int = 0,
     val videoQuality: String? = null,
     val availableStreams: List<StreamSource> = emptyList(),
-    val completedDownloadQualities: List<String> = emptyList()
+    val completedDownloadQualities: List<String> = emptyList(),
+    val videoWidth: Int = 0,
+    val videoHeight: Int = 0
 )
 
 @HiltViewModel
@@ -104,6 +107,12 @@ class PlayerViewModel @Inject constructor(
                 }
             }
             if (state == Player.STATE_ENDED) saveFinalPosition()
+        }
+        override fun onVideoSizeChanged(videoSize: VideoSize) {
+            _uiState.value = _uiState.value.copy(
+                videoWidth = videoSize.width,
+                videoHeight = videoSize.height
+            )
         }
         override fun onPlayerError(error: PlaybackException) {
             _uiState.value = _uiState.value.copy(error = error.localizedMessage ?: "Playback error")

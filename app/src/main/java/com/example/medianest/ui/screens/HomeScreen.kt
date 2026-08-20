@@ -40,6 +40,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.RadioButton
@@ -1394,6 +1395,8 @@ fun QuickPasteSearchPill(
     isLoading: Boolean,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+
     Surface(
         shape = RoundedCornerShape(28.dp),
         color = MediaNestColors.Card,
@@ -1460,44 +1463,65 @@ fun QuickPasteSearchPill(
                         modifier = Modifier.size(16.dp)
                     )
                 }
-                Spacer(Modifier.width(4.dp))
             }
 
-            // Embedded Extract Action Button
-            Button(
+            Spacer(Modifier.width(4.dp))
+
+            // PASTE Button
+            IconButton(
+                onClick = {
+                    try {
+                        val clipboardManager = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                        val clip = clipboardManager?.primaryClip
+                        if (clip != null && clip.itemCount > 0) {
+                            val text = clip.getItemAt(0)?.coerceToText(context)?.toString()
+                            if (!text.isNullOrEmpty()) {
+                                onValueChange(text)
+                            }
+                        }
+                    } catch (_: Exception) {
+                    }
+                },
+                colors = IconButtonDefaults.iconButtonColors(
+                    containerColor = MediaNestColors.Accent,
+                    contentColor = MediaNestColors.OnAccent
+                ),
+                modifier = Modifier.size(36.dp)
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_mn_copy),
+                    contentDescription = "Paste",
+                    tint = MediaNestColors.OnAccent,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+
+            Spacer(Modifier.width(4.dp))
+
+            // EXTRACT Button
+            IconButton(
                 onClick = onExtractClick,
                 enabled = !isLoading,
-                colors = ButtonDefaults.buttonColors(
+                colors = IconButtonDefaults.iconButtonColors(
                     containerColor = MediaNestColors.Accent,
                     contentColor = MediaNestColors.OnAccent,
                     disabledContainerColor = MediaNestColors.Accent.copy(alpha = 0.4f),
                     disabledContentColor = MediaNestColors.OnAccent.copy(alpha = 0.6f)
                 ),
-                shape = RoundedCornerShape(20.dp),
-                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
-                modifier = Modifier.height(36.dp)
+                modifier = Modifier.size(36.dp)
             ) {
                 if (isLoading) {
                     CircularProgressIndicator(
                         color = MediaNestColors.OnAccent,
-                        modifier = Modifier.size(14.dp),
+                        modifier = Modifier.size(16.dp),
                         strokeWidth = 2.dp
                     )
                 } else {
                     Icon(
                         painter = painterResource(R.drawable.ic_mn_extract),
-                        contentDescription = null,
+                        contentDescription = "Extract",
                         tint = MediaNestColors.OnAccent,
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Spacer(Modifier.width(4.dp))
-                    Text(
-                        text = "Extract",
-                        style = TextStyle(
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = MediaNestColors.OnAccent
-                        )
+                        modifier = Modifier.size(16.dp)
                     )
                 }
             }

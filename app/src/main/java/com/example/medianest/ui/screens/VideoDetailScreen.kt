@@ -154,7 +154,7 @@ fun VideoDetailScreen(
                             }
                         ) {
                             Icon(
-                                painter = painterResource(R.drawable.ic_mn_heart),
+                                painter = painterResource(if (isFavorite) R.drawable.ic_mn_heart_filled else R.drawable.ic_mn_heart),
                                 contentDescription = "Favorite",
                                 tint = if (isFavorite) MediaNestColors.Accent else MediaNestColors.TextSecondary
                             )

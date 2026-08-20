@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -65,6 +66,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import androidx.media3.ui.PlayerView
+import androidx.media3.ui.AspectRatioFrameLayout
 import com.example.medianest.ui.viewmodel.PlayerViewModel
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
@@ -641,6 +643,7 @@ fun PlayerScreen(
             }
         }
     } else {
+        val videoAspect = if (state.videoWidth > 0 && state.videoHeight > 0) state.videoWidth.toFloat() / state.videoHeight.toFloat() else 16f / 9f
         Scaffold(
             topBar = {
                 TopAppBar(
@@ -660,18 +663,19 @@ fun PlayerScreen(
                     .padding(padding)
             ) {
                 Column(
-                    modifier = Modifier.fillMaxSize()
+                    modifier = if (videoAspect < 1f) {
+                        Modifier
+                            .fillMaxSize()
+                            .verticalScroll(rememberScrollState())
+                    } else {
+                        Modifier.fillMaxSize()
+                    }
                 ) {
                     Box(
-                        modifier = if (hasQueueContext && isQueueExpanded) {
-                            Modifier
-                                .fillMaxWidth()
-                                .aspectRatio(16f / 9f)
-                        } else {
-                            Modifier
-                                .fillMaxWidth()
-                                .weight(1f)
-                        }
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .aspectRatio(videoAspect),
+                        contentAlignment = Alignment.TopCenter
                     ) {
                         if (state.isAudioOnly) {
                             Box(
@@ -725,6 +729,7 @@ fun PlayerScreen(
                                 factory = { ctx ->
                                     PlayerView(ctx).apply {
                                         useController = false
+                                        resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
                                     }
                                 },
                                 update = { playerView ->
