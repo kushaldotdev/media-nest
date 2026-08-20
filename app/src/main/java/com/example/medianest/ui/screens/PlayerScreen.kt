@@ -86,6 +86,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -146,11 +147,17 @@ fun PlayerScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val player by viewModel.player.collectAsStateWithLifecycle()
+    val vmQueue by viewModel.queue.collectAsStateWithLifecycle()
+    val vmContextTitle by viewModel.queueContextTitle.collectAsStateWithLifecycle()
+    val vmContextType by viewModel.queueContextType.collectAsStateWithLifecycle()
+    val effectiveQueue = if (queue.isNotEmpty()) queue else vmQueue
+    val effectiveContextTitle = contextTitle ?: vmContextTitle
+    val effectiveContextType = contextType ?: vmContextType
 
-    var currentQueue by remember(queue) { mutableStateOf(queue) }
+    var currentQueue by remember(effectiveQueue) { mutableStateOf(effectiveQueue) }
     var isAutoplayEnabled by remember(autoplayNext) { mutableStateOf(autoplayNext) }
     var isQueueExpanded by rememberSaveable { mutableStateOf(true) }
-    val hasQueueContext = currentQueue.isNotEmpty() || !contextTitle.isNullOrEmpty() || !contextType.isNullOrEmpty()
+    val hasQueueContext = currentQueue.isNotEmpty() || !effectiveContextTitle.isNullOrEmpty() || !effectiveContextType.isNullOrEmpty()
 
     fun moveQueueItem(fromIndex: Int, toIndex: Int) {
         if (fromIndex in currentQueue.indices && toIndex in currentQueue.indices && fromIndex != toIndex) {
@@ -545,7 +552,13 @@ fun PlayerScreen(
                         IconButton(onClick = { viewModel.seekRelative(-5_000L) }) {
                             Icon(painter = painterResource(R.drawable.ic_mn_rewind5), contentDescription = "Rewind 5s", tint = MediaNestColors.TextPrimary, modifier = Modifier.size(36.dp))
                         }
-                        IconButton(onClick = { /* Previous track no-op */ }) {
+                        IconButton(onClick = {
+                            val idx = currentQueue.indexOfFirst { it.id == state.videoId }
+                            if (idx > 0) {
+                                val p = currentQueue[idx - 1]
+                                if (onQueueItemClick != null) onQueueItemClick(p) else viewModel.initialize(p.id, p.streamIndex, p.downloadId)
+                            }
+                        }) {
                             Icon(painter = painterResource(R.drawable.ic_mn_prev), contentDescription = "Previous Track", tint = MediaNestColors.TextPrimary, modifier = Modifier.size(36.dp))
                         }
                         IconButton(
@@ -559,7 +572,13 @@ fun PlayerScreen(
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
-                        IconButton(onClick = { /* Next track no-op */ }) {
+                        IconButton(onClick = {
+                            val idx = currentQueue.indexOfFirst { it.id == state.videoId }
+                            if (idx != -1 && idx + 1 < currentQueue.size) {
+                                val n = currentQueue[idx + 1]
+                                if (onQueueItemClick != null) onQueueItemClick(n) else viewModel.initialize(n.id, n.streamIndex, n.downloadId)
+                            }
+                        }) {
                             Icon(painter = painterResource(R.drawable.ic_mn_next), contentDescription = "Next Track", tint = MediaNestColors.TextPrimary, modifier = Modifier.size(36.dp))
                         }
                         IconButton(onClick = { viewModel.seekRelative(5_000L) }) {
@@ -585,8 +604,9 @@ fun PlayerScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(horizontal = 6.dp)
-                                    .height(4.dp),
-                                color = MediaNestColors.ProgressTrack,
+                                    .height(5.dp)
+                                    .clip(RoundedCornerShape(3.dp)),
+                                color = Color.White.copy(alpha = 0.18f),
                                 trackColor = Color.Transparent
                             )
                             Slider(
@@ -600,10 +620,17 @@ fun PlayerScreen(
                                 },
                                 valueRange = 0f..maxOf(state.durationMs, 1L).toFloat(),
                                 colors = SliderDefaults.colors(
-                                    thumbColor = MediaNestColors.YouTubeRed,
-                                    activeTrackColor = MediaNestColors.YouTubeRed,
+                                    thumbColor = MediaNestColors.Accent,
+                                    activeTrackColor = MediaNestColors.Accent,
                                     inactiveTrackColor = MediaNestColors.ProgressTrack
                                 ),
+                                thumb = {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(14.dp)
+                                            .background(MediaNestColors.Accent, CircleShape)
+                                    )
+                                },
                                 modifier = Modifier.fillMaxWidth()
                             )
                         }
@@ -647,10 +674,45 @@ fun PlayerScreen(
         Scaffold(
             topBar = {
                 MediaNestTopAppBar(
-                    title = state.title.ifBlank { "Now Playing" },
-                    subtitle = state.channelName.ifBlank { "Player" },
+                    title = "",
                     onNavigateBack = onBack,
                     actions = {
+                        val quality = state.videoQuality
+                        if (!quality.isNullOrEmpty()) {
+                            val qualityText = if (state.isLocal) "$quality • Local" else "$quality • Stream"
+                            Surface(
+                                color = MediaNestColors.Card,
+                                shape = RoundedCornerShape(4.dp)
+                            ) {
+                                Text(
+                                    text = qualityText,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MediaNestColors.TextSecondary,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
+                            Spacer(Modifier.width(8.dp))
+                        }
+                        val watchCount = state.watchCount
+                        if (watchCount > 0) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_mn_eye),
+                                    contentDescription = null,
+                                    tint = MediaNestColors.Accent,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Text(
+                                    text = "$watchCount",
+                                    color = MediaNestColors.TextSecondary,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                            Spacer(Modifier.width(4.dp))
+                        }
                         IconButton(onClick = { isFullScreen = true }) {
                             Icon(
                                 painter = painterResource(R.drawable.ic_mn_fullscreen),
@@ -893,7 +955,7 @@ fun PlayerScreen(
                             .fillMaxWidth()
                             .padding(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 4.dp)
                     ) {
-                        // Meta block: Title, Channel, Quality/Stream tag, Watch count
+                        // Meta block: Title, Channel
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -909,78 +971,16 @@ fun PlayerScreen(
                                     .fillMaxWidth()
                                     .clickable { isTitleExpanded = !isTitleExpanded }
                             )
-                            val quality = state.videoQuality
-                            val qualityText = if (!quality.isNullOrEmpty()) {
-                                if (state.isLocal) "$quality • Local" else "$quality • Stream"
-                            } else {
-                                if (state.isLocal) "Local" else "Stream"
-                            }
-                            if (state.channelName.isNotEmpty() || qualityText.isNotEmpty() || state.watchCount > 0) {
+                            if (state.channelName.isNotEmpty()) {
                                 Spacer(Modifier.height(4.dp))
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                Text(
+                                    text = state.channelName,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
                                     modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    if (state.channelName.isNotEmpty()) {
-                                        Text(
-                                            text = state.channelName,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                            modifier = Modifier.weight(1f, fill = false)
-                                        )
-                                    }
-                                    if (state.channelName.isNotEmpty() && (qualityText.isNotEmpty() || state.watchCount > 0)) {
-                                        Text(
-                                            text = "•",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                    if (qualityText.isNotEmpty()) {
-                                        Surface(
-                                            color = MaterialTheme.colorScheme.secondaryContainer,
-                                            shape = MaterialTheme.shapes.extraSmall
-                                        ) {
-                                            Text(
-                                                text = qualityText,
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp),
-                                                maxLines = 1
-                                            )
-                                        }
-                                    }
-                                    val watchCount = state.watchCount
-                                    if (watchCount > 0) {
-                                        if (qualityText.isNotEmpty()) {
-                                            Text(
-                                                text = "•",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                                        ) {
-                                            Icon(
-                                                painter = painterResource(R.drawable.ic_mn_eye),
-                                                contentDescription = null,
-                                                tint = MediaNestColors.Accent,
-                                                modifier = Modifier.size(12.dp)
-                                            )
-                                            Text(
-                                                text = "$watchCount",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                maxLines = 1
-                                            )
-                                        }
-                                    }
-                                }
+                                )
                             }
                         }
 
@@ -993,8 +993,9 @@ fun PlayerScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(horizontal = 6.dp)
-                                    .height(4.dp),
-                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                                    .height(5.dp)
+                                    .clip(RoundedCornerShape(3.dp)),
+                                color = Color.White.copy(alpha = 0.18f),
                                 trackColor = Color.Transparent
                             )
                             Slider(
@@ -1008,10 +1009,17 @@ fun PlayerScreen(
                                 },
                                 valueRange = 0f..maxOf(state.durationMs, 1L).toFloat(),
                                 colors = SliderDefaults.colors(
-                                    thumbColor = MediaNestColors.YouTubeRed,
-                                    activeTrackColor = MediaNestColors.YouTubeRed,
+                                    thumbColor = MediaNestColors.Accent,
+                                    activeTrackColor = MediaNestColors.Accent,
                                     inactiveTrackColor = MediaNestColors.ProgressTrack
                                 ),
+                                thumb = {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(14.dp)
+                                            .background(MediaNestColors.Accent, CircleShape)
+                                    )
+                                },
                                 modifier = Modifier.fillMaxWidth()
                             )
                         }
@@ -1053,7 +1061,13 @@ fun PlayerScreen(
                             IconButton(onClick = { viewModel.seekRelative(-5_000L) }) {
                                 Icon(painter = painterResource(R.drawable.ic_mn_rewind5), contentDescription = "Rewind 5s", tint = MediaNestColors.TextPrimary)
                             }
-                            IconButton(onClick = { /* Previous track no-op */ }) {
+                            IconButton(onClick = {
+                                val idx = currentQueue.indexOfFirst { it.id == state.videoId }
+                                if (idx > 0) {
+                                    val p = currentQueue[idx - 1]
+                                    if (onQueueItemClick != null) onQueueItemClick(p) else viewModel.initialize(p.id, p.streamIndex, p.downloadId)
+                                }
+                            }) {
                                 Icon(painter = painterResource(R.drawable.ic_mn_prev), contentDescription = "Previous Track", tint = MediaNestColors.TextPrimary)
                             }
                             IconButton(
@@ -1067,7 +1081,13 @@ fun PlayerScreen(
                                     modifier = Modifier.fillMaxSize()
                                 )
                             }
-                            IconButton(onClick = { /* Next track no-op */ }) {
+                            IconButton(onClick = {
+                                val idx = currentQueue.indexOfFirst { it.id == state.videoId }
+                                if (idx != -1 && idx + 1 < currentQueue.size) {
+                                    val n = currentQueue[idx + 1]
+                                    if (onQueueItemClick != null) onQueueItemClick(n) else viewModel.initialize(n.id, n.streamIndex, n.downloadId)
+                                }
+                            }) {
                                 Icon(painter = painterResource(R.drawable.ic_mn_next), contentDescription = "Next Track", tint = MediaNestColors.TextPrimary)
                             }
                             IconButton(onClick = { viewModel.seekRelative(5_000L) }) {
@@ -1329,8 +1349,8 @@ fun PlayerScreen(
                                 .padding(horizontal = 12.dp, vertical = 4.dp)
                         ) {
                             AutoplayQueueHeader(
-                                contextTitle = contextTitle,
-                                contextType = contextType,
+                                contextTitle = effectiveContextTitle,
+                                contextType = effectiveContextType,
                                 queueSize = currentQueue.size,
                                 isAutoplayEnabled = isAutoplayEnabled,
                                 isExpanded = isQueueExpanded,

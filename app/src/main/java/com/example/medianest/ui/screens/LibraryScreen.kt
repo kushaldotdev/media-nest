@@ -87,6 +87,7 @@ fun LibraryScreen(
     onSubscriptionClick: (String, String) -> Unit = { _, _ -> },
     onNavigateToStatistics: () -> Unit = {},
     onNavigateToNotifications: () -> Unit = {},
+    onPlayPlaylist: (List<ExtractedVideoInfo>, startIndex: Int) -> Unit = { _, _ -> },
     viewModel: LibraryViewModel = hiltViewModel()
 ) {
     var selectedSubscription by remember { mutableStateOf<Pair<String, String>?>(null) }
@@ -96,7 +97,8 @@ fun LibraryScreen(
             sourceType = selectedSubscription!!.first,
             sourceId = selectedSubscription!!.second,
             onBack = { selectedSubscription = null },
-            onVideoClick = onVideoClick
+            onVideoClick = onVideoClick,
+            onPlayAll = onPlayPlaylist
         )
         return
     }
@@ -225,7 +227,7 @@ fun LibraryScreen(
                     subtitle = when {
                         uiState.isSelectionMode -> "Batch selection active"
                         uiState.currentTab == LibraryTab.FOLDERS && uiState.selectedFolder != null -> "Folder collection"
-                        else -> null
+                        else -> "Organized media, playlists & history"
                     },
                     navigationIcon = when {
                         uiState.isSelectionMode -> {

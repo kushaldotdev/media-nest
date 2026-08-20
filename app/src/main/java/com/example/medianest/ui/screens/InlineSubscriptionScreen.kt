@@ -81,6 +81,7 @@ fun InlineSubscriptionScreen(
     sourceId: String,
     onBack: () -> Unit,
     onVideoClick: (String) -> Unit,
+    onPlayAll: (List<ExtractedVideoInfo>, startIndex: Int) -> Unit = { _, _ -> },
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     BackHandler(enabled = true, onBack = onBack)
@@ -264,6 +265,9 @@ fun InlineSubscriptionScreen(
                                         }
                                     }
                                 },
+                                onPlayAll = {
+                                    onPlayAll(state.playlist.videos, 0)
+                                },
                                 onDownloadAll = {
                                     viewModel.setBulkQualityDialogVisible(true)
                                 },
@@ -430,6 +434,9 @@ fun InlineSubscriptionScreen(
                                             snackbarHostState.showSnackbar("Subscribed to Channel")
                                         }
                                     }
+                                },
+                                onPlayAll = {
+                                    onPlayAll(state.channel.uploads, 0)
                                 },
                                 onDownloadAll = {
                                     viewModel.setBulkQualityDialogVisible(true)
@@ -820,6 +827,7 @@ fun PlaylistHeader(
     playlist: ExtractedPlaylistInfo,
     isSaved: Boolean,
     onToggleSave: () -> Unit,
+    onPlayAll: () -> Unit = {},
     onDownloadAll: () -> Unit,
     showShorts: Boolean,
     onToggleShorts: (Boolean) -> Unit,
@@ -872,6 +880,14 @@ fun PlaylistHeader(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                Button(
+                    onClick = onPlayAll,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(painter = painterResource(R.drawable.ic_mn_play), contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Play All", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
                 if (isSaved) {
                     OutlinedButton(
                         onClick = onToggleSave,
@@ -925,6 +941,7 @@ fun ChannelHeader(
     channel: ChannelInfo,
     isSubscribed: Boolean,
     onToggleSubscribe: () -> Unit,
+    onPlayAll: () -> Unit = {},
     onDownloadAll: () -> Unit,
     showShorts: Boolean,
     onToggleShorts: (Boolean) -> Unit,
@@ -994,6 +1011,14 @@ fun ChannelHeader(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                Button(
+                    onClick = onPlayAll,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(painter = painterResource(R.drawable.ic_mn_play), contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Play All", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
                 YoutubeSubscribeButton(
                     isSubscribed = isSubscribed,
                     onClick = onToggleSubscribe,

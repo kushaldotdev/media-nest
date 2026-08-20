@@ -28,14 +28,16 @@ import com.example.medianest.extraction.YouTubeExtractor
 import com.google.common.util.concurrent.ListenableFuture
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import javax.inject.Inject
+import com.example.medianest.data.mapper.toVideoEntity
+import com.example.medianest.ui.screens.PlayerQueueItem
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import javax.inject.Inject
-import com.example.medianest.data.mapper.toVideoEntity
 
 data class PlayerUiState(
     val isPlaying: Boolean = false,
@@ -78,6 +80,15 @@ class PlayerViewModel @Inject constructor(
     private var controllerFuture: ListenableFuture<MediaController>? = null
     private val _player = MutableStateFlow<Player?>(null)
     val player: StateFlow<Player?> = _player
+
+    private val _queue = MutableStateFlow<List<PlayerQueueItem>>(emptyList())
+    val queue: StateFlow<List<PlayerQueueItem>> = _queue.asStateFlow()
+
+    private val _queueContextTitle = MutableStateFlow<String?>(null)
+    val queueContextTitle: StateFlow<String?> = _queueContextTitle.asStateFlow()
+
+    private val _queueContextType = MutableStateFlow<String?>(null)
+    val queueContextType: StateFlow<String?> = _queueContextType.asStateFlow()
 
     private var positionTrackingJob: Job? = null
     private var currentVideoId: String? = null
@@ -143,6 +154,20 @@ class PlayerViewModel @Inject constructor(
             },
             ContextCompat.getMainExecutor(context)
         )
+    }
+
+    fun setQueue(items: List<PlayerQueueItem>, startVideoId: String, contextTitle: String? = null, contextType: String? = null) {
+        _queue.value = items
+        _queueContextTitle.value = contextTitle
+        _queueContextType.value = contextType
+        val start = items.firstOrNull { it.id == startVideoId } ?: items.firstOrNull()
+        if (start != null) initialize(start.id, start.streamIndex, start.downloadId)
+    }
+
+    fun clearQueue() {
+        _queue.value = emptyList()
+        _queueContextTitle.value = null
+        _queueContextType.value = null
     }
 
     fun initialize(videoId: String, streamIndex: Int, downloadId: Long? = null) {

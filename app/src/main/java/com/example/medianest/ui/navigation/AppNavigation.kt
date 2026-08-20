@@ -24,10 +24,12 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.unit.dp
+import com.example.medianest.data.model.ExtractedVideoInfo
 import com.example.medianest.ui.screens.DownloadsScreen
 import com.example.medianest.ui.screens.HomeScreen
 import com.example.medianest.ui.screens.LibraryScreen
 import com.example.medianest.ui.screens.NotificationsScreen
+import com.example.medianest.ui.screens.PlayerQueueItem
 import com.example.medianest.ui.screens.PlayerScreen
 import com.example.medianest.ui.screens.SettingsScreen
 import com.example.medianest.ui.screens.SubscriptionsScreen
@@ -98,11 +100,17 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
             val context = LocalContext.current
             val activity = context.findActivity() ?: error("Activity not found")
             val playerViewModel: PlayerViewModel = hiltViewModel(activity)
+            val queue by playerViewModel.queue.collectAsStateWithLifecycle()
+            val ctxTitle by playerViewModel.queueContextTitle.collectAsStateWithLifecycle()
+            val ctxType by playerViewModel.queueContextType.collectAsStateWithLifecycle()
             PlayerScreen(
                 videoId = videoId,
                 streamIndex = streamIndex,
                 viewModel = playerViewModel,
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStack() },
+                queue = queue,
+                contextTitle = ctxTitle,
+                contextType = ctxType
             )
         }
         composable(
@@ -283,12 +291,18 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
             val context = LocalContext.current
             val activity = context.findActivity() ?: error("Activity not found")
             val playerViewModel: PlayerViewModel = hiltViewModel(activity)
+            val queue by playerViewModel.queue.collectAsStateWithLifecycle()
+            val ctxTitle by playerViewModel.queueContextTitle.collectAsStateWithLifecycle()
+            val ctxType by playerViewModel.queueContextType.collectAsStateWithLifecycle()
             PlayerScreen(
                 videoId = videoId,
                 streamIndex = 0,
                 downloadId = downloadId,
                 viewModel = playerViewModel,
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStack() },
+                queue = queue,
+                contextTitle = ctxTitle,
+                contextType = ctxType
             )
         }
         composable(
@@ -308,6 +322,10 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
                 }
             }
         ) {
+            val context = LocalContext.current
+            val activity = context.findActivity() ?: return@composable
+            val playerViewModel: PlayerViewModel = hiltViewModel(activity)
+
             Box(modifier = Modifier.padding(bottom = 80.dp)) {
                 LibraryScreen(
                     onVideoClick = { videoId ->
@@ -317,7 +335,28 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
                     onNavigateToStatistics = {
                         navController.navigate(NavigationRoutes.STATISTICS)
                     },
-                    onNavigateToNotifications = { navController.navigate(NavigationRoutes.NOTIFICATIONS) }
+                    onNavigateToNotifications = { navController.navigate(NavigationRoutes.NOTIFICATIONS) },
+                    onPlayPlaylist = { videos, startIndex ->
+                        if (videos.isNotEmpty()) {
+                            val startIdx = startIndex.coerceIn(0, videos.size - 1)
+                            val start = videos[startIdx]
+                            playerViewModel.setQueue(
+                                videos.map {
+                                    PlayerQueueItem(
+                                        id = it.videoId,
+                                        title = it.title,
+                                        channelName = it.channelName,
+                                        durationSeconds = it.durationSeconds,
+                                        thumbnailUrl = it.thumbnailUrl
+                                    )
+                                },
+                                startVideoId = start.videoId,
+                                contextTitle = null,
+                                contextType = "playlist"
+                            )
+                            navController.navigate("player/${start.videoId}?streamIndex=0")
+                        }
+                    }
                 )
             }
         }

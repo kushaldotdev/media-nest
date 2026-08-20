@@ -1482,7 +1482,7 @@ fun QuickPasteSearchPill(
                 modifier = Modifier.size(36.dp)
             ) {
                 Icon(
-                    painter = painterResource(R.drawable.ic_mn_copy),
+                    painter = painterResource(R.drawable.ic_mn_paste),
                     contentDescription = "Paste",
                     tint = MediaNestColors.OnAccent,
                     modifier = Modifier.size(16.dp)
