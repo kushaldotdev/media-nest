@@ -56,6 +56,7 @@ import com.example.medianest.data.repository.FolderRepository
 import com.example.medianest.data.repository.FolderTreeNode
 import com.example.medianest.data.repository.flattenWithDepth
 import com.example.medianest.ui.components.*
+import com.example.medianest.data.preferences.CollectionsPreferences
 import com.example.medianest.ui.components.MediaNestSnackbarHost
 import com.example.medianest.ui.components.NotificationBellAction
 import com.example.medianest.ui.theme.MediaNestColors
@@ -140,6 +141,19 @@ fun LibraryScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
+    val collectionsPreferences = remember(context) { CollectionsPreferences(context.applicationContext) }
+    val fullTitlesListKey = when (uiState.currentTab) {
+        LibraryTab.HISTORY -> CollectionsPreferences.LIST_HISTORY
+        LibraryTab.FAVORITES -> CollectionsPreferences.LIST_FAVORITES
+        LibraryTab.WATCHED -> CollectionsPreferences.LIST_WATCHED
+        LibraryTab.FOLDERS -> CollectionsPreferences.LIST_FOLDERS
+        LibraryTab.PLAYLISTS -> CollectionsPreferences.LIST_PLAYLISTS
+        LibraryTab.SUBSCRIPTIONS -> CollectionsPreferences.LIST_CHANNELS
+    }
+    val globalFullTitles by collectionsPreferences.fullTitles.collectAsStateWithLifecycle(
+        initialValue = CollectionsPreferences.DEFAULT_FULL_TITLES
+    )
+    var fullTitles by remember(fullTitlesListKey, globalFullTitles) { mutableStateOf(globalFullTitles) }
 
     // Move-to-Folder tree resolution
     val folderRepository = remember(context) {
@@ -159,7 +173,7 @@ fun LibraryScreen(
         if (folderTree.isNotEmpty()) {
             folderTree.flattenWithDepth()
         } else {
-            rootFolders.map { it to 0 }
+            rootFolders?.map { it to 0 } ?: emptyList()
         }
     }
     val allFoldersMap = remember(folderTree, rootFolders) {
@@ -170,7 +184,7 @@ fun LibraryScreen(
         }
         folderTree.forEach { addNode(it) }
         if (map.isEmpty()) {
-            rootFolders.forEach { map[it.id] = it }
+            rootFolders?.forEach { map[it.id] = it }
         }
         map
     }
@@ -205,10 +219,10 @@ fun LibraryScreen(
     // Determine current video items for selection actions
     val currentVideosList = remember(uiState.currentTab, videos, favoriteVideos, watchedVideos, folderVideos) {
         when (uiState.currentTab) {
-            LibraryTab.HISTORY -> videos
-            LibraryTab.FAVORITES -> favoriteVideos
-            LibraryTab.WATCHED -> watchedVideos
-            LibraryTab.FOLDERS -> folderVideos
+            LibraryTab.HISTORY -> videos ?: emptyList()
+            LibraryTab.FAVORITES -> favoriteVideos ?: emptyList()
+            LibraryTab.WATCHED -> watchedVideos ?: emptyList()
+            LibraryTab.FOLDERS -> folderVideos ?: emptyList()
             else -> emptyList()
         }
     }
@@ -321,7 +335,7 @@ fun LibraryScreen(
                 LibraryTab.WATCHED,
                 LibraryTab.PLAYLISTS,
                 LibraryTab.SUBSCRIPTIONS
-            ) || (uiState.currentTab == LibraryTab.FOLDERS && (uiState.selectedFolder != null || folderVideos.isNotEmpty()))
+            ) || (uiState.currentTab == LibraryTab.FOLDERS && (uiState.selectedFolder != null || !folderVideos.isNullOrEmpty()))
 
             val headerContent: @Composable () -> Unit = {
                 LibraryHeaderBlock(
@@ -339,13 +353,17 @@ fun LibraryScreen(
                     historyStats = historyStats,
                     watchedCount = watchedCount,
                     favoritesCount = favoritesCount,
-                    rootFoldersCount = rootFolders.size,
+                    rootFoldersCount = rootFolders?.size ?: 0,
                     childFoldersCount = childFolders.size,
-                    folderVideosCount = folderVideos.size,
+                    folderVideosCount = folderVideos?.size ?: 0,
                     selectedFolder = uiState.selectedFolder,
                     playlistsCount = playlistsCount,
                     channelsCount = channelsCount,
                     folderStack = uiState.folderStack,
+                    fullTitles = fullTitles,
+                    onFullTitlesChange = { checked ->
+                        fullTitles = checked
+                    },
                     onCrumbClick = { index -> viewModel.navigateToFolderCrumb(index) },
                     onNavigateBackFromFolder = { viewModel.navigateBackFromFolder() },
                     onCreateSubfolderClick = { showCreateFolderDialog = true }
@@ -362,7 +380,23 @@ fun LibraryScreen(
             ) {
                 when (uiState.currentTab) {
                     LibraryTab.HISTORY -> {
-                        if (videos.isEmpty()) {
+                        val currentVideos = videos
+                        if (currentVideos == null) {
+                            LazyColumn(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(horizontal = 12.dp)
+                            ) {
+                                item { headerContent() }
+                                item {
+                                    if (uiState.viewMode == ViewMode.GRID) {
+                                        VideoGridSkeleton(modifier = Modifier.padding(top = 8.dp))
+                                    } else {
+                                        VideoListSkeleton(modifier = Modifier.padding(top = 8.dp))
+                                    }
+                                }
+                            }
+                        } else if (currentVideos.isEmpty()) {
                             LazyColumn(
                                 modifier = Modifier
                                     .fillMaxSize()
@@ -389,7 +423,7 @@ fun LibraryScreen(
                             }
                         } else {
                             VideoListLayout(
-                                videos = videos,
+                                videos = currentVideos,
                                 videoFolderMap = videoFolderMap,
                                 viewMode = uiState.viewMode,
                                 isSelectionMode = uiState.isSelectionMode,
@@ -400,8 +434,8 @@ fun LibraryScreen(
                                 allDownloads = allDownloads,
                                 playbackHistory = playbackHistory,
                                 showContinueWatching = true,
-                                isEndReached = videos.isNotEmpty() && videos.size < historyLimit,
-                                onVideoClick = { videoId -> onPlayFromList(videos.map { it.toExtractedVideoInfo() }, videos.indexOfFirst { it.id == videoId }.coerceAtLeast(0)) },
+                                isEndReached = currentVideos.isNotEmpty() && currentVideos.size < historyLimit,
+                                onVideoClick = { videoId -> onPlayFromList(currentVideos.map { it.toExtractedVideoInfo() }, currentVideos.indexOfFirst { it.id == videoId }.coerceAtLeast(0)) },
                                 onVideoLongClick = { videoId ->
                                     if (!uiState.isSelectionMode) {
                                         viewModel.toggleSelectionMode()
@@ -428,7 +462,7 @@ fun LibraryScreen(
                                 },
                                 onLoadMore = viewModel::loadMoreHistory,
                                 onMarkWatched = { videoId ->
-                                    val video = videos.find { it.id == videoId }
+                                    val video = currentVideos.find { it.id == videoId }
                                     if (video != null) {
                                         watchCountTargetVideoId = videoId
                                         watchCountTargetTitle = video.title
@@ -436,13 +470,30 @@ fun LibraryScreen(
                                         showWatchCountDialog = true
                                     }
                                 },
+                                fullTitles = fullTitles,
                                 headerContent = headerContent
                             )
                         }
                     }
 
                     LibraryTab.FAVORITES -> {
-                        if (favoriteVideos.isEmpty()) {
+                        val currentFavorites = favoriteVideos
+                        if (currentFavorites == null) {
+                            LazyColumn(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(horizontal = 12.dp)
+                            ) {
+                                item { headerContent() }
+                                item {
+                                    if (uiState.viewMode == ViewMode.GRID) {
+                                        VideoGridSkeleton(modifier = Modifier.padding(top = 8.dp))
+                                    } else {
+                                        VideoListSkeleton(modifier = Modifier.padding(top = 8.dp))
+                                    }
+                                }
+                            }
+                        } else if (currentFavorites.isEmpty()) {
                             LazyColumn(
                                 modifier = Modifier
                                     .fillMaxSize()
@@ -469,7 +520,7 @@ fun LibraryScreen(
                             }
                         } else {
                             VideoListLayout(
-                                videos = favoriteVideos,
+                                videos = currentFavorites,
                                 videoFolderMap = videoFolderMap,
                                 viewMode = uiState.viewMode,
                                 isSelectionMode = uiState.isSelectionMode,
@@ -479,8 +530,8 @@ fun LibraryScreen(
                                 fetchedStreams = fetchedStreams,
                                 allDownloads = allDownloads,
                                 playbackHistory = playbackHistory,
-                                isEndReached = favoriteVideos.isNotEmpty() && favoriteVideos.size < favoritesLimit,
-                                onVideoClick = { videoId -> onPlayFromList(favoriteVideos.map { it.toExtractedVideoInfo() }, favoriteVideos.indexOfFirst { it.id == videoId }.coerceAtLeast(0)) },
+                                isEndReached = currentFavorites.isNotEmpty() && currentFavorites.size < favoritesLimit,
+                                onVideoClick = { videoId -> onPlayFromList(currentFavorites.map { it.toExtractedVideoInfo() }, currentFavorites.indexOfFirst { it.id == videoId }.coerceAtLeast(0)) },
                                 onVideoLongClick = { videoId ->
                                     if (!uiState.isSelectionMode) {
                                         viewModel.toggleSelectionMode()
@@ -507,7 +558,7 @@ fun LibraryScreen(
                                 },
                                 onLoadMore = viewModel::loadMoreFavorites,
                                 onMarkWatched = { videoId ->
-                                    val video = favoriteVideos.find { it.id == videoId }
+                                    val video = currentFavorites.find { it.id == videoId }
                                     if (video != null) {
                                         watchCountTargetVideoId = videoId
                                         watchCountTargetTitle = video.title
@@ -515,13 +566,30 @@ fun LibraryScreen(
                                         showWatchCountDialog = true
                                     }
                                 },
+                                fullTitles = fullTitles,
                                 headerContent = headerContent
                             )
                         }
                     }
 
                     LibraryTab.WATCHED -> {
-                        if (watchedVideos.isEmpty()) {
+                        val currentWatched = watchedVideos
+                        if (currentWatched == null) {
+                            LazyColumn(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(horizontal = 12.dp)
+                            ) {
+                                item { headerContent() }
+                                item {
+                                    if (uiState.viewMode == ViewMode.GRID) {
+                                        VideoGridSkeleton(modifier = Modifier.padding(top = 8.dp))
+                                    } else {
+                                        VideoListSkeleton(modifier = Modifier.padding(top = 8.dp))
+                                    }
+                                }
+                            }
+                        } else if (currentWatched.isEmpty()) {
                             LazyColumn(
                                 modifier = Modifier
                                     .fillMaxSize()
@@ -548,7 +616,7 @@ fun LibraryScreen(
                             }
                         } else {
                             VideoListLayout(
-                                videos = watchedVideos,
+                                videos = currentWatched,
                                 videoFolderMap = videoFolderMap,
                                 viewMode = uiState.viewMode,
                                 isSelectionMode = uiState.isSelectionMode,
@@ -558,8 +626,8 @@ fun LibraryScreen(
                                 fetchedStreams = fetchedStreams,
                                 allDownloads = allDownloads,
                                 playbackHistory = playbackHistory,
-                                isEndReached = watchedVideos.isNotEmpty() && watchedVideos.size < watchedLimit,
-                                onVideoClick = { videoId -> onPlayFromList(watchedVideos.map { it.toExtractedVideoInfo() }, watchedVideos.indexOfFirst { it.id == videoId }.coerceAtLeast(0)) },
+                                isEndReached = currentWatched.isNotEmpty() && currentWatched.size < watchedLimit,
+                                onVideoClick = { videoId -> onPlayFromList(currentWatched.map { it.toExtractedVideoInfo() }, currentWatched.indexOfFirst { it.id == videoId }.coerceAtLeast(0)) },
                                 onVideoLongClick = { videoId ->
                                     if (!uiState.isSelectionMode) {
                                         viewModel.toggleSelectionMode()
@@ -586,7 +654,7 @@ fun LibraryScreen(
                                 },
                                 onLoadMore = viewModel::loadMoreWatched,
                                 onMarkWatched = { videoId ->
-                                    val video = watchedVideos.find { it.id == videoId }
+                                    val video = currentWatched.find { it.id == videoId }
                                     if (video != null) {
                                         watchCountTargetVideoId = videoId
                                         watchCountTargetTitle = video.title
@@ -594,6 +662,7 @@ fun LibraryScreen(
                                         showWatchCountDialog = true
                                     }
                                 },
+                                fullTitles = fullTitles,
                                 headerContent = headerContent
                             )
                         }
@@ -616,7 +685,8 @@ fun LibraryScreen(
                             fetchedStreams = fetchedStreams,
                             allDownloads = allDownloads,
                             playbackHistory = playbackHistory,
-                            isEndReached = folderVideos.isNotEmpty() && folderVideos.size < folderVideosLimit,
+                            isEndReached = !folderVideos.isNullOrEmpty() && folderVideos!!.size < folderVideosLimit,
+                            fullTitles = fullTitles,
                             onFolderClick = { viewModel.selectFolder(it) },
                             onCreateFolderClick = { showCreateFolderDialog = true },
                             onRenameFolder = { folder ->
@@ -628,7 +698,7 @@ fun LibraryScreen(
                                 deleteDownloadsWithFolder = false
                             },
                             onNavigateBack = { viewModel.navigateBackFromFolder() },
-                            onVideoClick = { videoId -> onPlayFromList(folderVideos.map { it.toExtractedVideoInfo() }, folderVideos.indexOfFirst { it.id == videoId }.coerceAtLeast(0)) },
+                            onVideoClick = { videoId -> val list = folderVideos ?: emptyList(); onPlayFromList(list.map { it.toExtractedVideoInfo() }, list.indexOfFirst { it.id == videoId }.coerceAtLeast(0)) },
                             onVideoLongClick = { videoId ->
                                 if (!uiState.isSelectionMode) {
                                     viewModel.toggleSelectionMode()
@@ -659,7 +729,7 @@ fun LibraryScreen(
                             },
                             onLoadMoreVideos = viewModel::loadMoreFolderVideos,
                             onMarkWatched = { videoId ->
-                                val video = folderVideos.find { it.id == videoId }
+                                val video = folderVideos?.find { it.id == videoId }
                                 if (video != null) {
                                     watchCountTargetVideoId = videoId
                                     watchCountTargetTitle = video.title
@@ -682,6 +752,8 @@ fun LibraryScreen(
                                 sourceType = "playlist",
                                 searchQuery = uiState.searchQuery,
                                 viewMode = uiState.viewMode,
+                                fullTitles = fullTitles,
+                                showFullTitlesToggle = false,
                                 onSubscriptionClick = { type, id ->
                                     selectedSubscriptionType = type
                                     selectedSubscriptionId = id
@@ -702,6 +774,8 @@ fun LibraryScreen(
                                 sourceType = "channel",
                                 searchQuery = uiState.searchQuery,
                                 viewMode = uiState.viewMode,
+                                fullTitles = fullTitles,
+                                showFullTitlesToggle = false,
                                 onSubscriptionClick = { type, id ->
                                     selectedSubscriptionType = type
                                     selectedSubscriptionId = id
@@ -1273,6 +1347,8 @@ private fun LibraryHeaderBlock(
     playlistsCount: Int,
     channelsCount: Int,
     folderStack: List<FolderEntity>,
+    fullTitles: Boolean = false,
+    onFullTitlesChange: (Boolean) -> Unit = {},
     onCrumbClick: (Int) -> Unit,
     onNavigateBackFromFolder: () -> Unit,
     onCreateSubfolderClick: () -> Unit,
@@ -1310,12 +1386,25 @@ private fun LibraryHeaderBlock(
             contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
         )
 
-        LibrarySearchBar(
-            query = searchQuery,
-            onQueryChange = onSearchQueryChange,
-            placeholder = "Search ${currentTab.label.lowercase()}...",
-            modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp)
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 4.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            LibrarySearchBar(
+                query = searchQuery,
+                onQueryChange = onSearchQueryChange,
+                placeholder = "Search ${currentTab.label.lowercase()}...",
+                modifier = Modifier.weight(1f)
+            )
+
+            FullTitlesToggle(
+                checked = fullTitles,
+                onCheckedChange = onFullTitlesChange
+            )
+        }
 
         if (showSecondaryFilters) {
             Row(
@@ -1973,6 +2062,7 @@ private fun VideoListLayout(
     onMarkWatched: (String) -> Unit = {},
     showContinueWatching: Boolean = false,
     isEndReached: Boolean = false,
+    fullTitles: Boolean? = null,
     headerContent: @Composable () -> Unit = {}
 ) {
     val onMoveToFolderClick = LocalMoveToFolder.current
@@ -2090,7 +2180,8 @@ private fun VideoListLayout(
                         showPlaybackProgress = true,
                         showDownloadedBadge = true,
                         showMarkWatchedButton = !isSelectionMode,
-                        showMediaTypeBadge = true
+                        showMediaTypeBadge = true,
+                        fullTitles = fullTitles
                     ),
                     onClick = { if (isSelectionMode) onToggleSelection(video.id) else onVideoClick(video.id) },
                     onLongClick = { onVideoLongClick(video.id) },
@@ -2179,7 +2270,8 @@ private fun VideoListLayout(
                         showPlaybackProgress = true,
                         showDownloadedBadge = true,
                         showMarkWatchedButton = !isSelectionMode,
-                        showMediaTypeBadge = true
+                        showMediaTypeBadge = true,
+                        fullTitles = fullTitles
                     ),
                     onClick = { if (isSelectionMode) onToggleSelection(video.id) else onVideoClick(video.id) },
                     onLongClick = { onVideoLongClick(video.id) },
@@ -2214,9 +2306,9 @@ private fun VideoListLayout(
 
 @Composable
 private fun FolderContent(
-    folders: List<FolderEntity>,
+    folders: List<FolderEntity>?,
     childFolders: List<FolderEntity>,
-    folderVideos: List<VideoEntity>,
+    folderVideos: List<VideoEntity>?,
     videoFolderMap: Map<String, List<FolderEntity>>,
     folderStatsMap: Map<Long, FolderStats>,
     selectedFolder: FolderEntity?,
@@ -2247,6 +2339,7 @@ private fun FolderContent(
     onLoadMoreVideos: (() -> Unit)? = null,
     onMarkWatched: (String) -> Unit = {},
     isEndReached: Boolean = false,
+    fullTitles: Boolean? = null,
     headerContent: @Composable () -> Unit = {}
 ) {
     val gridState = rememberLazyGridState()
@@ -2268,8 +2361,39 @@ private fun FolderContent(
         }
     }
 
-    if (selectedFolder == null && searchQuery.isEmpty()) {
-        if (folders.isEmpty()) {
+    if (selectedFolder == null && folders == null) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 12.dp)
+        ) {
+            item { headerContent() }
+            item {
+                if (viewMode == ViewMode.GRID) {
+                    FolderSkeletonGrid(modifier = Modifier.padding(top = 8.dp))
+                } else {
+                    VideoListSkeleton(modifier = Modifier.padding(top = 8.dp))
+                }
+            }
+        }
+    } else if (selectedFolder != null && folderVideos == null) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 12.dp)
+        ) {
+            item { headerContent() }
+            item {
+                if (viewMode == ViewMode.GRID) {
+                    VideoGridSkeleton(modifier = Modifier.padding(top = 8.dp))
+                } else {
+                    VideoListSkeleton(modifier = Modifier.padding(top = 8.dp))
+                }
+            }
+        }
+    } else if (selectedFolder == null && searchQuery.isEmpty()) {
+        val nonNullFolders = folders ?: emptyList()
+        if (nonNullFolders.isEmpty()) {
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
@@ -2278,7 +2402,7 @@ private fun FolderContent(
                 item { headerContent() }
                 item {
                     RootFolderHeaderRow(
-                        count = folders.size,
+                        count = nonNullFolders.size,
                         onCreateFolderClick = onCreateFolderClick
                     )
                 }
@@ -2315,14 +2439,15 @@ private fun FolderContent(
                     }
                     item(span = { GridItemSpan(maxLineSpan) }) {
                         RootFolderHeaderRow(
-                            count = folders.size,
+                            count = nonNullFolders.size,
                             onCreateFolderClick = onCreateFolderClick
                         )
                     }
-                    items(folders, key = { it.id }) { folder ->
+                    items(nonNullFolders, key = { it.id }) { folder ->
                         FolderCard(
                             folder = folder,
                             stats = folderStatsMap[folder.id],
+                            fullTitles = fullTitles,
                             onClick = { onFolderClick(folder) },
                             onRename = { onRenameFolder(folder) },
                             onDelete = { onDeleteFolder(folder) }
@@ -2344,14 +2469,15 @@ private fun FolderContent(
                     }
                     item {
                         RootFolderHeaderRow(
-                            count = folders.size,
+                            count = nonNullFolders.size,
                             onCreateFolderClick = onCreateFolderClick
                         )
                     }
-                    items(folders, key = { it.id }) { folder ->
+                    items(nonNullFolders, key = { it.id }) { folder ->
                         FolderRow(
                             folder = folder,
                             stats = folderStatsMap[folder.id],
+                            fullTitles = fullTitles,
                             onClick = { onFolderClick(folder) },
                             onRename = { onRenameFolder(folder) },
                             onDelete = { onDeleteFolder(folder) }
@@ -2364,8 +2490,9 @@ private fun FolderContent(
             }
         }
     } else {
-        val currentFolders = if (selectedFolder == null) folders else childFolders
-        val currentVideos = folderVideos
+        val nonNullFolders = folders ?: emptyList()
+        val currentFolders = if (selectedFolder == null) nonNullFolders else childFolders
+        val currentVideos = folderVideos ?: emptyList()
 
         if (currentFolders.isEmpty() && currentVideos.isEmpty()) {
             LazyColumn(
@@ -2377,7 +2504,7 @@ private fun FolderContent(
                 if (selectedFolder == null) {
                     item {
                         RootFolderHeaderRow(
-                            count = folders.size,
+                            count = nonNullFolders.size,
                             onCreateFolderClick = onCreateFolderClick
                         )
                     }
@@ -2415,7 +2542,7 @@ private fun FolderContent(
                     if (selectedFolder == null) {
                         item(span = { GridItemSpan(maxLineSpan) }) {
                             RootFolderHeaderRow(
-                                count = folders.size,
+                                count = nonNullFolders.size,
                                 onCreateFolderClick = onCreateFolderClick
                             )
                         }
@@ -2435,6 +2562,7 @@ private fun FolderContent(
                             FolderCard(
                                 folder = folder,
                                 stats = folderStatsMap[folder.id],
+                                fullTitles = fullTitles,
                                 onClick = { onFolderClick(folder) },
                                 onRename = { onRenameFolder(folder) },
                                 onDelete = { onDeleteFolder(folder) }
@@ -2484,7 +2612,8 @@ private fun FolderContent(
                                     showPlaybackProgress = true,
                                     showDownloadedBadge = true,
                                     showMarkWatchedButton = !isSelectionMode,
-                                    showMediaTypeBadge = true
+                                    showMediaTypeBadge = true,
+                                    fullTitles = fullTitles
                                 ),
                                 onClick = { if (isSelectionMode) onToggleSelection(video.id) else onVideoClick(video.id) },
                                 onLongClick = { onVideoLongClick(video.id) },
@@ -2530,7 +2659,7 @@ private fun FolderContent(
                     if (selectedFolder == null) {
                         item {
                             RootFolderHeaderRow(
-                                count = folders.size,
+                                count = nonNullFolders.size,
                                 onCreateFolderClick = onCreateFolderClick
                             )
                         }
@@ -2550,6 +2679,7 @@ private fun FolderContent(
                             FolderRow(
                                 folder = folder,
                                 stats = folderStatsMap[folder.id],
+                                fullTitles = fullTitles,
                                 onClick = { onFolderClick(folder) },
                                 onRename = { onRenameFolder(folder) },
                                 onDelete = { onDeleteFolder(folder) }
@@ -2599,7 +2729,8 @@ private fun FolderContent(
                                     showPlaybackProgress = true,
                                     showDownloadedBadge = true,
                                     showMarkWatchedButton = !isSelectionMode,
-                                    showMediaTypeBadge = true
+                                    showMediaTypeBadge = true,
+                                    fullTitles = fullTitles
                                 ),
                                 onClick = { if (isSelectionMode) onToggleSelection(video.id) else onVideoClick(video.id) },
                                 onLongClick = { onVideoLongClick(video.id) },
@@ -2644,6 +2775,7 @@ private fun FolderContent(
 private fun FolderCard(
     folder: FolderEntity,
     stats: FolderStats?,
+    fullTitles: Boolean? = null,
     onClick: () -> Unit,
     onRename: () -> Unit,
     onDelete: () -> Unit,
@@ -2651,6 +2783,7 @@ private fun FolderCard(
 ) {
     val context = LocalContext.current
     var menuExpanded by remember { mutableStateOf(false) }
+    var isTitleExpanded by remember(fullTitles) { mutableStateOf(fullTitles ?: false) }
 
     GlassCard(
         modifier = modifier
@@ -2750,8 +2883,9 @@ private fun FolderCard(
                     fontSize = 14.5.sp
                 ),
                 color = MediaNestColors.TextPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                maxLines = if (isTitleExpanded) Int.MAX_VALUE else 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.clickable { isTitleExpanded = !isTitleExpanded }
             )
 
             // Item Count and Size Badge
@@ -2789,12 +2923,14 @@ private fun FolderCard(
 private fun FolderRow(
     folder: FolderEntity,
     stats: FolderStats?,
+    fullTitles: Boolean? = null,
     onClick: () -> Unit,
     onRename: () -> Unit,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    var isTitleExpanded by remember(fullTitles) { mutableStateOf(fullTitles ?: false) }
 
     GlassCard(
         modifier = modifier
@@ -2837,8 +2973,9 @@ private fun FolderRow(
                         fontSize = 15.sp
                     ),
                     color = MediaNestColors.TextPrimary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    maxLines = if (isTitleExpanded) Int.MAX_VALUE else 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.clickable { isTitleExpanded = !isTitleExpanded }
                 )
                 Spacer(Modifier.height(2.dp))
                 val itemCount = stats?.itemCount ?: 0

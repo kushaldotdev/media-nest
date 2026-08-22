@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -29,6 +30,11 @@ import com.example.medianest.ui.theme.MediaNestColors
 import com.example.medianest.ui.utils.UiUtils
 
 /**
+ * CompositionLocal providing global preference for displaying full vs truncated video titles.
+ */
+val LocalFullTitles = staticCompositionLocalOf { false }
+
+/**
  * Configuration options for displaying optional features on the unified video card.
  */
 data class VideoCardConfig(
@@ -43,7 +49,8 @@ data class VideoCardConfig(
     val showDownloadedBadge: Boolean = false,
     val showMarkWatchedButton: Boolean = false,
     val showMediaTypeBadge: Boolean = false,
-    val showMoreButton: Boolean = true
+    val showMoreButton: Boolean = true,
+    val fullTitles: Boolean? = null
 )
 
 /**
@@ -167,7 +174,9 @@ fun UnifiedVideoCard(
     serialNumber: Int? = null,
     mediaType: String = "VIDEO"
 ) {
-    var isTitleExpanded by remember { mutableStateOf(false) }
+    val globalFullTitles = LocalFullTitles.current
+    val initialExpanded = config.fullTitles ?: globalFullTitles
+    var isTitleExpanded by remember(initialExpanded) { mutableStateOf(initialExpanded) }
     var showActionSheet by remember { mutableStateOf(false) }
 
     GlassCard(
@@ -499,7 +508,9 @@ fun UnifiedVideoRow(
     serialNumber: Int? = null,
     mediaType: String = "VIDEO"
 ) {
-    var isTitleExpanded by remember { mutableStateOf(false) }
+    val globalFullTitles = LocalFullTitles.current
+    val initialExpanded = config.fullTitles ?: globalFullTitles
+    var isTitleExpanded by remember(initialExpanded) { mutableStateOf(initialExpanded) }
     var showActionSheet by remember { mutableStateOf(false) }
 
     GlassCard(

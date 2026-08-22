@@ -96,8 +96,11 @@ import com.example.medianest.data.local.entity.VideoEntity
 import com.example.medianest.data.model.ExtractedPlaylistInfo
 import com.example.medianest.data.model.ExtractedVideoInfo
 import com.example.medianest.data.model.StreamSource
+import com.example.medianest.data.preferences.CollectionsPreferences
 import com.example.medianest.ui.viewmodel.ViewMode
 import com.example.medianest.ui.components.EndOfListIndicator
+import com.example.medianest.ui.components.FullTitlesToggle
+import com.example.medianest.ui.components.LocalFullTitles
 import com.example.medianest.ui.components.MediaNestSnackbarHost
 import com.example.medianest.ui.components.MediaNestTopAppBar
 import com.example.medianest.ui.components.NotificationBellAction
@@ -153,7 +156,6 @@ fun HomeScreen(
 
     var urlInput by remember { mutableStateOf("") }
     var selectedFormatFilter by remember { mutableStateOf("All") } // "All", "Videos", "Audio"
-    val expandedTitles = remember { mutableStateOf(setOf<String>()) }
     var expandedDownloadVideoId by remember { mutableStateOf<String?>(null) }
 
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -161,6 +163,11 @@ fun HomeScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
+    val collectionsPreferences = remember(context) { CollectionsPreferences(context.applicationContext) }
+    val globalFullTitles by collectionsPreferences.fullTitles.collectAsStateWithLifecycle(
+        initialValue = CollectionsPreferences.DEFAULT_FULL_TITLES
+    )
+    var fullTitlesHome by remember(globalFullTitles) { mutableStateOf(globalFullTitles) }
 
     // Bottom sheet & dialog states
     var activeVideoForSheet by remember { mutableStateOf<ExtractedVideoInfo?>(null) }
@@ -268,17 +275,20 @@ fun HomeScreen(
                         viewModel.onUrlSubmitted(urlInput.trim())
                     },
                     isLoading = uiState is HomeUiState.Loading,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    fullTitles = fullTitlesHome,
+                    onFullTitlesChange = { fullTitlesHome = it }
                 )
             }
 
-            // 4. Format Filter Pills
+            // 4. Format filter pills
             item {
-                FormatFilterPills(
-                    selectedFilter = selectedFormatFilter,
-                    onFilterSelected = { selectedFormatFilter = it },
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                )
+                Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                    FormatFilterPills(
+                        selectedFilter = selectedFormatFilter,
+                        onFilterSelected = { selectedFormatFilter = it }
+                    )
+                }
             }
 
             // 5. Extraction Results or Loading / Error
@@ -373,7 +383,8 @@ fun HomeScreen(
                                         showPlaybackProgress = true,
                                         showDownloadedBadge = true,
                                         showMarkWatchedButton = true,
-                                        showMediaTypeBadge = true
+                                        showMediaTypeBadge = true,
+                                        fullTitles = fullTitlesHome
                                     ),
                                     onClick = { onVideoSelected(state.video.videoId) },
                                     onFavoriteToggle = {
@@ -433,7 +444,8 @@ fun HomeScreen(
                                         showPlaybackProgress = true,
                                         showDownloadedBadge = true,
                                         showMarkWatchedButton = true,
-                                        showMediaTypeBadge = true
+                                        showMediaTypeBadge = true,
+                                        fullTitles = fullTitlesHome
                                     ),
                                     onClick = { onVideoSelected(state.video.videoId) },
                                     onFavoriteToggle = {
@@ -547,7 +559,8 @@ fun HomeScreen(
                                                 showPlaybackProgress = true,
                                                 showDownloadedBadge = true,
                                                 showMarkWatchedButton = true,
-                                                showMediaTypeBadge = true
+                                                showMediaTypeBadge = true,
+                                                fullTitles = fullTitlesHome
                                             ),
                                             onClick = { onVideoSelected(video.videoId) },
                                             onFavoriteToggle = {
@@ -624,7 +637,8 @@ fun HomeScreen(
                                         showPlaybackProgress = true,
                                         showDownloadedBadge = true,
                                         showMarkWatchedButton = true,
-                                        showMediaTypeBadge = true
+                                        showMediaTypeBadge = true,
+                                        fullTitles = fullTitlesHome
                                     ),
                                     onClick = { onVideoSelected(video.videoId) },
                                     onFavoriteToggle = {
@@ -774,7 +788,8 @@ fun HomeScreen(
                                                 showPlaybackProgress = true,
                                                 showDownloadedBadge = true,
                                                 showMarkWatchedButton = true,
-                                                showMediaTypeBadge = true
+                                                showMediaTypeBadge = true,
+                                                fullTitles = fullTitlesHome
                                             ),
                                             onClick = { onVideoSelected(video.videoId) },
                                             onFavoriteToggle = {
@@ -851,7 +866,8 @@ fun HomeScreen(
                                         showPlaybackProgress = true,
                                         showDownloadedBadge = true,
                                         showMarkWatchedButton = true,
-                                        showMediaTypeBadge = true
+                                        showMediaTypeBadge = true,
+                                        fullTitles = fullTitlesHome
                                     ),
                                     onClick = { onVideoSelected(video.videoId) },
                                     onFavoriteToggle = {
@@ -922,14 +938,48 @@ fun HomeScreen(
 
                 item {
                     Spacer(Modifier.height(16.dp))
-                    SectionHeader(
-                        title = "History",
-                        actionText = if (filteredHistory.isNotEmpty()) "Clear all" else null,
-                        actionIconRes = if (filteredHistory.isNotEmpty()) R.drawable.ic_mn_trash else null,
-                        actionColor = MediaNestColors.Destructive,
-                        onActionClick = { showClearHistoryDialog = true },
-                        modifier = Modifier.padding(horizontal = 16.dp)
-                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "History",
+                            style = TextStyle(
+                                fontSize = 17.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MediaNestColors.TextPrimary,
+                                letterSpacing = (-0.2).sp
+                            )
+                        )
+                        if (filteredHistory.isNotEmpty()) {
+                            Row(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable { showClearHistoryDialog = true }
+                                    .padding(horizontal = 6.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_mn_trash),
+                                    contentDescription = null,
+                                    tint = MediaNestColors.Destructive,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Text(
+                                    text = "Clear all",
+                                    style = TextStyle(
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MediaNestColors.Destructive
+                                    )
+                                )
+                            }
+                        }
+                    }
                     Spacer(Modifier.height(8.dp))
                 }
 
@@ -972,6 +1022,7 @@ fun HomeScreen(
                         Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
                             LinkHistoryItemRow(
                                 item = item,
+                                fullTitles = fullTitlesHome,
                                 onClick = {
                                     try {
                                         val clipboardManager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -1680,7 +1731,9 @@ fun HeroExtractionPanel(
     onUrlChange: (String) -> Unit,
     onExtractClick: () -> Unit,
     isLoading: Boolean,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    fullTitles: Boolean = false,
+    onFullTitlesChange: ((Boolean) -> Unit)? = null
 ) {
     Surface(
         shape = RoundedCornerShape(24.dp),
@@ -1703,25 +1756,40 @@ fun HeroExtractionPanel(
                 .padding(20.dp)
         ) {
             Column {
-                Text(
-                    text = "OFFLINE-FIRST",
-                    style = TextStyle(
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.4.sp,
-                        color = MediaNestColors.Accent
-                    )
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = "MediaNest",
-                    style = TextStyle(
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MediaNestColors.TextPrimary,
-                        letterSpacing = (-0.4).sp
-                    )
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Column(modifier = Modifier.weight(1f, fill = false)) {
+                        Text(
+                            text = "OFFLINE-FIRST",
+                            style = TextStyle(
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.4.sp,
+                                color = MediaNestColors.Accent
+                            )
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = "MediaNest",
+                            style = TextStyle(
+                                fontSize = 24.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MediaNestColors.TextPrimary,
+                                letterSpacing = (-0.4).sp
+                            )
+                        )
+                    }
+
+                    if (onFullTitlesChange != null) {
+                        FullTitlesToggle(
+                            checked = fullTitles,
+                            onCheckedChange = onFullTitlesChange
+                        )
+                    }
+                }
                 Spacer(Modifier.height(4.dp))
                 Text(
                     text = "Download, organize and play your YouTube library — even offline.",
@@ -1901,7 +1969,7 @@ fun FormatFilterPills(
     )
 
     Row(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         filters.forEach { (id, label, iconRes) ->
@@ -2304,13 +2372,16 @@ fun HomeMediaRow(
     isFavorite: Boolean = false,
     playbackProgressFraction: Float = 0f,
     watchCount: Int = 0,
-    isExpanded: Boolean = false,
+    isExpanded: Boolean? = null,
     onTitleToggle: () -> Unit = {},
     onClick: () -> Unit,
     onFavoriteToggle: () -> Unit,
     onMoreClick: () -> Unit,
+    fullTitles: Boolean = LocalFullTitles.current,
     modifier: Modifier = Modifier
 ) {
+    var isTitleExpanded by remember(fullTitles, isExpanded) { mutableStateOf(isExpanded ?: fullTitles) }
+
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = MediaNestColors.Card,
@@ -2433,12 +2504,15 @@ fun HomeMediaRow(
                         color = MediaNestColors.TextPrimary,
                         lineHeight = 19.sp
                     ),
-                    maxLines = if (isExpanded) Int.MAX_VALUE else 2,
+                    maxLines = if (isTitleExpanded) Int.MAX_VALUE else 2,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null
-                    ) { onTitleToggle() }
+                    ) {
+                        isTitleExpanded = !isTitleExpanded
+                        onTitleToggle()
+                    }
                 )
 
                 if (!video.description.isNullOrBlank()) {
@@ -2517,8 +2591,11 @@ fun LinkHistoryItemRow(
     onClick: () -> Unit,
     onReExtract: () -> Unit,
     onDelete: () -> Unit,
+    fullTitles: Boolean = LocalFullTitles.current,
     modifier: Modifier = Modifier
 ) {
+    var isTitleExpanded by remember(fullTitles) { mutableStateOf(fullTitles) }
+
     val (typeIconRes, typeLabel) = when (item.linkType.uppercase()) {
         "VIDEO" -> Pair(R.drawable.ic_mn_video, "Video")
         "PLAYLIST" -> Pair(R.drawable.ic_mn_playlist, "Playlist")
@@ -2561,8 +2638,9 @@ fun LinkHistoryItemRow(
                 Text(
                     text = item.title,
                     style = TextStyle(fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = MediaNestColors.TextPrimary),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    maxLines = if (isTitleExpanded) Int.MAX_VALUE else 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.clickable { isTitleExpanded = !isTitleExpanded }
                 )
                 Spacer(Modifier.height(2.dp))
                 Text(
@@ -3041,7 +3119,8 @@ fun VideoResultCard(
     watchCount: Int = 0,
     onSelectQuality: () -> Unit,
     onFavoriteToggle: ((ExtractedVideoInfo, Boolean) -> Unit)? = null,
-    onMarkWatched: () -> Unit = {}
+    onMarkWatched: () -> Unit = {},
+    fullTitles: Boolean = LocalFullTitles.current
 ) {
     HomeMediaRow(
         video = video,
@@ -3050,7 +3129,8 @@ fun VideoResultCard(
         watchCount = watchCount,
         onClick = onSelectQuality,
         onFavoriteToggle = { onFavoriteToggle?.invoke(video, !isFavorite) },
-        onMoreClick = onSelectQuality
+        onMoreClick = onSelectQuality,
+        fullTitles = fullTitles
     )
 }
 
@@ -3068,7 +3148,8 @@ fun VideoListItem(
     onDownloadClick: ((String) -> Unit)? = null,
     downloadMenuContent: (@Composable () -> Unit)? = null,
     serialNumber: Int? = null,
-    onMarkWatched: () -> Unit = {}
+    onMarkWatched: () -> Unit = {},
+    fullTitles: Boolean = LocalFullTitles.current
 ) {
     HomeMediaRow(
         video = video,
@@ -3078,6 +3159,7 @@ fun VideoListItem(
         watchCount = watchCount,
         onClick = onClick,
         onFavoriteToggle = { onFavoriteToggle?.invoke(video, !isFavorite) },
-        onMoreClick = { onDownloadClick?.invoke(video.videoId) }
+        onMoreClick = { onDownloadClick?.invoke(video.videoId) },
+        fullTitles = fullTitles
     )
 }

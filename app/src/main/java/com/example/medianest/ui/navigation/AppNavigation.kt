@@ -110,7 +110,8 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
                 onBack = { navController.popBackStack() },
                 queue = queue,
                 contextTitle = ctxTitle,
-                contextType = ctxType
+                contextType = ctxType,
+                onQueueReordered = playerViewModel::reorderQueue
             )
         }
         composable(
@@ -305,7 +306,8 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
                 onBack = { navController.popBackStack() },
                 queue = emptyList(),
                 contextTitle = ctxTitle,
-                contextType = ctxType
+                contextType = ctxType,
+                onQueueReordered = playerViewModel::reorderQueue
             )
         }
         composable(

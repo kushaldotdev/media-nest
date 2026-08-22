@@ -66,6 +66,8 @@ import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import coil.compose.AsyncImage
+import com.example.medianest.data.preferences.CollectionsPreferences
+import com.example.medianest.ui.components.LocalFullTitles
 import com.example.medianest.ui.navigation.AppNavigation
 import com.example.medianest.ui.navigation.BottomNavItem
 import com.example.medianest.ui.navigation.NavigationRoutes
@@ -93,6 +95,8 @@ fun MainScreen() {
         val currentDestination = navBackStackEntry?.destination
 
         val context = LocalContext.current
+        val collectionsPrefs = remember(context) { CollectionsPreferences(context.applicationContext) }
+        val fullTitles by collectionsPrefs.fullTitles.collectAsStateWithLifecycle(initialValue = CollectionsPreferences.DEFAULT_FULL_TITLES)
         val activity = context.findActivity() ?: error("Activity not found")
         val playerViewModel: PlayerViewModel = hiltViewModel(activity)
         val playerUiState by playerViewModel.uiState.collectAsStateWithLifecycle()
@@ -151,7 +155,10 @@ fun MainScreen() {
                 currentRoute != NavigationRoutes.PLAYER_ONLINE &&
                 currentRoute != NavigationRoutes.PLAYER_OFFLINE
 
-        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        CompositionLocalProvider(
+            LocalFullTitles provides fullTitles
+        ) {
+            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             val density = LocalDensity.current
             val maxWidthPx = with(density) { maxWidth.toPx() }
             val maxHeightPx = with(density) { maxHeight.toPx() }
@@ -252,6 +259,7 @@ fun MainScreen() {
             }
         }
     }
+}
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

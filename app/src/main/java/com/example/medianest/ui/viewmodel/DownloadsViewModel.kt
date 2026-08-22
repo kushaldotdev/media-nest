@@ -83,7 +83,7 @@ class DownloadsViewModel @Inject constructor(
         _queueOrder.value = emptyList()
     }
 
-    val downloads: StateFlow<List<DownloadEntity>> = downloadRepository.getAllDownloads()
+    val downloads: StateFlow<List<DownloadEntity>?> = downloadRepository.getAllDownloads()
         .map { list ->
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 val mapped = list.map { download ->
@@ -111,7 +111,7 @@ class DownloadsViewModel @Inject constructor(
                 mapped
             }
         }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     /**
      * Clears [VideoEntity.localFilePath] for [videoId] when no completed download for that

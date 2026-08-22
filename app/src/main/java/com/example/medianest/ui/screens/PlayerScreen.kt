@@ -30,6 +30,8 @@ import android.content.ContextWrapper
 import android.app.Activity
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
 import androidx.compose.material3.Button
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Surface
@@ -47,6 +49,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
+import com.example.medianest.data.preferences.CollectionsPreferences
+import com.example.medianest.ui.components.FullTitlesToggle
+import com.example.medianest.ui.components.LocalFullTitles
 import com.example.medianest.ui.components.MediaNestTopAppBar
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
@@ -67,6 +72,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -112,6 +118,13 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.zIndex
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.Spring
 import com.example.medianest.ui.theme.MediaNestColors
 import com.example.medianest.ui.theme.MediaNestSemanticColors
 import com.example.medianest.ui.utils.UiUtils
@@ -165,6 +178,13 @@ fun PlayerScreen(
     val vmContextTitle by viewModel.queueContextTitle.collectAsStateWithLifecycle()
     val vmContextType by viewModel.queueContextType.collectAsStateWithLifecycle()
     val playbackHistory by viewModel.playbackHistory.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val collectionsPreferences = remember(context) { CollectionsPreferences(context.applicationContext) }
+    val globalFullTitles by collectionsPreferences.fullTitles.collectAsStateWithLifecycle(
+        initialValue = CollectionsPreferences.DEFAULT_FULL_TITLES
+    )
+    var fullTitlesQueue by remember(globalFullTitles) { mutableStateOf(globalFullTitles) }
     val effectiveQueue = if (queue.isNotEmpty()) queue else vmQueue
     val effectiveContextTitle = contextTitle ?: vmContextTitle
     val effectiveContextType = contextType ?: vmContextType
@@ -174,7 +194,14 @@ fun PlayerScreen(
             if (itm.originalIndex == null) itm.copy(originalIndex = idx + 1) else itm
         }
     }
-    var currentQueue by remember(indexedQueue) { mutableStateOf(indexedQueue) }
+    var currentQueue by remember { mutableStateOf(indexedQueue) }
+    LaunchedEffect(indexedQueue) {
+        val currentIds = currentQueue.map { it.id }
+        val newIds = indexedQueue.map { it.id }
+        if (currentIds.sorted() != newIds.sorted() || (currentQueue.isEmpty() && indexedQueue.isNotEmpty())) {
+            currentQueue = indexedQueue
+        }
+    }
     var isAutoplayEnabled by remember(autoplayNext) { mutableStateOf(autoplayNext) }
     var showQueueSheet by remember { mutableStateOf(false) }
     val hasQueueContext = currentQueue.isNotEmpty() || !effectiveContextTitle.isNullOrEmpty() || !effectiveContextType.isNullOrEmpty()
@@ -214,7 +241,7 @@ fun PlayerScreen(
         }
     }
 
-    var showResumeButton by rememberSaveable(videoId) { mutableStateOf(true) }
+    var showResumeButton by rememberSaveable(state.videoId) { mutableStateOf(true) }
     var localPosition by remember { mutableStateOf<Float?>(null) }
     var isFullScreen by rememberSaveable { mutableStateOf(false) }
     var showControls by remember { mutableStateOf(true) }
@@ -238,7 +265,6 @@ fun PlayerScreen(
         }
     }
 
-    val context = LocalContext.current
     val activity = remember(context) { context.findActivity() }
     DisposableEffect(isFullScreen) {
         activity?.requestedOrientation = if (isFullScreen) {
@@ -1540,6 +1566,11 @@ fun PlayerScreen(
                         color = MediaNestColors.TextSecondary
                     )
                     Spacer(Modifier.width(12.dp))
+                    FullTitlesToggle(
+                        checked = fullTitlesQueue,
+                        onCheckedChange = { fullTitlesQueue = it }
+                    )
+                    Spacer(Modifier.width(12.dp))
                     Text(
                         text = "Autoplay",
                         style = MaterialTheme.typography.labelSmall,
@@ -1575,9 +1606,10 @@ fun PlayerScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        items(currentQueue.size) { i ->
-                            val item = currentQueue[i]
-                            val idx = i
+                        itemsIndexed(
+                            items = currentQueue,
+                            key = { index, item -> "${item.id}_${item.originalIndex ?: index}" }
+                        ) { idx, item ->
                             val isCurrent = item.id == state.videoId
                             val history = playbackHistory.find { it.videoId == item.id }
                             val progressFraction = if (isCurrent) {
@@ -1594,6 +1626,7 @@ fun PlayerScreen(
                                 totalCount = currentQueue.size,
                                 isCurrent = isCurrent,
                                 playbackProgressFraction = progressFraction,
+                                fullTitles = fullTitlesQueue,
                                 onMoveUp = {
                                     if (idx > 0) {
                                         moveQueueItem(idx, idx - 1)
@@ -1618,7 +1651,8 @@ fun PlayerScreen(
                                         onQueueReordered?.invoke(it)
                                         onRemoveFromQueue?.invoke(removed)
                                     }
-                                }
+                                },
+                                modifier = Modifier.animateItem()
                             )
                         }
                     }
@@ -1775,107 +1809,6 @@ fun WatchCountDisplay(
 }
 
 @Composable
-fun AutoplayQueueHeader(
-    contextTitle: String?,
-    contextType: String?,
-    queueSize: Int,
-    isAutoplayEnabled: Boolean,
-    isExpanded: Boolean,
-    onAutoplayToggle: (Boolean) -> Unit,
-    onExpandToggle: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
-        ),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            val contextIconRes = when (contextType?.lowercase()) {
-                "playlist" -> R.drawable.ic_mn_playlist
-                "folder" -> R.drawable.ic_mn_folder
-                "favorites" -> R.drawable.ic_mn_heart
-                else -> R.drawable.ic_mn_playlist
-            }
-            val defaultTitle = when (contextType?.lowercase()) {
-                "playlist" -> "Playlist"
-                "folder" -> "Folder"
-                "favorites" -> "Favorites"
-                else -> "Up Next Queue"
-            }
-            val titleText = contextTitle?.ifBlank { defaultTitle } ?: defaultTitle
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .weight(1f, fill = false)
-                    .clickable { onExpandToggle() }
-            ) {
-                Icon(
-                    painter = painterResource(contextIconRes),
-                    contentDescription = null,
-                    tint = if (contextType?.lowercase() == "favorites") MediaNestColors.Destructive else MediaNestColors.Accent,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(Modifier.width(8.dp))
-                Column {
-                    Text(
-                        text = titleText,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = if (queueSize > 0) "$queueSize videos" else "Empty queue",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Text(
-                    text = "Autoplay next",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Switch(
-                    checked = isAutoplayEnabled,
-                    onCheckedChange = onAutoplayToggle,
-                    colors = mediaNestSwitchColors(),
-                    modifier = Modifier.scale(0.8f)
-                )
-                IconButton(
-                    onClick = onExpandToggle,
-                    modifier = Modifier.size(32.dp)
-                ) {
-                    Icon(
-                        painter = painterResource(if (isExpanded) R.drawable.ic_mn_chevron_up else R.drawable.ic_mn_chevron_down),
-                        contentDescription = if (isExpanded) "Collapse Queue" else "Expand Queue",
-                        tint = MediaNestColors.TextSecondary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
 fun PlayerQueueItemRow(
     item: PlayerQueueItem,
     index: Int,
@@ -1887,30 +1820,69 @@ fun PlayerQueueItemRow(
     onDragMove: (targetIndex: Int) -> Unit,
     onClick: () -> Unit,
     onRemove: () -> Unit,
+    fullTitles: Boolean = LocalFullTitles.current,
     modifier: Modifier = Modifier
 ) {
+    var isTitleExpanded by remember(fullTitles) { mutableStateOf(fullTitles) }
+    var isDragging by remember { mutableStateOf(false) }
     var dragAccumulator by remember { mutableStateOf(0f) }
-    val dragThresholdPx = 120f
+    val density = LocalDensity.current
+    val dragThresholdPx = remember(density) { with(density) { 52.dp.toPx() } }
+
+    val dragScale by animateFloatAsState(
+        targetValue = if (isDragging) 1.025f else 1.0f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "dragScale"
+    )
+
+    val cardBgColor by animateColorAsState(
+        targetValue = when {
+            isDragging -> MediaNestColors.Raised
+            isCurrent -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
+            else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f)
+        },
+        animationSpec = tween(durationMillis = 150),
+        label = "cardBgColor"
+    )
+
+    val cardBorderColor by animateColorAsState(
+        targetValue = when {
+            isDragging -> MediaNestColors.Accent.copy(alpha = 0.85f)
+            isCurrent -> MaterialTheme.colorScheme.primary
+            else -> MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+        },
+        animationSpec = tween(durationMillis = 150),
+        label = "cardBorderColor"
+    )
+
+    val cardElevation by animateDpAsState(
+        targetValue = if (isDragging) 6.dp else 0.dp,
+        animationSpec = tween(durationMillis = 150),
+        label = "cardElevation"
+    )
 
     Card(
         modifier = modifier
             .fillMaxWidth()
+            .zIndex(if (isDragging) 2f else 0f)
+            .graphicsLayer {
+                scaleX = dragScale
+                scaleY = dragScale
+            }
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(10.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (isCurrent) {
-                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
-            } else {
-                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f)
-            }
+            containerColor = cardBgColor
+        ),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = cardElevation
         ),
         border = BorderStroke(
-            width = if (isCurrent) 1.5.dp else 1.dp,
-            color = if (isCurrent) {
-                MaterialTheme.colorScheme.primary
-            } else {
-                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
-            }
+            width = if (isDragging || isCurrent) 1.5.dp else 1.dp,
+            color = cardBorderColor
         )
     ) {
         Row(
@@ -1922,20 +1894,25 @@ fun PlayerQueueItemRow(
             // Drag handle with draggable modifier
             Box(
                 modifier = Modifier
-                    .size(28.dp)
+                    .size(32.dp)
                     .draggable(
                         orientation = Orientation.Vertical,
                         state = rememberDraggableState { delta ->
                             dragAccumulator += delta
                             if (dragAccumulator > dragThresholdPx && index < totalCount - 1) {
                                 onDragMove(index + 1)
-                                dragAccumulator = 0f
+                                dragAccumulator -= dragThresholdPx
                             } else if (dragAccumulator < -dragThresholdPx && index > 0) {
                                 onDragMove(index - 1)
-                                dragAccumulator = 0f
+                                dragAccumulator += dragThresholdPx
                             }
                         },
+                        onDragStarted = {
+                            isDragging = true
+                            dragAccumulator = 0f
+                        },
                         onDragStopped = {
+                            isDragging = false
                             dragAccumulator = 0f
                         }
                     ),
@@ -1944,7 +1921,7 @@ fun PlayerQueueItemRow(
                 Icon(
                     painter = painterResource(R.drawable.ic_mn_grip),
                     contentDescription = "Reorder Drag Handle",
-                    tint = MediaNestColors.TextSecondary.copy(alpha = 0.7f),
+                    tint = if (isDragging) MediaNestColors.Accent else MediaNestColors.TextSecondary.copy(alpha = 0.7f),
                     modifier = Modifier.size(18.dp)
                 )
             }
@@ -2045,8 +2022,9 @@ fun PlayerQueueItemRow(
                     ),
                     fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium,
                     color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
+                    maxLines = if (isTitleExpanded) Int.MAX_VALUE else 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.clickable { isTitleExpanded = !isTitleExpanded }
                 )
 
                 Spacer(Modifier.height(4.dp))

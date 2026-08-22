@@ -68,12 +68,15 @@ import com.example.medianest.R
 import com.example.medianest.data.local.entity.DownloadEntity
 import com.example.medianest.data.local.entity.DownloadStatus
 import com.example.medianest.data.local.entity.VideoEntity
+import com.example.medianest.data.preferences.CollectionsPreferences
 import com.example.medianest.data.preferences.DownloadPreferences
 import com.example.medianest.ui.components.DownloadProgressBar
 import com.example.medianest.ui.components.DownloadProgressStage
 import com.example.medianest.ui.components.EmptyState
 import com.example.medianest.ui.components.EndOfListIndicator
 import com.example.medianest.ui.components.GlassCard
+import com.example.medianest.ui.components.FullTitlesToggle
+import com.example.medianest.ui.components.LocalFullTitles
 import com.example.medianest.ui.components.MediaNestButton
 import com.example.medianest.ui.components.MediaNestButtonSize
 import com.example.medianest.ui.components.MediaNestButtonVariant
@@ -85,6 +88,7 @@ import com.example.medianest.ui.components.MediaNestSortBottomSheet
 import com.example.medianest.ui.components.MediaNestSortOption
 import com.example.medianest.ui.components.MediaNestTopAppBar
 import com.example.medianest.ui.components.NotificationBellAction
+import com.example.medianest.ui.components.VideoListSkeleton
 import com.example.medianest.ui.theme.MediaNestColors
 import com.example.medianest.ui.theme.MediaNestSemanticColors
 import com.example.medianest.ui.theme.MediaNestShapes
@@ -620,11 +624,16 @@ fun DownloadsScreen(
     val coroutineScope = rememberCoroutineScope()
     val sortMode by prefs.sortMode.collectAsStateWithLifecycle(initialValue = DownloadPreferences.DEFAULT_SORT_MODE)
     val defaultResolution by prefs.defaultResolution.collectAsStateWithLifecycle(initialValue = DownloadPreferences.DEFAULT_RESOLUTION)
+    val collectionsPreferences = remember(context) { CollectionsPreferences(context) }
+    val globalFullTitles by collectionsPreferences.fullTitles.collectAsStateWithLifecycle(
+        initialValue = CollectionsPreferences.DEFAULT_FULL_TITLES
+    )
+    var fullTitles by remember(globalFullTitles) { mutableStateOf(globalFullTitles) }
 
     val downloads by viewModel.downloads.collectAsStateWithLifecycle()
     val queueOrder by viewModel.queueOrder.collectAsStateWithLifecycle()
     val sortedDownloads = remember(downloads, sortMode, queueOrder) {
-        applyQueueOrder(downloads, queueOrder, sortMode)
+        applyQueueOrder(downloads ?: emptyList(), queueOrder, sortMode)
     }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val playingVideoId by viewModel.playingVideoId.collectAsStateWithLifecycle()
@@ -677,8 +686,9 @@ fun DownloadsScreen(
 
     LaunchedEffect(downloads, pendingDialogId) {
         val id = pendingDialogId
-        if (id != null && downloads.isNotEmpty()) {
-            val download = downloads.find { it.id == id }
+        val currentDownloads = downloads
+        if (id != null && !currentDownloads.isNullOrEmpty()) {
+            val download = currentDownloads.find { it.id == id }
             if (download != null) {
                 showRestartDialogFor = download
                 pendingDialogId = null
@@ -723,48 +733,58 @@ fun DownloadsScreen(
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // Sort Bottom Sheet Trigger
-                            val currentCategory = getSortCategory(sortMode)
-                            val isAsc = isSortAscending(sortMode)
-                            MediaNestButton(
-                                text = currentCategory.label,
-                                onClick = { showSortBottomSheet = true },
-                                variant = MediaNestButtonVariant.Secondary,
-                                size = MediaNestButtonSize.Small,
-                                leadingIcon = {
-                                    Icon(
-                                        painter = painterResource(
-                                            if (isAsc) R.drawable.ic_mn_arrow_up else R.drawable.ic_mn_arrow_down
-                                        ),
-                                        contentDescription = "Sort",
-                                        tint = MediaNestColors.Accent,
-                                        modifier = Modifier.size(14.dp)
-                                    )
-                                }
-                            )
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // Sort Bottom Sheet Trigger
+                                val currentCategory = getSortCategory(sortMode)
+                                val isAsc = isSortAscending(sortMode)
+                                MediaNestButton(
+                                    text = currentCategory.label,
+                                    onClick = { showSortBottomSheet = true },
+                                    variant = MediaNestButtonVariant.Secondary,
+                                    size = MediaNestButtonSize.Small,
+                                    leadingIcon = {
+                                        Icon(
+                                            painter = painterResource(
+                                                if (isAsc) R.drawable.ic_mn_arrow_up else R.drawable.ic_mn_arrow_down
+                                            ),
+                                            contentDescription = "Sort",
+                                            tint = MediaNestColors.Accent,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
+                                )
 
-                            // Max Concurrent Trigger
-                            MediaNestButton(
-                                text = "Max: ${uiState.maxConcurrent}",
-                                onClick = { showMaxConcurrentDialog = true },
-                                variant = MediaNestButtonVariant.Secondary,
-                                size = MediaNestButtonSize.Small,
-                                leadingIcon = {
-                                    Icon(
-                                        painter = painterResource(R.drawable.ic_mn_sliders),
-                                        contentDescription = "Max concurrent",
-                                        tint = MediaNestColors.Accent,
-                                        modifier = Modifier.size(14.dp)
-                                    )
-                                }
+                                // Max Concurrent Trigger
+                                MediaNestButton(
+                                    text = "Max: ${uiState.maxConcurrent}",
+                                    onClick = { showMaxConcurrentDialog = true },
+                                    variant = MediaNestButtonVariant.Secondary,
+                                    size = MediaNestButtonSize.Small,
+                                    leadingIcon = {
+                                        Icon(
+                                            painter = painterResource(R.drawable.ic_mn_sliders),
+                                            contentDescription = "Max concurrent",
+                                            tint = MediaNestColors.Accent,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
+                                )
+                            }
+
+                            FullTitlesToggle(
+                                checked = fullTitles,
+                                onCheckedChange = { fullTitles = it }
                             )
                         }
 
                         // Secondary Action Controls Row (Pause All / Resume All)
-                        if (downloads.isNotEmpty()) {
+                        if (!downloads.isNullOrEmpty()) {
                             val hasPauseable = activeDownloads.any { it.status == DownloadStatus.DOWNLOADING || it.status == DownloadStatus.QUEUED }
                             val hasResumeable = activeDownloads.any { it.status == DownloadStatus.PAUSED }
                             if (hasPauseable || hasResumeable) {
@@ -812,19 +832,12 @@ fun DownloadsScreen(
                     }
                 }
 
-            // -----------------------------------------------------------------
-            // Download Storage & Status Overview Card
-            // -----------------------------------------------------------------
-            if (downloads.isNotEmpty()) {
+            val currentDlList = downloads
+            if (currentDlList == null) {
                 item {
-                    DownloadStatsCard(downloads = downloads)
+                    VideoListSkeleton(modifier = Modifier.padding(top = 8.dp))
                 }
-            }
-
-            // -----------------------------------------------------------------
-            // Entirely Empty State
-            // -----------------------------------------------------------------
-            if (downloads.isEmpty()) {
+            } else if (currentDlList.isEmpty()) {
                 item {
                     EmptyState(
                         title = "No downloads yet",
@@ -839,6 +852,13 @@ fun DownloadsScreen(
                         },
                         modifier = Modifier.padding(top = 40.dp)
                     )
+                }
+            } else {
+                // -----------------------------------------------------------------
+                // Download Storage & Status Overview Card
+                // -----------------------------------------------------------------
+                item {
+                    DownloadStatsCard(downloads = currentDlList)
                 }
             }
 
@@ -889,14 +909,15 @@ fun DownloadsScreen(
                         index = index,
                         totalCount = activeDownloads.size,
                         onDragMove = { targetIndex ->
-                            viewModel.reorderDownloads(index, targetIndex, sortedDownloads)
+                            viewModel.reorderDownloads(index, targetIndex, activeDownloads)
                         },
                         videosMap = videosMap,
                         onVideoClick = onVideoClick,
                         onDeleteClick = { showDeleteDialogFor = it },
                         onRestartClick = { showRestartDialogFor = it },
                         viewModel = viewModel,
-                        defaultResolution = defaultResolution
+                        defaultResolution = defaultResolution,
+                        fullTitles = fullTitles
                     )
                 }
                 item { EndOfListIndicator() }
@@ -1127,13 +1148,14 @@ fun DownloadsScreen(
                             playingVideoId = playingVideoId,
                             playingUri = playingUri,
                             isPlaying = isPlaying,
-                            defaultResolution = defaultResolution
+                            defaultResolution = defaultResolution,
+                            fullTitles = fullTitles
                         )
                     }
                 }
             }
 
-            if (downloads.isNotEmpty()) {
+            if (downloads?.isNotEmpty() == true) {
                 item {
                     EndOfListIndicator()
                 }
@@ -1164,6 +1186,8 @@ fun DownloadsScreen(
             selectedSortBy = currentCategory.name,
             isAscending = isAsc,
             options = downloadSortOptions,
+            fullTitles = fullTitles,
+            onFullTitlesChange = { fullTitles = it },
             onSortSelected = { newCat, newAsc ->
                 val dir = if (newAsc) "ASC" else "DESC"
                 val newMode = "${newCat}_$dir"
@@ -1632,8 +1656,10 @@ private fun ActiveDownloadCard(
     onDeleteClick: (DownloadEntity) -> Unit,
     onRestartClick: (DownloadEntity) -> Unit,
     viewModel: DownloadsViewModel,
-    defaultResolution: String = DownloadPreferences.DEFAULT_RESOLUTION
+    defaultResolution: String = DownloadPreferences.DEFAULT_RESOLUTION,
+    fullTitles: Boolean = LocalFullTitles.current
 ) {
+    var isTitleExpanded by remember(fullTitles) { mutableStateOf(fullTitles) }
     var dragAccumulator by remember { mutableStateOf(0f) }
     val dragThresholdPx = 120f
     val videoEntity = videosMap[download.videoId]
@@ -1666,10 +1692,10 @@ private fun ActiveDownloadCard(
                                 dragAccumulator += delta
                                 if (dragAccumulator > dragThresholdPx && index < totalCount - 1) {
                                     onDragMove(index + 1)
-                                    dragAccumulator = 0f
+                                    dragAccumulator -= dragThresholdPx
                                 } else if (dragAccumulator < -dragThresholdPx && index > 0) {
                                     onDragMove(index - 1)
-                                    dragAccumulator = 0f
+                                    dragAccumulator += dragThresholdPx
                                 }
                             },
                             onDragStopped = { dragAccumulator = 0f }
@@ -1787,8 +1813,9 @@ private fun ActiveDownloadCard(
                                 fontWeight = FontWeight.SemiBold,
                                 color = MediaNestColors.TextPrimary
                             ),
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
+                            maxLines = if (isTitleExpanded) Int.MAX_VALUE else 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.clickable { isTitleExpanded = !isTitleExpanded }
                         )
 
                         Row(
@@ -2040,8 +2067,10 @@ private fun CompletedDownloadCard(
     playingVideoId: String?,
     playingUri: String?,
     isPlaying: Boolean,
-    defaultResolution: String = DownloadPreferences.DEFAULT_RESOLUTION
+    defaultResolution: String = DownloadPreferences.DEFAULT_RESOLUTION,
+    fullTitles: Boolean = LocalFullTitles.current
 ) {
+    var isTitleExpanded by remember(fullTitles) { mutableStateOf(fullTitles) }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val playbackHistory by viewModel.playbackHistory.collectAsStateWithLifecycle()
 
@@ -2212,8 +2241,9 @@ private fun CompletedDownloadCard(
                                 fontWeight = FontWeight.SemiBold,
                                 color = MediaNestColors.TextPrimary
                             ),
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
+                            maxLines = if (isTitleExpanded) Int.MAX_VALUE else 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.clickable { isTitleExpanded = !isTitleExpanded }
                         )
 
                         Row(

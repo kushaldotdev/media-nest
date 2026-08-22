@@ -56,10 +56,14 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.example.medianest.data.local.entity.SubscriptionEntity
+import com.example.medianest.data.preferences.CollectionsPreferences
 import com.example.medianest.data.preferences.SubscriptionsPreferences
 import com.example.medianest.ui.components.GlassCard
 import com.example.medianest.ui.components.EndOfListIndicator
+import com.example.medianest.ui.components.FullTitlesToggle
+import com.example.medianest.ui.components.LocalFullTitles
 import com.example.medianest.ui.components.MediaNestSnackbarHost
+import com.example.medianest.ui.components.SubscriptionListSkeleton
 import com.example.medianest.ui.viewmodel.SubscriptionsViewModel
 import com.example.medianest.ui.viewmodel.ViewMode
 import kotlinx.coroutines.launch
@@ -72,7 +76,9 @@ fun SubscriptionsScreen(
     viewMode: ViewMode = ViewMode.LIST,
     onSubscriptionClick: (String, String) -> Unit,
     viewModel: SubscriptionsViewModel = hiltViewModel(),
-    subscriptionsPreferences: SubscriptionsPreferences? = null
+    subscriptionsPreferences: SubscriptionsPreferences? = null,
+    fullTitles: Boolean? = null,
+    showFullTitlesToggle: Boolean = true
 ) {
     val subscriptions by viewModel.subscriptions.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -81,43 +87,74 @@ fun SubscriptionsScreen(
     val prefs = remember(context, subscriptionsPreferences) {
         subscriptionsPreferences ?: SubscriptionsPreferences(context.applicationContext)
     }
+    val collectionsPreferences = remember(context) { CollectionsPreferences(context.applicationContext) }
+    val listKey = if (sourceType.equals("playlist", ignoreCase = true)) {
+        CollectionsPreferences.LIST_PLAYLISTS
+    } else {
+        CollectionsPreferences.LIST_CHANNELS
+    }
+    val collectedFullTitles by collectionsPreferences.fullTitlesFor(listKey).collectAsStateWithLifecycle(
+        initialValue = CollectionsPreferences.DEFAULT_FULL_TITLES
+    )
+    var localFullTitles by remember(collectedFullTitles) { mutableStateOf(collectedFullTitles) }
+    val effectiveFullTitles = fullTitles ?: localFullTitles
     val showShorts by prefs.showShorts.collectAsStateWithLifecycle(initialValue = SubscriptionsPreferences.DEFAULT_SHOW_SHORTS)
     var pendingUnsubscribe by remember { mutableStateOf<SubscriptionEntity?>(null) }
 
-    val filtered = subscriptions.filter { 
+    val currentSubs = subscriptions
+    val filtered = currentSubs?.filter { 
         it.sourceType == sourceType && 
         (searchQuery.isBlank() || it.name.contains(searchQuery, ignoreCase = true))
-    }
+    } ?: emptyList()
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
-            // Show Shorts filter toggle header
+            // Header filter / full titles toggle row
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 12.dp, vertical = 4.dp),
-                horizontalArrangement = Arrangement.End,
+                horizontalArrangement = if (showFullTitlesToggle) Arrangement.SpaceBetween else Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = "Show Shorts",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Switch(
-                    checked = showShorts,
-                    onCheckedChange = { checked ->
-                        coroutineScope.launch {
-                            prefs.setShowShorts(checked)
+                if (showFullTitlesToggle) {
+                    FullTitlesToggle(
+                        checked = effectiveFullTitles,
+                        onCheckedChange = { checked ->
+                            localFullTitles = checked
                         }
-                    },
-                    colors = mediaNestSwitchColors(),
-                    modifier = Modifier.scale(0.8f)
-                )
+                    )
+                }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = "Show Shorts",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Switch(
+                        checked = showShorts,
+                        onCheckedChange = { checked ->
+                            coroutineScope.launch {
+                                prefs.setShowShorts(checked)
+                            }
+                        },
+                        colors = mediaNestSwitchColors(),
+                        modifier = Modifier.scale(0.8f)
+                    )
+                }
             }
 
-            if (filtered.isEmpty()) {
+            if (currentSubs == null) {
+                SubscriptionListSkeleton(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .padding(horizontal = 8.dp)
+                )
+            } else if (filtered.isEmpty()) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -156,7 +193,8 @@ fun SubscriptionsScreen(
                                     }
                                 },
                                 onUnsubscribe = { pendingUnsubscribe = sub },
-                                onClick = { onSubscriptionClick(sub.sourceType, sub.sourceId) }
+                                onClick = { onSubscriptionClick(sub.sourceType, sub.sourceId) },
+                                fullTitles = effectiveFullTitles
                             )
                         }
                         item(span = { GridItemSpan(maxLineSpan) }) {
@@ -200,7 +238,8 @@ fun SubscriptionsScreen(
                                     }
                                 },
                                 onUnsubscribe = { pendingUnsubscribe = sub },
-                                onClick = { onSubscriptionClick(sub.sourceType, sub.sourceId) }
+                                onClick = { onSubscriptionClick(sub.sourceType, sub.sourceId) },
+                                fullTitles = effectiveFullTitles
                             )
                         }
                         item {
@@ -282,9 +321,10 @@ private fun SubscriptionCard(
     subscription: SubscriptionEntity,
     onAutoDownloadChange: (Boolean, Boolean) -> Unit,
     onUnsubscribe: () -> Unit,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    fullTitles: Boolean = LocalFullTitles.current
 ) {
-    var isTitleExpanded by remember { mutableStateOf(false) }
+    var isTitleExpanded by remember(fullTitles) { mutableStateOf(fullTitles) }
 
     GlassCard(
         onClick = onClick,

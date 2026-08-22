@@ -182,7 +182,7 @@ class LibraryViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    val videos: StateFlow<List<VideoEntity>> = combine(
+    val videos: StateFlow<List<VideoEntity>?> = combine(
         videoDao.getWatchHistoryVideos(),
         _searchQuery,
         _uiState.map { Triple(it.mediaTypeFilter, it.sortCategory, it.sortDirection) }.distinctUntilChanged(),
@@ -190,10 +190,10 @@ class LibraryViewModel @Inject constructor(
     ) { rawVideos, query, (mediaType, sortCat, sortDir), limit ->
         val sorted = sortAndFilterVideos(rawVideos, query, mediaType, sortCat, sortDir)
         sorted.take(limit)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    val favoriteVideos: StateFlow<List<VideoEntity>> = combine(
+    val favoriteVideos: StateFlow<List<VideoEntity>?> = combine(
         videoDao.getFavoriteVideos(),
         _searchQuery,
         _uiState.map { Triple(it.mediaTypeFilter, it.sortCategory, it.sortDirection) }.distinctUntilChanged(),
@@ -201,10 +201,10 @@ class LibraryViewModel @Inject constructor(
     ) { rawVideos, query, (mediaType, sortCat, sortDir), limit ->
         val sorted = sortAndFilterVideos(rawVideos, query, mediaType, sortCat, sortDir)
         sorted.take(limit)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    val watchedVideos: StateFlow<List<VideoEntity>> = combine(
+    val watchedVideos: StateFlow<List<VideoEntity>?> = combine(
         videoDao.getWatchedVideos(),
         _searchQuery,
         _uiState.map { Triple(it.mediaTypeFilter, it.sortCategory, it.sortDirection) }.distinctUntilChanged(),
@@ -212,10 +212,10 @@ class LibraryViewModel @Inject constructor(
     ) { rawVideos, query, (mediaType, sortCat, sortDir), limit ->
         val sorted = sortAndFilterVideos(rawVideos, query, mediaType, sortCat, sortDir)
         sorted.take(limit)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    val folderVideos: StateFlow<List<VideoEntity>> = combine(
+    val folderVideos: StateFlow<List<VideoEntity>?> = combine(
         _uiState.map { it.selectedFolder }.distinctUntilChanged(),
         _searchQuery,
         _uiState.map { Triple(it.mediaTypeFilter, it.sortCategory, it.sortDirection) }.distinctUntilChanged(),
@@ -240,10 +240,10 @@ class LibraryViewModel @Inject constructor(
                 }
             }
         }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    val rootFolders: StateFlow<List<FolderEntity>> = combine(
+    val rootFolders: StateFlow<List<FolderEntity>?> = combine(
         folderDao.getRootFolders(),
         _searchQuery,
         _uiState.map { it.sortCategory to it.sortDirection }.distinctUntilChanged()
@@ -258,7 +258,7 @@ class LibraryViewModel @Inject constructor(
             else -> compareBy(String.CASE_INSENSITIVE_ORDER) { it.name }
         }
         if (sortDir == SortDirection.ASC) list.sortedWith(comparator) else list.sortedWith(comparator.reversed())
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val childFolders: StateFlow<List<FolderEntity>> = combine(

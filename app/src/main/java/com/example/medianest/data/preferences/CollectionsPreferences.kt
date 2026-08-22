@@ -3,6 +3,7 @@ package com.example.medianest.data.preferences
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -30,6 +31,18 @@ class CollectionsPreferences(private val context: Context) {
         private val KEY_SORT_MODE_FAVORITES = stringPreferencesKey("sort_mode_favorites")
         private val KEY_SORT_MODE_PLAYLISTS = stringPreferencesKey("sort_mode_playlists")
         private val KEY_SORT_MODE_CHANNELS = stringPreferencesKey("sort_mode_channels")
+        private val KEY_FULL_TITLES = booleanPreferencesKey("full_titles")
+
+        const val LIST_HOME = "home"
+        const val LIST_HOME_LINKS = "home_links"
+        const val LIST_HISTORY = "history"
+        const val LIST_FAVORITES = "favorites"
+        const val LIST_WATCHED = "watched"
+        const val LIST_FOLDERS = "folders"
+        const val LIST_PLAYLISTS = "playlists"
+        const val LIST_CHANNELS = "channels"
+        const val LIST_DOWNLOADS = "downloads"
+        const val LIST_QUEUE = "queue"
 
         const val DEFAULT_VIEW_MODE = "GRID"
         const val DEFAULT_SORT_MODE_HISTORY = "DATE_DESC"
@@ -38,6 +51,7 @@ class CollectionsPreferences(private val context: Context) {
         const val DEFAULT_SORT_MODE_FAVORITES = "DATE_DESC"
         const val DEFAULT_SORT_MODE_PLAYLISTS = "DATE_DESC"
         const val DEFAULT_SORT_MODE_CHANNELS = "NAME_ASC"
+        const val DEFAULT_FULL_TITLES = false
     }
 
     val viewMode: Flow<String> = context.collectionsStore.data.map { prefs ->
@@ -75,6 +89,25 @@ class CollectionsPreferences(private val context: Context) {
         prefs[KEY_SORT_MODE_CHANNELS] ?: DEFAULT_SORT_MODE_CHANNELS
     }
     val sortModeChannels: Flow<String> get() = sortMode_channels
+
+    val fullTitles: Flow<Boolean> = context.collectionsStore.data.map { prefs ->
+        prefs[KEY_FULL_TITLES] ?: DEFAULT_FULL_TITLES
+    }
+
+    suspend fun setFullTitles(enabled: Boolean) {
+        context.collectionsStore.edit { prefs ->
+            prefs[KEY_FULL_TITLES] = enabled
+        }
+    }
+
+    /**
+     * Returns the current global default. List toggles are intentionally transient UI state;
+     * leaving a list must not persist an override that can mask the Settings value.
+     */
+    fun fullTitlesFor(listKey: String): Flow<Boolean> = fullTitles
+
+    /** Kept for source compatibility; per-list title choices are not persisted. */
+    suspend fun setFullTitlesFor(listKey: String, enabled: Boolean) = Unit
 
     suspend fun setViewMode(mode: String) {
         context.collectionsStore.edit { prefs ->

@@ -630,6 +630,63 @@ fun SettingsScreen(
 
                     HorizontalDivider(color = MediaNestColors.Border, thickness = 1.dp)
 
+                    // Show Full Titles toggle
+                    val fullTitles by collectionsPreferences.fullTitles.collectAsStateWithLifecycle(
+                        initialValue = CollectionsPreferences.DEFAULT_FULL_TITLES
+                    )
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                coroutineScope.launch {
+                                    collectionsPreferences.setFullTitles(!fullTitles)
+                                }
+                            },
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_mn_video),
+                                    contentDescription = null,
+                                    tint = MediaNestColors.Accent,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    "Always Show Full Titles",
+                                    style = MaterialTheme.typography.titleMedium.copy(
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    ),
+                                    color = MediaNestColors.TextPrimary
+                                )
+                            }
+                            Spacer(Modifier.height(2.dp))
+                            Text(
+                                "Display complete video titles without 2-line truncation",
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
+                                color = MediaNestColors.TextSecondary
+                            )
+                        }
+
+                        Spacer(Modifier.width(12.dp))
+
+                        Switch(
+                            checked = fullTitles,
+                            onCheckedChange = { checked ->
+                                coroutineScope.launch {
+                                    collectionsPreferences.setFullTitles(checked)
+                                }
+                            },
+                            colors = customSwitchColors()
+                        )
+                    }
+
+                    HorizontalDivider(color = MediaNestColors.Border, thickness = 1.dp)
+
                     // Auto-mark as Watched switch
                     val autoMarkWatched by playbackPreferences.autoMarkWatched.collectAsStateWithLifecycle(
                         initialValue = PlaybackPreferences.DEFAULT_AUTO_MARK_WATCHED

@@ -130,7 +130,9 @@ fun MediaNestSortBottomSheet(
     sheetState: SheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
     title: String = "Sort By",
     options: List<MediaNestSortOption> = MediaNestSortOption.DefaultMediaOptions,
-    showDirectionSection: Boolean = true
+    showDirectionSection: Boolean = true,
+    fullTitles: Boolean? = null,
+    onFullTitlesChange: ((Boolean) -> Unit)? = null
 ) {
     var tempSortBy by remember(selectedSortBy) { mutableStateOf(selectedSortBy) }
     var tempIsAscending by remember(isAscending) { mutableStateOf(isAscending) }
@@ -254,6 +256,19 @@ fun MediaNestSortBottomSheet(
                         }
                     )
                 }
+            }
+
+            // Full titles section
+            if (fullTitles != null && onFullTitlesChange != null) {
+                HorizontalDivider(
+                    thickness = 1.dp,
+                    color = MediaNestColors.Border
+                )
+                FullTitlesToggle(
+                    checked = fullTitles,
+                    onCheckedChange = onFullTitlesChange,
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
 
             Spacer(modifier = Modifier.height(4.dp))

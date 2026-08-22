@@ -163,14 +163,21 @@ class PlayerViewModel @Inject constructor(
     }
 
     fun setQueue(items: List<PlayerQueueItem>, startVideoId: String, contextTitle: String? = null, contextType: String? = null) {
+        val usedIndexes = mutableSetOf<Int>()
         val indexed = items.mapIndexed { idx, itm ->
-            if (itm.originalIndex == null) itm.copy(originalIndex = idx + 1) else itm
+            var index = itm.originalIndex ?: (idx + 1)
+            while (!usedIndexes.add(index)) index++
+            if (itm.originalIndex == index) itm else itm.copy(originalIndex = index)
         }
         _queue.value = indexed
         _queueContextTitle.value = contextTitle
         _queueContextType.value = contextType
         val start = indexed.firstOrNull { it.id == startVideoId } ?: indexed.firstOrNull()
         if (start != null) initialize(start.id, start.streamIndex, start.downloadId)
+    }
+
+    fun reorderQueue(items: List<PlayerQueueItem>) {
+        _queue.value = items
     }
 
     fun clearQueue() {

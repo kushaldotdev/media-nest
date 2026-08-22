@@ -73,7 +73,10 @@ import com.example.medianest.data.model.ChannelInfo
 import com.example.medianest.data.model.ExtractedPlaylistInfo
 import com.example.medianest.data.model.ExtractedVideoInfo
 import com.example.medianest.data.local.entity.DownloadStatus
+import com.example.medianest.data.preferences.CollectionsPreferences
 import com.example.medianest.ui.components.GlassCard
+import com.example.medianest.ui.components.FullTitlesToggle
+import com.example.medianest.ui.components.LocalFullTitles
 import com.example.medianest.ui.components.MediaNestChip
 import com.example.medianest.ui.components.MediaNestSnackbarHost
 import com.example.medianest.ui.components.MediaNestSortBottomSheet
@@ -126,6 +129,16 @@ fun InlineSubscriptionScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
+    val listKey = if (sourceType.equals("playlist", ignoreCase = true)) {
+        CollectionsPreferences.LIST_PLAYLISTS
+    } else {
+        CollectionsPreferences.LIST_CHANNELS
+    }
+    val collectionsPreferences = remember(context) { CollectionsPreferences(context.applicationContext) }
+    val globalFullTitles by collectionsPreferences.fullTitles.collectAsStateWithLifecycle(
+        initialValue = CollectionsPreferences.DEFAULT_FULL_TITLES
+    )
+    var fullTitles by remember(listKey, globalFullTitles) { mutableStateOf(globalFullTitles) }
 
     var showMoveToFolderDialog by remember { mutableStateOf(false) }
     var videoToMove by remember { mutableStateOf<ExtractedVideoInfo?>(null) }
@@ -283,6 +296,7 @@ fun InlineSubscriptionScreen(
                         viewMode = viewMode,
                         gridState = gridState,
                         listState = listState,
+                        fullTitles = fullTitles,
                         headerContent = {
                             PlaylistHeader(
                                 playlist = state.playlist,
@@ -315,22 +329,31 @@ fun InlineSubscriptionScreen(
                         },
                         sortContent = {
                             if (filteredVideos.isNotEmpty()) {
-                                val sortLabel = when (sortCategory) { SortCategory.DATE -> "Date"; SortCategory.NAME -> "Name"; SortCategory.DURATION -> "Duration"; else -> "Date" }
-                                val sortDirectionSymbol = if (sortDirection == SortDirection.ASC) "↑" else "↓"
-                                MediaNestChip(
-                                    label = "$sortLabel $sortDirectionSymbol",
-                                    selected = false,
-                                    onClick = { showSortSheet = true },
-                                    shape = RoundedCornerShape(12.dp),
-                                    leadingIcon = {
-                                        Icon(
-                                            painter = painterResource(R.drawable.ic_mn_sort),
-                                            contentDescription = "Sort",
-                                            tint = MediaNestColors.TextSecondary,
-                                            modifier = Modifier.size(14.dp)
-                                        )
-                                    }
-                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    val sortLabel = when (sortCategory) { SortCategory.DATE -> "Date"; SortCategory.NAME -> "Name"; SortCategory.DURATION -> "Duration"; else -> "Date" }
+                                    val sortDirectionSymbol = if (sortDirection == SortDirection.ASC) "↑" else "↓"
+                                    MediaNestChip(
+                                        label = "$sortLabel $sortDirectionSymbol",
+                                        selected = false,
+                                        onClick = { showSortSheet = true },
+                                        shape = RoundedCornerShape(12.dp),
+                                        leadingIcon = {
+                                            Icon(
+                                                painter = painterResource(R.drawable.ic_mn_sort),
+                                                contentDescription = "Sort",
+                                                tint = MediaNestColors.TextSecondary,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                        }
+                                    )
+                                    FullTitlesToggle(
+                                        checked = fullTitles,
+                                        onCheckedChange = { checked -> fullTitles = checked }
+                                    )
+                                }
                             }
                         },
                         playbackHistory = playbackHistory,
@@ -386,6 +409,8 @@ fun InlineSubscriptionScreen(
                                 else -> "DATE"
                             },
                             isAscending = sortDirection == SortDirection.ASC,
+                            fullTitles = fullTitles,
+                            onFullTitlesChange = { checked -> fullTitles = checked },
                             onSortSelected = { sortBy, isAscending ->
                                 sortCategory = when (sortBy.uppercase()) {
                                     "TITLE", "NAME" -> SortCategory.NAME
@@ -433,6 +458,7 @@ fun InlineSubscriptionScreen(
                         viewMode = viewMode,
                         gridState = gridState,
                         listState = listState,
+                        fullTitles = fullTitles,
                         headerContent = {
                             ChannelHeader(
                                 channel = state.channel,
@@ -477,22 +503,31 @@ fun InlineSubscriptionScreen(
                         },
                         sortContent = {
                             if (filteredVideos.isNotEmpty()) {
-                                val sortLabel = when (sortCategory) { SortCategory.DATE -> "Date"; SortCategory.NAME -> "Name"; SortCategory.DURATION -> "Duration"; else -> "Date" }
-                                val sortDirectionSymbol = if (sortDirection == SortDirection.ASC) "↑" else "↓"
-                                MediaNestChip(
-                                    label = "$sortLabel $sortDirectionSymbol",
-                                    selected = false,
-                                    onClick = { showSortSheet = true },
-                                    shape = RoundedCornerShape(12.dp),
-                                    leadingIcon = {
-                                        Icon(
-                                            painter = painterResource(R.drawable.ic_mn_sort),
-                                            contentDescription = "Sort",
-                                            tint = MediaNestColors.TextSecondary,
-                                            modifier = Modifier.size(14.dp)
-                                        )
-                                    }
-                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    val sortLabel = when (sortCategory) { SortCategory.DATE -> "Date"; SortCategory.NAME -> "Name"; SortCategory.DURATION -> "Duration"; else -> "Date" }
+                                    val sortDirectionSymbol = if (sortDirection == SortDirection.ASC) "↑" else "↓"
+                                    MediaNestChip(
+                                        label = "$sortLabel $sortDirectionSymbol",
+                                        selected = false,
+                                        onClick = { showSortSheet = true },
+                                        shape = RoundedCornerShape(12.dp),
+                                        leadingIcon = {
+                                            Icon(
+                                                painter = painterResource(R.drawable.ic_mn_sort),
+                                                contentDescription = "Sort",
+                                                tint = MediaNestColors.TextSecondary,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                        }
+                                    )
+                                    FullTitlesToggle(
+                                        checked = fullTitles,
+                                        onCheckedChange = { checked -> fullTitles = checked }
+                                    )
+                                }
                             }
                         },
                         playbackHistory = playbackHistory,
@@ -548,6 +583,8 @@ fun InlineSubscriptionScreen(
                                 else -> "DATE"
                             },
                             isAscending = sortDirection == SortDirection.ASC,
+                            fullTitles = fullTitles,
+                            onFullTitlesChange = { checked -> fullTitles = checked },
                             onSortSelected = { sortBy, isAscending ->
                                 sortCategory = when (sortBy.uppercase()) {
                                     "TITLE", "NAME" -> SortCategory.NAME
@@ -571,6 +608,7 @@ fun InlineSubscriptionScreen(
                         viewMode = viewMode,
                         gridState = gridState,
                         listState = listState,
+                        fullTitles = fullTitles,
                         headerContent = {},
                         playbackHistory = playbackHistory,
                         favoriteVideoIds = favoriteVideoIds,
@@ -851,7 +889,8 @@ private fun ExtractedVideoListContent(
     onDismissDownloadMenu: () -> Unit,
     onEnqueueDownload: (ExtractedVideoInfo, com.example.medianest.data.model.StreamSource) -> Unit,
     onDeleteDownload: (com.example.medianest.data.local.entity.DownloadEntity) -> Unit,
-    onExtractAudio: (com.example.medianest.data.local.entity.DownloadEntity) -> Unit
+    onExtractAudio: (com.example.medianest.data.local.entity.DownloadEntity) -> Unit,
+    fullTitles: Boolean = LocalFullTitles.current
 ) {
     if (viewMode == ViewMode.GRID) {
         LazyVerticalGrid(
@@ -933,7 +972,8 @@ private fun ExtractedVideoListContent(
                             showPlaybackProgress = true,
                             showDownloadedBadge = true,
                             showMarkWatchedButton = true,
-                            showMediaTypeBadge = true
+                            showMediaTypeBadge = true,
+                            fullTitles = fullTitles
                         ),
                         onClick = { onVideoClick(video) },
                         onPlayClick = onPlayClick?.let { cb -> { cb(video) } },
@@ -1052,7 +1092,8 @@ private fun ExtractedVideoListContent(
                             showPlaybackProgress = true,
                             showDownloadedBadge = true,
                             showMarkWatchedButton = true,
-                            showMediaTypeBadge = true
+                            showMediaTypeBadge = true,
+                            fullTitles = fullTitles
                         ),
                         onClick = { onVideoClick(video) },
                         onPlayClick = onPlayClick?.let { cb -> { cb(video) } },
