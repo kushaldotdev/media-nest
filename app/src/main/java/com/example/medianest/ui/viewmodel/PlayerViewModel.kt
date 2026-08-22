@@ -432,8 +432,8 @@ class PlayerViewModel @Inject constructor(
 
     private suspend fun ensureVideoExists(videoId: String) {
         if (videoDao.getVideoById(videoId) == null) {
-            val info = videoInfo ?: lastResultCache.get(videoId)
-            if (info != null) {
+            val info = videoInfo?.takeIf { it.videoId == videoId } ?: lastResultCache.get(videoId)
+            if (info != null && info.videoId == videoId) {
                 videoDao.insert(info.toVideoEntity())
             } else {
                 val fallback = com.example.medianest.data.local.entity.VideoEntity(

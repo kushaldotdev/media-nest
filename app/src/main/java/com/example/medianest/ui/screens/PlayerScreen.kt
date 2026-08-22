@@ -571,16 +571,18 @@ fun PlayerScreen(
                             Icon(painter = painterResource(R.drawable.ic_mn_rewind5), contentDescription = "Rewind 5s", tint = MediaNestColors.TextPrimary, modifier = Modifier.size(36.dp))
                         }
                         val fsPrevIdx = currentQueue.indexOfFirst { it.id == state.videoId }
-                        IconButton(
-                            onClick = {
-                                val p = if (fsPrevIdx > 0) currentQueue.getOrNull(fsPrevIdx - 1) else null
-                                if (p != null) {
-                                    if (onQueueItemClick != null) onQueueItemClick(p) else viewModel.initialize(p.id, p.streamIndex, p.downloadId)
-                                }
-                            },
-                            enabled = fsPrevIdx > 0
-                        ) {
-                            Icon(painter = painterResource(R.drawable.ic_mn_prev), contentDescription = "Previous Track", tint = MediaNestColors.TextPrimary, modifier = Modifier.size(36.dp))
+                        if (currentQueue.isNotEmpty()) {
+                            IconButton(
+                                onClick = {
+                                    val p = if (fsPrevIdx > 0) currentQueue.getOrNull(fsPrevIdx - 1) else null
+                                    if (p != null) {
+                                        if (onQueueItemClick != null) onQueueItemClick(p) else viewModel.initialize(p.id, p.streamIndex, p.downloadId)
+                                    }
+                                },
+                                enabled = fsPrevIdx > 0
+                            ) {
+                                Icon(painter = painterResource(R.drawable.ic_mn_prev), contentDescription = "Previous Track", tint = MediaNestColors.TextPrimary, modifier = Modifier.size(36.dp))
+                            }
                         }
                         IconButton(
                             onClick = { viewModel.togglePlayPause() },
@@ -603,16 +605,18 @@ fun PlayerScreen(
                             }
                         }
                         val fsNextIdx = currentQueue.indexOfFirst { it.id == state.videoId }
-                        IconButton(
-                            onClick = {
-                                val n = currentQueue.getOrNull(fsNextIdx + 1)
-                                if (n != null) {
-                                    if (onQueueItemClick != null) onQueueItemClick(n) else viewModel.initialize(n.id, n.streamIndex, n.downloadId)
-                                }
-                            },
-                            enabled = fsNextIdx != -1 && fsNextIdx + 1 < currentQueue.size && currentQueue.isNotEmpty()
-                        ) {
-                            Icon(painter = painterResource(R.drawable.ic_mn_next), contentDescription = "Next Track", tint = MediaNestColors.TextPrimary, modifier = Modifier.size(36.dp))
+                        if (currentQueue.isNotEmpty()) {
+                            IconButton(
+                                onClick = {
+                                    val n = currentQueue.getOrNull(fsNextIdx + 1)
+                                    if (n != null) {
+                                        if (onQueueItemClick != null) onQueueItemClick(n) else viewModel.initialize(n.id, n.streamIndex, n.downloadId)
+                                    }
+                                },
+                                enabled = fsNextIdx != -1 && fsNextIdx + 1 < currentQueue.size
+                            ) {
+                                Icon(painter = painterResource(R.drawable.ic_mn_next), contentDescription = "Next Track", tint = MediaNestColors.TextPrimary, modifier = Modifier.size(36.dp))
+                            }
                         }
                         IconButton(onClick = { viewModel.seekRelative(5_000L) }) {
                             Icon(painter = painterResource(R.drawable.ic_mn_forward5), contentDescription = "Forward 5s", tint = MediaNestColors.TextPrimary, modifier = Modifier.size(36.dp))
@@ -1100,16 +1104,18 @@ fun PlayerScreen(
                                 Icon(painter = painterResource(R.drawable.ic_mn_rewind5), contentDescription = "Rewind 5s", tint = MediaNestColors.TextPrimary)
                             }
                             val nfsPrevIdx = currentQueue.indexOfFirst { it.id == state.videoId }
-                            IconButton(
-                                onClick = {
-                                    val p = if (nfsPrevIdx > 0) currentQueue.getOrNull(nfsPrevIdx - 1) else null
-                                    if (p != null) {
-                                        if (onQueueItemClick != null) onQueueItemClick(p) else viewModel.initialize(p.id, p.streamIndex, p.downloadId)
-                                    }
-                                },
-                                enabled = nfsPrevIdx > 0
-                            ) {
-                                Icon(painter = painterResource(R.drawable.ic_mn_prev), contentDescription = "Previous Track", tint = MediaNestColors.TextPrimary)
+                            if (currentQueue.isNotEmpty()) {
+                                IconButton(
+                                    onClick = {
+                                        val p = if (nfsPrevIdx > 0) currentQueue.getOrNull(nfsPrevIdx - 1) else null
+                                        if (p != null) {
+                                            if (onQueueItemClick != null) onQueueItemClick(p) else viewModel.initialize(p.id, p.streamIndex, p.downloadId)
+                                        }
+                                    },
+                                    enabled = nfsPrevIdx > 0
+                                ) {
+                                    Icon(painter = painterResource(R.drawable.ic_mn_prev), contentDescription = "Previous Track", tint = MediaNestColors.TextPrimary)
+                                }
                             }
                             IconButton(
                                 onClick = { viewModel.togglePlayPause() },
@@ -1132,16 +1138,18 @@ fun PlayerScreen(
                                 }
                             }
                             val nfsNextIdx = currentQueue.indexOfFirst { it.id == state.videoId }
-                            IconButton(
-                                onClick = {
-                                    val n = currentQueue.getOrNull(nfsNextIdx + 1)
-                                    if (n != null) {
-                                        if (onQueueItemClick != null) onQueueItemClick(n) else viewModel.initialize(n.id, n.streamIndex, n.downloadId)
-                                    }
-                                },
-                                enabled = nfsNextIdx != -1 && nfsNextIdx + 1 < currentQueue.size && currentQueue.isNotEmpty()
-                            ) {
-                                Icon(painter = painterResource(R.drawable.ic_mn_next), contentDescription = "Next Track", tint = MediaNestColors.TextPrimary)
+                            if (currentQueue.isNotEmpty()) {
+                                IconButton(
+                                    onClick = {
+                                        val n = currentQueue.getOrNull(nfsNextIdx + 1)
+                                        if (n != null) {
+                                            if (onQueueItemClick != null) onQueueItemClick(n) else viewModel.initialize(n.id, n.streamIndex, n.downloadId)
+                                        }
+                                    },
+                                    enabled = nfsNextIdx != -1 && nfsNextIdx + 1 < currentQueue.size
+                                ) {
+                                    Icon(painter = painterResource(R.drawable.ic_mn_next), contentDescription = "Next Track", tint = MediaNestColors.TextPrimary)
+                                }
                             }
                             IconButton(onClick = { viewModel.seekRelative(5_000L) }) {
                                 Icon(painter = painterResource(R.drawable.ic_mn_forward5), contentDescription = "Forward 5s", tint = MediaNestColors.TextPrimary)

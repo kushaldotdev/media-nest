@@ -377,36 +377,38 @@ fun MiniPlayer(
                                     }
                                 }
 
-                                IconButton(
-                                    onClick = {
-                                        val p = q.getOrNull(idx - 1)
-                                        if (p != null) playerViewModel.initialize(p.id, p.streamIndex, p.downloadId)
-                                    },
-                                    enabled = canPrev,
-                                    modifier = Modifier.size(28.dp)
-                                ) {
-                                    Icon(
-                                        painter = painterResource(R.drawable.ic_mn_prev),
-                                        contentDescription = "Previous",
-                                        tint = if (canPrev) MediaNestColors.TextPrimary else MediaNestColors.TextSecondary.copy(alpha = 0.35f),
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                }
+                                if (q.isNotEmpty()) {
+                                    IconButton(
+                                        onClick = {
+                                            val p = q.getOrNull(idx - 1)
+                                            if (p != null) playerViewModel.initialize(p.id, p.streamIndex, p.downloadId)
+                                        },
+                                        enabled = canPrev,
+                                        modifier = Modifier.size(28.dp)
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(R.drawable.ic_mn_prev),
+                                            contentDescription = "Previous",
+                                            tint = if (canPrev) MediaNestColors.TextPrimary else MediaNestColors.TextSecondary.copy(alpha = 0.35f),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
 
-                                IconButton(
-                                    onClick = {
-                                        val n = q.getOrNull(idx + 1)
-                                        if (n != null) playerViewModel.initialize(n.id, n.streamIndex, n.downloadId)
-                                    },
-                                    enabled = canNext,
-                                    modifier = Modifier.size(28.dp)
-                                ) {
-                                    Icon(
-                                        painter = painterResource(R.drawable.ic_mn_next),
-                                        contentDescription = "Next",
-                                        tint = if (canNext) MediaNestColors.TextPrimary else MediaNestColors.TextSecondary.copy(alpha = 0.35f),
-                                        modifier = Modifier.size(16.dp)
-                                    )
+                                    IconButton(
+                                        onClick = {
+                                            val n = q.getOrNull(idx + 1)
+                                            if (n != null) playerViewModel.initialize(n.id, n.streamIndex, n.downloadId)
+                                        },
+                                        enabled = canNext,
+                                        modifier = Modifier.size(28.dp)
+                                    ) {
+                                        Icon(
+                                            painter = painterResource(R.drawable.ic_mn_next),
+                                            contentDescription = "Next",
+                                            tint = if (canNext) MediaNestColors.TextPrimary else MediaNestColors.TextSecondary.copy(alpha = 0.35f),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
                                 }
 
                                 IconButton(
