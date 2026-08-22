@@ -32,7 +32,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
+import com.example.medianest.ui.components.mediaNestSwitchColors
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -112,13 +112,7 @@ fun SubscriptionsScreen(
                             prefs.setShowShorts(checked)
                         }
                     },
-                    colors = SwitchDefaults.colors(
-                        checkedTrackColor = MediaNestColors.AccentDeep,
-                        checkedThumbColor = Color.White,
-                        uncheckedTrackColor = MediaNestColors.ProgressTrack,
-                        uncheckedThumbColor = Color.White,
-                        uncheckedBorderColor = MediaNestColors.Border
-                    ),
+                    colors = mediaNestSwitchColors(),
                     modifier = Modifier.scale(0.8f)
                 )
             }
@@ -347,13 +341,7 @@ private fun SubscriptionCard(
                         Switch(
                             checked = subscription.autoDownload,
                             onCheckedChange = { onAutoDownloadChange(it, subscription.audioOnly) },
-                            colors = SwitchDefaults.colors(
-                                checkedTrackColor = MediaNestColors.AccentDeep,
-                                checkedThumbColor = Color.White,
-                                uncheckedTrackColor = MediaNestColors.ProgressTrack,
-                                uncheckedThumbColor = Color.White,
-                                uncheckedBorderColor = MediaNestColors.Border
-                            ),
+                            colors = mediaNestSwitchColors(),
                             modifier = Modifier.scale(0.8f)
                         )
                     }
@@ -369,13 +357,7 @@ private fun SubscriptionCard(
                         Switch(
                             checked = subscription.audioOnly,
                             onCheckedChange = { onAutoDownloadChange(subscription.autoDownload, it) },
-                            colors = SwitchDefaults.colors(
-                                checkedTrackColor = MediaNestColors.AccentDeep,
-                                checkedThumbColor = Color.White,
-                                uncheckedTrackColor = MediaNestColors.ProgressTrack,
-                                uncheckedThumbColor = Color.White,
-                                uncheckedBorderColor = MediaNestColors.Border
-                            ),
+                            colors = mediaNestSwitchColors(),
                             modifier = Modifier.scale(0.8f)
                         )
                     }

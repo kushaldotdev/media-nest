@@ -52,7 +52,8 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
+import androidx.compose.ui.draw.scale
+import com.example.medianest.ui.components.mediaNestSwitchColors
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -2136,12 +2137,8 @@ fun PlaylistResultHeader(
                 Switch(
                     checked = showShorts,
                     onCheckedChange = onToggleShorts,
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = MediaNestColors.TextPrimary,
-                        checkedTrackColor = MediaNestColors.AccentDeep,
-                        uncheckedThumbColor = MediaNestColors.TextSecondary,
-                        uncheckedTrackColor = MediaNestColors.Raised
-                    )
+                    colors = mediaNestSwitchColors(),
+                    modifier = Modifier.scale(0.8f)
                 )
             }
         }
@@ -2292,12 +2289,8 @@ fun ChannelResultHeader(
                 Switch(
                     checked = showShorts,
                     onCheckedChange = onToggleShorts,
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = MediaNestColors.TextPrimary,
-                        checkedTrackColor = MediaNestColors.AccentDeep,
-                        uncheckedThumbColor = MediaNestColors.TextSecondary,
-                        uncheckedTrackColor = MediaNestColors.Raised
-                    )
+                    colors = mediaNestSwitchColors(),
+                    modifier = Modifier.scale(0.8f)
                 )
             }
         }

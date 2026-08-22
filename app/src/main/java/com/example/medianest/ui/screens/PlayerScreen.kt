@@ -105,7 +105,8 @@ import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
+import androidx.compose.ui.draw.scale
+import com.example.medianest.ui.components.mediaNestSwitchColors
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -1551,10 +1552,8 @@ fun PlayerScreen(
                             isAutoplayEnabled = it
                             onAutoplayToggle?.invoke(it)
                         },
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = MediaNestColors.Accent,
-                            checkedTrackColor = MediaNestColors.Accent.copy(alpha = 0.5f)
-                        )
+                        colors = mediaNestSwitchColors(),
+                        modifier = Modifier.scale(0.8f)
                     )
                 }
                 Spacer(Modifier.height(12.dp))
@@ -1857,16 +1856,8 @@ fun AutoplayQueueHeader(
                 Switch(
                     checked = isAutoplayEnabled,
                     onCheckedChange = onAutoplayToggle,
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
-                        checkedTrackColor = MaterialTheme.colorScheme.primary,
-                        uncheckedThumbColor = MaterialTheme.colorScheme.outline,
-                        uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant
-                    ),
-                    modifier = Modifier.graphicsLayer {
-                        scaleX = 0.8f
-                        scaleY = 0.8f
-                    }
+                    colors = mediaNestSwitchColors(),
+                    modifier = Modifier.scale(0.8f)
                 )
                 IconButton(
                     onClick = onExpandToggle,

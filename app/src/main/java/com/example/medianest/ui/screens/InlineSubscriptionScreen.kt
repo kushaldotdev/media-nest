@@ -45,6 +45,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
+import androidx.compose.ui.draw.scale
+import com.example.medianest.ui.components.mediaNestSwitchColors
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -310,29 +312,25 @@ fun InlineSubscriptionScreen(
                                 showShorts = showShorts,
                                 onToggleShorts = { viewModel.toggleShorts(it) }
                             )
+                        },
+                        sortContent = {
                             if (filteredVideos.isNotEmpty()) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 8.dp),
-                                    horizontalArrangement = Arrangement.End,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    val sortLabel = when (sortCategory) { SortCategory.DATE -> "Date"; SortCategory.NAME -> "Name"; SortCategory.DURATION -> "Duration"; else -> "Date" }
-                                    val sortDirectionSymbol = if (sortDirection == SortDirection.ASC) "↑" else "↓"
-                                    MediaNestChip(
-                                        label = "$sortLabel $sortDirectionSymbol",
-                                        selected = false,
-                                        onClick = { showSortSheet = true },
-                                        shape = RoundedCornerShape(12.dp),
-                                        leadingIcon = {
-                                            Icon(
-                                                painter = painterResource(R.drawable.ic_mn_sort),
-                                                contentDescription = "Sort",
-                                                tint = MediaNestColors.TextSecondary,
-                                                modifier = Modifier.size(14.dp)
-                                            )
-                                        }
-                                    )
-                                }
+                                val sortLabel = when (sortCategory) { SortCategory.DATE -> "Date"; SortCategory.NAME -> "Name"; SortCategory.DURATION -> "Duration"; else -> "Date" }
+                                val sortDirectionSymbol = if (sortDirection == SortDirection.ASC) "↑" else "↓"
+                                MediaNestChip(
+                                    label = "$sortLabel $sortDirectionSymbol",
+                                    selected = false,
+                                    onClick = { showSortSheet = true },
+                                    shape = RoundedCornerShape(12.dp),
+                                    leadingIcon = {
+                                        Icon(
+                                            painter = painterResource(R.drawable.ic_mn_sort),
+                                            contentDescription = "Sort",
+                                            tint = MediaNestColors.TextSecondary,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
+                                )
                             }
                         },
                         playbackHistory = playbackHistory,
@@ -476,29 +474,25 @@ fun InlineSubscriptionScreen(
                                 showShorts = showShorts,
                                 onToggleShorts = { viewModel.toggleShorts(it) }
                             )
+                        },
+                        sortContent = {
                             if (filteredVideos.isNotEmpty()) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 8.dp),
-                                    horizontalArrangement = Arrangement.End,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    val sortLabel = when (sortCategory) { SortCategory.DATE -> "Date"; SortCategory.NAME -> "Name"; SortCategory.DURATION -> "Duration"; else -> "Date" }
-                                    val sortDirectionSymbol = if (sortDirection == SortDirection.ASC) "↑" else "↓"
-                                    MediaNestChip(
-                                        label = "$sortLabel $sortDirectionSymbol",
-                                        selected = false,
-                                        onClick = { showSortSheet = true },
-                                        shape = RoundedCornerShape(12.dp),
-                                        leadingIcon = {
-                                            Icon(
-                                                painter = painterResource(R.drawable.ic_mn_sort),
-                                                contentDescription = "Sort",
-                                                tint = MediaNestColors.TextSecondary,
-                                                modifier = Modifier.size(14.dp)
-                                            )
-                                        }
-                                    )
-                                }
+                                val sortLabel = when (sortCategory) { SortCategory.DATE -> "Date"; SortCategory.NAME -> "Name"; SortCategory.DURATION -> "Duration"; else -> "Date" }
+                                val sortDirectionSymbol = if (sortDirection == SortDirection.ASC) "↑" else "↓"
+                                MediaNestChip(
+                                    label = "$sortLabel $sortDirectionSymbol",
+                                    selected = false,
+                                    onClick = { showSortSheet = true },
+                                    shape = RoundedCornerShape(12.dp),
+                                    leadingIcon = {
+                                        Icon(
+                                            painter = painterResource(R.drawable.ic_mn_sort),
+                                            contentDescription = "Sort",
+                                            tint = MediaNestColors.TextSecondary,
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
+                                )
                             }
                         },
                         playbackHistory = playbackHistory,
@@ -837,6 +831,7 @@ private fun ExtractedVideoListContent(
     gridState: androidx.compose.foundation.lazy.grid.LazyGridState,
     listState: androidx.compose.foundation.lazy.LazyListState,
     headerContent: @Composable () -> Unit,
+    sortContent: (@Composable () -> Unit)? = null,
     playbackHistory: List<com.example.medianest.data.local.entity.HistoryEntity>,
     favoriteVideoIds: Set<String>,
     allDownloads: List<com.example.medianest.data.local.entity.DownloadEntity>,
@@ -873,11 +868,20 @@ private fun ExtractedVideoListContent(
                 headerContent()
             }
             item(span = { GridItemSpan(maxLineSpan) }) {
-                Text(
-                    text = "Videos",
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
-                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 16.dp, bottom = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Videos",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MediaNestColors.TextPrimary
+                    )
+                    sortContent?.invoke()
+                }
             }
             if (videos.isEmpty()) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
@@ -983,11 +987,20 @@ private fun ExtractedVideoListContent(
                 headerContent()
             }
             item {
-                Text(
-                    text = "Videos",
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
-                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 16.dp, bottom = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Videos",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MediaNestColors.TextPrimary
+                    )
+                    sortContent?.invoke()
+                }
             }
             if (videos.isEmpty()) {
                 item {
@@ -1206,7 +1219,9 @@ fun PlaylistHeader(
                 )
                 Switch(
                     checked = showShorts,
-                    onCheckedChange = onToggleShorts
+                    onCheckedChange = onToggleShorts,
+                    colors = mediaNestSwitchColors(),
+                    modifier = Modifier.scale(0.8f)
                 )
             }
         }
@@ -1324,7 +1339,9 @@ fun ChannelHeader(
                 )
                 Switch(
                     checked = showShorts,
-                    onCheckedChange = onToggleShorts
+                    onCheckedChange = onToggleShorts,
+                    colors = mediaNestSwitchColors(),
+                    modifier = Modifier.scale(0.8f)
                 )
             }
         }

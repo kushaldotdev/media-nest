@@ -51,6 +51,7 @@ import com.example.medianest.ui.components.MediaNestIconButton
 import com.example.medianest.ui.components.MediaNestIconButtonSize
 import com.example.medianest.ui.components.MediaNestSnackbarHost
 import com.example.medianest.ui.components.MediaNestTopAppBar
+import com.example.medianest.ui.components.mediaNestSwitchColors
 import com.example.medianest.ui.components.NotificationBellAction
 import com.example.medianest.ui.components.MnNoteBox
 import com.example.medianest.ui.components.NoteBoxVariant
@@ -2957,17 +2958,7 @@ private fun customTextFieldColors() = OutlinedTextFieldDefaults.colors(
 )
 
 @Composable
-private fun customSwitchColors() = SwitchDefaults.colors(
-    checkedTrackColor = MediaNestColors.AccentDeep,
-    checkedThumbColor = Color.White,
-    uncheckedTrackColor = MediaNestColors.ProgressTrack,
-    uncheckedThumbColor = Color.White,
-    uncheckedBorderColor = MediaNestColors.Border,
-    disabledCheckedTrackColor = MediaNestColors.Border.copy(alpha = 0.4f),
-    disabledUncheckedTrackColor = MediaNestColors.Border.copy(alpha = 0.4f),
-    disabledCheckedThumbColor = MediaNestColors.TextSecondary.copy(alpha = 0.6f),
-    disabledUncheckedThumbColor = MediaNestColors.TextSecondary.copy(alpha = 0.6f)
-)
+private fun customSwitchColors() = mediaNestSwitchColors()
 
 private fun getPathFromUri(context: Context, uri: Uri): String? {
     try {
