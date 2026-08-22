@@ -313,7 +313,9 @@ fun LibraryScreen(
             val showSecondaryFilters = uiState.currentTab in listOf(
                 LibraryTab.HISTORY,
                 LibraryTab.FAVORITES,
-                LibraryTab.WATCHED
+                LibraryTab.WATCHED,
+                LibraryTab.PLAYLISTS,
+                LibraryTab.SUBSCRIPTIONS
             ) || (uiState.currentTab == LibraryTab.FOLDERS && (uiState.selectedFolder != null || folderVideos.isNotEmpty()))
 
             val headerContent: @Composable () -> Unit = {

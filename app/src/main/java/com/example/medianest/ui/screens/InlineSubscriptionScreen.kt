@@ -72,7 +72,10 @@ import com.example.medianest.data.model.ExtractedPlaylistInfo
 import com.example.medianest.data.model.ExtractedVideoInfo
 import com.example.medianest.data.local.entity.DownloadStatus
 import com.example.medianest.ui.components.GlassCard
+import com.example.medianest.ui.components.MediaNestChip
 import com.example.medianest.ui.components.MediaNestSnackbarHost
+import com.example.medianest.ui.components.MediaNestSortBottomSheet
+import com.example.medianest.ui.components.MediaNestSortOption
 import com.example.medianest.ui.components.MediaNestTopAppBar
 import com.example.medianest.ui.components.QuickDownloadMenu
 import com.example.medianest.ui.components.UnifiedVideoCard
@@ -84,6 +87,8 @@ import com.example.medianest.ui.components.EndOfListIndicator
 import com.example.medianest.ui.theme.MediaNestColors
 import com.example.medianest.ui.viewmodel.HomeUiState
 import com.example.medianest.ui.viewmodel.HomeViewModel
+import com.example.medianest.ui.viewmodel.SortCategory
+import com.example.medianest.ui.viewmodel.SortDirection
 import com.example.medianest.ui.viewmodel.ViewMode
 import kotlinx.coroutines.launch
 
@@ -127,6 +132,10 @@ fun InlineSubscriptionScreen(
     var watchCountTargetVideoId by remember { mutableStateOf<String?>(null) }
     var watchCountTargetTitle by remember { mutableStateOf("") }
     var watchCountTargetInitialCount by remember { mutableStateOf(0) }
+
+    var sortCategory by remember { mutableStateOf(SortCategory.DATE) }
+    var sortDirection by remember { mutableStateOf(SortDirection.DESC) }
+    var showSortSheet by remember { mutableStateOf(false) }
 
     val url = remember(sourceType, sourceId) {
         val trimmed = sourceId.trim()
@@ -256,9 +265,18 @@ fun InlineSubscriptionScreen(
                     } else {
                         playlistVideos.filter { !it.isShort }
                     }
+                    val sortedVideos = remember(filteredVideos, sortCategory, sortDirection) {
+                        val sorted = when (sortCategory) {
+                            SortCategory.DATE -> filteredVideos.sortedBy { it.uploadDate }.let { if (sortDirection == SortDirection.ASC) it else it.reversed() }
+                            SortCategory.NAME -> filteredVideos.sortedBy { it.title.lowercase() }.let { if (sortDirection == SortDirection.ASC) it else it.reversed() }
+                            SortCategory.DURATION -> filteredVideos.sortedBy { it.durationSeconds }.let { if (sortDirection == SortDirection.ASC) it else it.reversed() }
+                            else -> filteredVideos
+                        }
+                        sorted
+                    }
 
                     ExtractedVideoListContent(
-                        videos = filteredVideos,
+                        videos = sortedVideos,
                         viewMode = viewMode,
                         gridState = gridState,
                         listState = listState,
@@ -290,6 +308,30 @@ fun InlineSubscriptionScreen(
                                 showShorts = showShorts,
                                 onToggleShorts = { viewModel.toggleShorts(it) }
                             )
+                            if (filteredVideos.isNotEmpty()) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 8.dp),
+                                    horizontalArrangement = Arrangement.End,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    val sortLabel = when (sortCategory) { SortCategory.DATE -> "Date"; SortCategory.NAME -> "Name"; SortCategory.DURATION -> "Duration"; else -> "Date" }
+                                    val sortDirectionSymbol = if (sortDirection == SortDirection.ASC) "↑" else "↓"
+                                    MediaNestChip(
+                                        label = "$sortLabel $sortDirectionSymbol",
+                                        selected = false,
+                                        onClick = { showSortSheet = true },
+                                        shape = RoundedCornerShape(12.dp),
+                                        leadingIcon = {
+                                            Icon(
+                                                painter = painterResource(R.drawable.ic_mn_sort),
+                                                contentDescription = "Sort",
+                                                tint = MediaNestColors.TextSecondary,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                        }
+                                    )
+                                }
+                            }
                         },
                         playbackHistory = playbackHistory,
                         favoriteVideoIds = favoriteVideoIds,
@@ -302,7 +344,10 @@ fun InlineSubscriptionScreen(
                         isFetchingNextPage = state.isFetchingNextPage,
                         hasMore = state.hasMore,
                         onVideoClick = { video ->
-                            onPlayFromList(playlistVideos, playlistVideos.indexOfFirst { it.videoId == video.videoId }.coerceAtLeast(0))
+                            onVideoClick(video.videoId)
+                        },
+                        onPlayClick = { video ->
+                            onPlayFromList(sortedVideos, sortedVideos.indexOfFirst { it.videoId == video.videoId }.coerceAtLeast(0))
                         },
                         onFavoriteToggle = { video, fav ->
                             viewModel.toggleFavorite(video, fav)
@@ -330,6 +375,29 @@ fun InlineSubscriptionScreen(
                         onDeleteDownload = { entity -> viewModel.deleteDownload(entity) },
                         onExtractAudio = { entity -> viewModel.extractAudio(entity) }
                     )
+
+                    if (showSortSheet) {
+                        MediaNestSortBottomSheet(
+                            onDismissRequest = { showSortSheet = false },
+                            selectedSortBy = when (sortCategory) {
+                                SortCategory.DATE -> "DATE"
+                                SortCategory.NAME -> "TITLE"
+                                SortCategory.DURATION -> "DURATION"
+                                else -> "DATE"
+                            },
+                            isAscending = sortDirection == SortDirection.ASC,
+                            onSortSelected = { sortBy, isAscending ->
+                                sortCategory = when (sortBy.uppercase()) {
+                                    "TITLE", "NAME" -> SortCategory.NAME
+                                    "DURATION" -> SortCategory.DURATION
+                                    else -> SortCategory.DATE
+                                }
+                                sortDirection = if (isAscending) SortDirection.ASC else SortDirection.DESC
+                                showSortSheet = false
+                            },
+                            options = MediaNestSortOption.DefaultMediaOptions
+                        )
+                    }
                 }
 
                 is HomeUiState.ChannelResult -> {
@@ -350,9 +418,18 @@ fun InlineSubscriptionScreen(
                     } else {
                         channelUploads.filter { !it.isShort }
                     }
+                    val sortedVideos = remember(filteredVideos, sortCategory, sortDirection) {
+                        val sorted = when (sortCategory) {
+                            SortCategory.DATE -> filteredVideos.sortedBy { it.uploadDate }.let { if (sortDirection == SortDirection.ASC) it else it.reversed() }
+                            SortCategory.NAME -> filteredVideos.sortedBy { it.title.lowercase() }.let { if (sortDirection == SortDirection.ASC) it else it.reversed() }
+                            SortCategory.DURATION -> filteredVideos.sortedBy { it.durationSeconds }.let { if (sortDirection == SortDirection.ASC) it else it.reversed() }
+                            else -> filteredVideos
+                        }
+                        sorted
+                    }
 
                     ExtractedVideoListContent(
-                        videos = filteredVideos,
+                        videos = sortedVideos,
                         viewMode = viewMode,
                         gridState = gridState,
                         listState = listState,
@@ -396,6 +473,30 @@ fun InlineSubscriptionScreen(
                                 showShorts = showShorts,
                                 onToggleShorts = { viewModel.toggleShorts(it) }
                             )
+                            if (filteredVideos.isNotEmpty()) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 8.dp),
+                                    horizontalArrangement = Arrangement.End,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    val sortLabel = when (sortCategory) { SortCategory.DATE -> "Date"; SortCategory.NAME -> "Name"; SortCategory.DURATION -> "Duration"; else -> "Date" }
+                                    val sortDirectionSymbol = if (sortDirection == SortDirection.ASC) "↑" else "↓"
+                                    MediaNestChip(
+                                        label = "$sortLabel $sortDirectionSymbol",
+                                        selected = false,
+                                        onClick = { showSortSheet = true },
+                                        shape = RoundedCornerShape(12.dp),
+                                        leadingIcon = {
+                                            Icon(
+                                                painter = painterResource(R.drawable.ic_mn_sort),
+                                                contentDescription = "Sort",
+                                                tint = MediaNestColors.TextSecondary,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                        }
+                                    )
+                                }
+                            }
                         },
                         playbackHistory = playbackHistory,
                         favoriteVideoIds = favoriteVideoIds,
@@ -408,7 +509,10 @@ fun InlineSubscriptionScreen(
                         isFetchingNextPage = state.isFetchingNextPage,
                         hasMore = state.hasMore,
                         onVideoClick = { video ->
-                            onPlayFromList(channelUploads, channelUploads.indexOfFirst { it.videoId == video.videoId }.coerceAtLeast(0))
+                            onVideoClick(video.videoId)
+                        },
+                        onPlayClick = { video ->
+                            onPlayFromList(sortedVideos, sortedVideos.indexOfFirst { it.videoId == video.videoId }.coerceAtLeast(0))
                         },
                         onFavoriteToggle = { video, fav ->
                             viewModel.toggleFavorite(video, fav)
@@ -436,6 +540,29 @@ fun InlineSubscriptionScreen(
                         onDeleteDownload = { entity -> viewModel.deleteDownload(entity) },
                         onExtractAudio = { entity -> viewModel.extractAudio(entity) }
                     )
+
+                    if (showSortSheet) {
+                        MediaNestSortBottomSheet(
+                            onDismissRequest = { showSortSheet = false },
+                            selectedSortBy = when (sortCategory) {
+                                SortCategory.DATE -> "DATE"
+                                SortCategory.NAME -> "TITLE"
+                                SortCategory.DURATION -> "DURATION"
+                                else -> "DATE"
+                            },
+                            isAscending = sortDirection == SortDirection.ASC,
+                            onSortSelected = { sortBy, isAscending ->
+                                sortCategory = when (sortBy.uppercase()) {
+                                    "TITLE", "NAME" -> SortCategory.NAME
+                                    "DURATION" -> SortCategory.DURATION
+                                    else -> SortCategory.DATE
+                                }
+                                sortDirection = if (isAscending) SortDirection.ASC else SortDirection.DESC
+                                showSortSheet = false
+                            },
+                            options = MediaNestSortOption.DefaultMediaOptions
+                        )
+                    }
                 }
 
                 is HomeUiState.Success -> {
@@ -459,6 +586,7 @@ fun InlineSubscriptionScreen(
                         isFetchingNextPage = false,
                         hasMore = false,
                         onVideoClick = { video -> onVideoClick(video.videoId) },
+                        onPlayClick = { video -> onPlayFromList(singleList, 0) },
                         onFavoriteToggle = { video, fav ->
                             viewModel.toggleFavorite(video, fav)
                             coroutineScope.launch {
@@ -717,6 +845,7 @@ private fun ExtractedVideoListContent(
     isFetchingNextPage: Boolean,
     hasMore: Boolean,
     onVideoClick: (ExtractedVideoInfo) -> Unit,
+    onPlayClick: ((ExtractedVideoInfo) -> Unit)? = null,
     onFavoriteToggle: (ExtractedVideoInfo, Boolean) -> Unit,
     onMoveToFolder: (ExtractedVideoInfo) -> Unit,
     onDownloadClick: (String) -> Unit,
@@ -790,6 +919,7 @@ private fun ExtractedVideoListContent(
                         mediaType = "VIDEO",
                         config = VideoCardConfig(
                             showFavoriteButton = true,
+                            showPlayButton = true,
                             showMoveToFolderButton = true,
                             showDownloadButton = true,
                             showFolderBadges = true,
@@ -799,6 +929,7 @@ private fun ExtractedVideoListContent(
                             showMediaTypeBadge = true
                         ),
                         onClick = { onVideoClick(video) },
+                        onPlayClick = onPlayClick?.let { cb -> { cb(video) } },
                         onFavoriteToggle = { onFavoriteToggle(video, !isFavorite) },
                         onMoveToFolder = { onMoveToFolder(video) },
                         onDownloadClick = { onDownloadClick(video.videoId) },
@@ -898,6 +1029,7 @@ private fun ExtractedVideoListContent(
                         mediaType = "VIDEO",
                         config = VideoCardConfig(
                             showFavoriteButton = true,
+                            showPlayButton = true,
                             showMoveToFolderButton = true,
                             showDownloadButton = true,
                             showFolderBadges = true,
@@ -907,6 +1039,7 @@ private fun ExtractedVideoListContent(
                             showMediaTypeBadge = true
                         ),
                         onClick = { onVideoClick(video) },
+                        onPlayClick = onPlayClick?.let { cb -> { cb(video) } },
                         onFavoriteToggle = { onFavoriteToggle(video, !isFavorite) },
                         onMoveToFolder = { onMoveToFolder(video) },
                         onDownloadClick = { onDownloadClick(video.videoId) },

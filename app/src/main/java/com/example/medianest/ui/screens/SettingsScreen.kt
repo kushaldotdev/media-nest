@@ -845,6 +845,7 @@ fun SettingsScreen(
                             onClick = { showExportDialog = true },
                             enabled = state !is ExportImportState.InProgress,
                             variant = MediaNestButtonVariant.Primary,
+                            size = MediaNestButtonSize.Small,
                             modifier = Modifier.weight(1f),
                             leadingIcon = {
                                 Icon(
@@ -860,6 +861,7 @@ fun SettingsScreen(
                             onClick = { importLauncher.launch(arrayOf("application/zip")) },
                             enabled = state !is ExportImportState.InProgress,
                             variant = MediaNestButtonVariant.Secondary,
+                            size = MediaNestButtonSize.Small,
                             modifier = Modifier.weight(1f),
                             leadingIcon = {
                                 Icon(
@@ -2021,6 +2023,7 @@ fun SettingsScreen(
                             onClick = { viewModel.registerDevice(serverUrl) },
                             enabled = serverUrl.isNotBlank(),
                             variant = MediaNestButtonVariant.Deep,
+                            size = MediaNestButtonSize.Small,
                             modifier = Modifier.weight(1f),
                             leadingIcon = {
                                 Icon(
@@ -2036,6 +2039,7 @@ fun SettingsScreen(
                             onClick = { viewModel.triggerSync() },
                             enabled = serverUrl.isNotBlank() && apiKey.isNotBlank(),
                             variant = MediaNestButtonVariant.Primary,
+                            size = MediaNestButtonSize.Small,
                             modifier = Modifier.weight(1f),
                             leadingIcon = {
                                 Icon(

@@ -33,6 +33,7 @@ import com.example.medianest.ui.utils.UiUtils
  */
 data class VideoCardConfig(
     val showFavoriteButton: Boolean = false,
+    val showPlayButton: Boolean = false,
     val showMoveToFolderButton: Boolean = false,
     val showRemoveFromFolderButton: Boolean = false,
     val showDownloadButton: Boolean = false,
@@ -153,6 +154,7 @@ fun UnifiedVideoCard(
     folders: List<FolderEntity> = emptyList(),
     config: VideoCardConfig = VideoCardConfig(),
     onClick: () -> Unit = {},
+    onPlayClick: (() -> Unit)? = null,
     onLongClick: () -> Unit = {},
     onFavoriteToggle: () -> Unit = {},
     onMoveToFolder: () -> Unit = {},
@@ -359,6 +361,19 @@ fun UnifiedVideoCard(
                         horizontalArrangement = Arrangement.End,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        if (onPlayClick != null && config.showPlayButton) {
+                            IconButton(
+                                onClick = onPlayClick,
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_mn_play),
+                                    contentDescription = "Play",
+                                    tint = MediaNestColors.Accent,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
                         if (isFavorite || config.showFavoriteButton) {
                             IconButton(
                                 onClick = onFavoriteToggle,
@@ -439,7 +454,7 @@ fun UnifiedVideoCard(
             onAction = { actionId ->
                 showActionSheet = false
                 when (actionId) {
-                    "play" -> onClick()
+                    "play" -> (onPlayClick ?: onClick).invoke()
                     "folder" -> onMoveToFolder()
                     "download" -> onDownloadClick()
                     "favorite" -> onFavoriteToggle()
@@ -471,6 +486,7 @@ fun UnifiedVideoRow(
     folders: List<FolderEntity> = emptyList(),
     config: VideoCardConfig = VideoCardConfig(),
     onClick: () -> Unit = {},
+    onPlayClick: (() -> Unit)? = null,
     onLongClick: () -> Unit = {},
     onFavoriteToggle: () -> Unit = {},
     onMoveToFolder: () -> Unit = {},
@@ -692,6 +708,19 @@ fun UnifiedVideoRow(
                         horizontalArrangement = Arrangement.End,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        if (onPlayClick != null && config.showPlayButton) {
+                            IconButton(
+                                onClick = onPlayClick,
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_mn_play),
+                                    contentDescription = "Play",
+                                    tint = MediaNestColors.Accent,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
                         if (isFavorite || config.showFavoriteButton) {
                             IconButton(
                                 onClick = onFavoriteToggle,
@@ -772,7 +801,7 @@ fun UnifiedVideoRow(
             onAction = { actionId ->
                 showActionSheet = false
                 when (actionId) {
-                    "play" -> onClick()
+                    "play" -> (onPlayClick ?: onClick).invoke()
                     "folder" -> onMoveToFolder()
                     "download" -> onDownloadClick()
                     "favorite" -> onFavoriteToggle()

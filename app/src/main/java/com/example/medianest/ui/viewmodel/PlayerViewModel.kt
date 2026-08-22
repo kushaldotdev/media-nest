@@ -102,6 +102,7 @@ class PlayerViewModel @Inject constructor(
 
     private var pendingInit: (() -> Unit)? = null
     private var maxSavedPositionMs: Long = 0L
+    private var loadMediaJob: Job? = null
 
     private val playerListener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -178,204 +179,14 @@ class PlayerViewModel @Inject constructor(
         currentVideoId = videoId
         currentStreamIndex = streamIndex
         currentDownloadId = downloadId
-        var info = lastResultCache.get(videoId)
-        videoInfo = info
 
-        if (info == null) {
-            viewModelScope.launch {
-                try {
-                    val extracted = youTubeExtractor.extractVideo("https://www.youtube.com/watch?v=$videoId")
-                    videoInfo = extracted
-                    lastResultCache.put(videoId, extracted)
-                    val currentState = _uiState.value
-                    val newTitle = if (currentState.title.isEmpty() || currentState.title == "Unknown") extracted.title else currentState.title
-                    val newChannel = if (currentState.channelName.isEmpty()) extracted.channelName else currentState.channelName
-                    val newThumbnail = if (currentState.thumbnailUrl.isNullOrEmpty()) extracted.thumbnailUrl else currentState.thumbnailUrl
-                    val newDuration = if (currentState.durationMs == 0L) extracted.durationSeconds * 1000 else currentState.durationMs
+        // Immediately update UI so the clicked queue item highlights and a spinner shows
+        _uiState.value = _uiState.value.copy(videoId = videoId, error = null, isBuffering = true)
 
-                    _uiState.value = _uiState.value.copy(
-                        title = newTitle,
-                        channelName = newChannel,
-                        thumbnailUrl = newThumbnail,
-                        durationMs = newDuration,
-                        availableStreams = extracted.streamSources
-                    )
-
-                    val controller = _player.value
-                    if (controller != null && !currentState.isLocal && (controller.currentMediaItem == null || currentState.error != null)) {
-                        _uiState.value = _uiState.value.copy(error = null)
-                        changeStreamQuality(streamIndex)
-                    }
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
-        }
-
-        val action = {
-            val controller = _player.value
-            if (controller != null) {
-                viewModelScope.launch {
-                    val speed = playbackPreferences.playbackSpeed.first()
-                    controller.setPlaybackSpeed(speed)
-                    _uiState.value = _uiState.value.copy(currentSpeed = speed)
-
-                    val localVideo = videoDao.getVideoById(videoId)
-                    val localDownloads = downloadRepository.getLocalDownloadsForVideo(videoId)
-                    val localFile = if (downloadId != null) {
-                        localDownloads.firstOrNull { it.id == downloadId && it.filePath.isNotEmpty() && java.io.File(it.filePath).exists() }
-                    } else if (info != null && streamIndex < info.streamSources.size) {
-                        val streamSource = info.streamSources[streamIndex]
-                        val streamQuality = if (streamSource.format == "audio") {
-                            streamSource.quality
-                        } else if (!streamSource.codec.isNullOrEmpty()) {
-                            "${streamSource.quality} (${streamSource.codec})"
-                        } else {
-                            streamSource.quality
-                        }
-                        val streamRes = streamSource.quality.takeWhile { it.isDigit() }
-                        localDownloads.firstOrNull { 
-                            it.format == streamSource.format && 
-                            it.filePath.isNotEmpty() && 
-                            java.io.File(it.filePath).exists() &&
-                            (it.quality == streamQuality || it.quality.takeWhile { c -> c.isDigit() } == streamRes)
-                        }
-                    } else {
-                        localDownloads
-                            .sortedWith(
-                                compareBy<DownloadEntity> { it.format == "audio" || it.format == "audio_extracted" }
-                                    .thenByDescending { getQualityValue(it) }
-                                    .thenBy { it.id }
-                            )
-                            .firstOrNull { it.filePath.isNotEmpty() && java.io.File(it.filePath).exists() }
-                    }
-
-                    val streamSource = if (localFile == null && info != null && streamIndex < info.streamSources.size) {
-                        info.streamSources[streamIndex]
-                    } else {
-                        null
-                    }
-                    val uri = if (localFile != null) {
-                        android.net.Uri.fromFile(java.io.File(localFile.filePath)).toString()
-                    } else if (streamSource != null) {
-                        streamSource.url
-                    } else {
-                        _uiState.value = _uiState.value.copy(error = "No playable source found")
-                        return@launch
-                    }
-
-                    val audioUri = if (localFile == null && streamSource != null && streamSource.format == "video_only" && info != null) {
-                        val isWebmVideo = streamSource.mimeType.contains("webm", ignoreCase = true) || streamSource.codec.contains("webm", ignoreCase = true)
-                        val compatibleAudioStreams = info.streamSources
-                            .filter { it.format == "audio" }
-                            .filter {
-                                val mime = it.mimeType.lowercase()
-                                val codec = it.codec.lowercase()
-                                if (isWebmVideo) {
-                                    mime.contains("webm") || mime.contains("ogg") || codec.contains("webm") || codec.contains("opus")
-                                } else {
-                                    mime.contains("mp4") || mime.contains("m4a") || codec.contains("m4a") || codec.contains("aac")
-                                }
-                            }
-                        val audioStreamsToUse = if (compatibleAudioStreams.isNotEmpty()) compatibleAudioStreams else {
-                            info.streamSources.filter { it.format == "audio" }
-                        }
-                        val audioStream = audioStreamsToUse
-                            .maxByOrNull { it.quality.replace("kbps", "").toIntOrNull() ?: 0 }
-                        audioStream?.url
-                    } else {
-                        null
-                    }
-
-                    val title = info?.title ?: localFile?.title ?: localVideo?.title ?: "Unknown"
-                    val channel = info?.channelName ?: localVideo?.channelName ?: ""
-                    val thumbnail = info?.thumbnailUrl ?: localFile?.thumbnailUrl ?: localVideo?.thumbnailUrl
-
-                    val lastPlayback = historyDao.getLatestPlayback(videoId)
-                    val startPosition = 0L
-                    val savedPosition = lastPlayback?.positionMillis ?: 0L
-                    maxSavedPositionMs = savedPosition
-                    
-                    sessionTotalWatchTime = lastPlayback?.totalWatchTimeMillis ?: 0L
-                    countedThisSession = false
-                    videoDao.updateLastPlayedAt(videoId, System.currentTimeMillis())
-
-                    val durationSeconds = info?.durationSeconds ?: localVideo?.durationSeconds ?: 0L
-                    val quality = if (localFile != null) {
-                        if (localFile.format == "audio" || localFile.format == "audio_extracted") {
-                            localFile.quality
-                        } else {
-                            localFile.quality.substringBefore(" (")
-                        }
-                    } else {
-                        streamSource?.quality
-                    }
-                    val completedDownloadQualities = localDownloads
-                        .filter { it.status == DownloadStatus.COMPLETED && it.filePath.isNotEmpty() && java.io.File(it.filePath).exists() }
-                        .map { it.quality }
-                    val fallbackStreams = localDownloads
-                        .filter { it.status == DownloadStatus.COMPLETED && it.filePath.isNotEmpty() && java.io.File(it.filePath).exists() }
-                        .map { download ->
-                            StreamSource(
-                                url = android.net.Uri.fromFile(java.io.File(download.filePath)).toString(),
-                                format = download.format,
-                                quality = download.quality,
-                                mimeType = if (download.format.contains("audio")) "audio/*" else "video/*",
-                                contentLength = download.fileSizeBytes
-                            )
-                        }
-                    _uiState.value = _uiState.value.copy(
-                        title = title,
-                        channelName = channel,
-                        thumbnailUrl = thumbnail,
-                        isAudioOnly = localFile?.format == "audio" || localFile?.format == "audio_extracted",
-                        durationMs = if (localFile != null) 0L else durationSeconds * 1000,
-                        positionMs = startPosition,
-                        historyPositionMs = savedPosition,
-                        videoId = videoId,
-                        watchCount = localVideo?.watchCount ?: 0,
-                        isLocal = localFile != null,
-                        streamIndex = streamIndex,
-                        downloadId = localFile?.id,
-                        videoQuality = quality,
-                        availableStreams = info?.streamSources ?: fallbackStreams,
-                        completedDownloadQualities = completedDownloadQualities
-                    )
-
-                    val mediaMetadataBuilder = MediaMetadata.Builder()
-                        .setTitle(title)
-                        .setArtist(channel)
-
-                    if (!thumbnail.isNullOrEmpty()) {
-                        val artworkUri = if (thumbnail.startsWith("http") || thumbnail.startsWith("content")) {
-                            android.net.Uri.parse(thumbnail)
-                        } else {
-                            android.net.Uri.fromFile(java.io.File(thumbnail))
-                        }
-                        mediaMetadataBuilder.setArtworkUri(artworkUri)
-                    }
-
-                    val mediaItemBuilder = MediaItem.Builder()
-                        .setMediaId(videoId)
-                        .setUri(uri)
-                        .setMediaMetadata(mediaMetadataBuilder.build())
-
-                    if (audioUri != null) {
-                        mediaItemBuilder.setRequestMetadata(
-                            MediaItem.RequestMetadata.Builder()
-                                .setExtras(android.os.Bundle().apply {
-                                    putString("audio_url", audioUri)
-                                })
-                                .build()
-                        )
-                    }
-
-                    val mediaItem = mediaItemBuilder.build()
-                    controller.setMediaItem(mediaItem)
-                    controller.seekTo(startPosition)
-                    controller.prepare()
-                    controller.play()
-                }
+        val action: () -> Unit = {
+            loadMediaJob?.cancel()
+            loadMediaJob = viewModelScope.launch {
+                loadMedia(videoId, streamIndex, downloadId)
             }
         }
 
@@ -384,6 +195,211 @@ class PlayerViewModel @Inject constructor(
         } else {
             pendingInit = action
         }
+    }
+
+    private fun selectBestDefaultStream(streams: List<StreamSource>): Pair<Int, StreamSource>? {
+        val idx360 = streams.indexOfFirst { it.format != "audio" && it.quality == "360p" }
+        if (idx360 >= 0) return idx360 to streams[idx360]
+        val idxVideo = streams.indexOfFirst { it.format != "audio" && it.format != "audio_only" }
+        if (idxVideo >= 0) return idxVideo to streams[idxVideo]
+        if (streams.isNotEmpty()) return 0 to streams[0]
+        return null
+    }
+
+    private suspend fun ensureInfo(videoId: String): ExtractedVideoInfo? {
+        var info = lastResultCache.get(videoId) ?: if (videoInfo?.videoId == videoId) videoInfo else null
+        if (info == null) {
+            try {
+                val extracted = youTubeExtractor.extractVideo("https://www.youtube.com/watch?v=$videoId")
+                videoInfo = extracted
+                lastResultCache.put(videoId, extracted)
+                info = extracted
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                e.printStackTrace()
+                _uiState.value = _uiState.value.copy(isBuffering = false)
+            }
+        } else {
+            videoInfo = info
+        }
+        return info
+    }
+
+    private suspend fun loadMedia(videoId: String, streamIndex: Int, downloadId: Long?) {
+        val controller = _player.value ?: return
+        val info = ensureInfo(videoId)
+        if (currentVideoId != videoId) return
+
+        val speed = playbackPreferences.playbackSpeed.first()
+        controller.setPlaybackSpeed(speed)
+        _uiState.value = _uiState.value.copy(currentSpeed = speed)
+
+        val localVideo = videoDao.getVideoById(videoId)
+        val localDownloads = downloadRepository.getLocalDownloadsForVideo(videoId)
+
+        val (resolvedIndex, candidateStreamSource) = if (info != null && info.streamSources.isNotEmpty()) {
+            if (streamIndex == 0 && downloadId == null) {
+                selectBestDefaultStream(info.streamSources) ?: (0 to info.streamSources[0])
+            } else if (streamIndex < info.streamSources.size) {
+                streamIndex to info.streamSources[streamIndex]
+            } else {
+                0 to info.streamSources[0]
+            }
+        } else {
+            streamIndex to null
+        }
+        currentStreamIndex = resolvedIndex
+
+        val localFile = if (downloadId != null) {
+            localDownloads.firstOrNull { it.id == downloadId && it.filePath.isNotEmpty() && java.io.File(it.filePath).exists() }
+        } else if (candidateStreamSource != null) {
+            val streamQuality = if (candidateStreamSource.format == "audio") {
+                candidateStreamSource.quality
+            } else if (!candidateStreamSource.codec.isNullOrEmpty()) {
+                "${candidateStreamSource.quality} (${candidateStreamSource.codec})"
+            } else {
+                candidateStreamSource.quality
+            }
+            val streamRes = candidateStreamSource.quality.takeWhile { it.isDigit() }
+            localDownloads.firstOrNull { 
+                it.format == candidateStreamSource.format && 
+                it.filePath.isNotEmpty() && 
+                java.io.File(it.filePath).exists() &&
+                (it.quality == streamQuality || it.quality.takeWhile { c -> c.isDigit() } == streamRes)
+            }
+        } else {
+            localDownloads
+                .sortedWith(
+                    compareBy<DownloadEntity> { it.format == "audio" || it.format == "audio_extracted" }
+                        .thenByDescending { getQualityValue(it) }
+                        .thenBy { it.id }
+                )
+                .firstOrNull { it.filePath.isNotEmpty() && java.io.File(it.filePath).exists() }
+        }
+
+        val streamSource = if (localFile == null) candidateStreamSource else null
+        val uri = if (localFile != null) {
+            android.net.Uri.fromFile(java.io.File(localFile.filePath)).toString()
+        } else if (streamSource != null) {
+            streamSource.url
+        } else {
+            _uiState.value = _uiState.value.copy(error = "No playable source found", isBuffering = false)
+            return
+        }
+
+        val audioUri = if (localFile == null && streamSource != null && streamSource.format == "video_only" && info != null) {
+            val isWebmVideo = streamSource.mimeType.contains("webm", ignoreCase = true) || streamSource.codec.contains("webm", ignoreCase = true)
+            val compatibleAudioStreams = info.streamSources
+                .filter { it.format == "audio" }
+                .filter {
+                    val mime = it.mimeType.lowercase()
+                    val codec = it.codec.lowercase()
+                    if (isWebmVideo) {
+                        mime.contains("webm") || mime.contains("ogg") || codec.contains("webm") || codec.contains("opus")
+                    } else {
+                        mime.contains("mp4") || mime.contains("m4a") || codec.contains("m4a") || codec.contains("aac")
+                    }
+                }
+            val audioStreamsToUse = if (compatibleAudioStreams.isNotEmpty()) compatibleAudioStreams else {
+                info.streamSources.filter { it.format == "audio" }
+            }
+            val audioStream = audioStreamsToUse
+                .maxByOrNull { it.quality.replace("kbps", "").toIntOrNull() ?: 0 }
+            audioStream?.url
+        } else {
+            null
+        }
+
+        val title = info?.title ?: localFile?.title ?: localVideo?.title ?: "Unknown"
+        val channel = info?.channelName ?: localVideo?.channelName ?: ""
+        val thumbnail = info?.thumbnailUrl ?: localFile?.thumbnailUrl ?: localVideo?.thumbnailUrl
+
+        val lastPlayback = historyDao.getLatestPlayback(videoId)
+        val startPosition = 0L
+        val savedPosition = lastPlayback?.positionMillis ?: 0L
+        maxSavedPositionMs = savedPosition
+        
+        sessionTotalWatchTime = lastPlayback?.totalWatchTimeMillis ?: 0L
+        countedThisSession = false
+        videoDao.updateLastPlayedAt(videoId, System.currentTimeMillis())
+
+        val durationSeconds = info?.durationSeconds ?: localVideo?.durationSeconds ?: 0L
+        val quality = if (localFile != null) {
+            if (localFile.format == "audio" || localFile.format == "audio_extracted") {
+                localFile.quality
+            } else {
+                localFile.quality.substringBefore(" (")
+            }
+        } else {
+            streamSource?.quality
+        }
+        val completedDownloadQualities = localDownloads
+            .filter { it.status == DownloadStatus.COMPLETED && it.filePath.isNotEmpty() && java.io.File(it.filePath).exists() }
+            .map { it.quality }
+        val fallbackStreams = localDownloads
+            .filter { it.status == DownloadStatus.COMPLETED && it.filePath.isNotEmpty() && java.io.File(it.filePath).exists() }
+            .map { download ->
+                StreamSource(
+                    url = android.net.Uri.fromFile(java.io.File(download.filePath)).toString(),
+                    format = download.format,
+                    quality = download.quality,
+                    mimeType = if (download.format.contains("audio")) "audio/*" else "video/*",
+                    contentLength = download.fileSizeBytes
+                )
+            }
+        _uiState.value = _uiState.value.copy(
+            title = title,
+            channelName = channel,
+            thumbnailUrl = thumbnail,
+            isAudioOnly = localFile?.format == "audio" || localFile?.format == "audio_extracted",
+            durationMs = if (localFile != null) 0L else durationSeconds * 1000,
+            positionMs = startPosition,
+            historyPositionMs = savedPosition,
+            videoId = videoId,
+            watchCount = localVideo?.watchCount ?: 0,
+            isLocal = localFile != null,
+            streamIndex = resolvedIndex,
+            downloadId = localFile?.id,
+            videoQuality = quality,
+            availableStreams = info?.streamSources ?: fallbackStreams,
+            completedDownloadQualities = completedDownloadQualities,
+            error = null
+        )
+
+        val mediaMetadataBuilder = MediaMetadata.Builder()
+            .setTitle(title)
+            .setArtist(channel)
+
+        if (!thumbnail.isNullOrEmpty()) {
+            val artworkUri = if (thumbnail.startsWith("http") || thumbnail.startsWith("content")) {
+                android.net.Uri.parse(thumbnail)
+            } else {
+                android.net.Uri.fromFile(java.io.File(thumbnail))
+            }
+            mediaMetadataBuilder.setArtworkUri(artworkUri)
+        }
+
+        val mediaItemBuilder = MediaItem.Builder()
+            .setMediaId(videoId)
+            .setUri(uri)
+            .setMediaMetadata(mediaMetadataBuilder.build())
+
+        if (audioUri != null) {
+            mediaItemBuilder.setRequestMetadata(
+                MediaItem.RequestMetadata.Builder()
+                    .setExtras(android.os.Bundle().apply {
+                        putString("audio_url", audioUri)
+                    })
+                    .build()
+            )
+        }
+
+        val mediaItem = mediaItemBuilder.build()
+        controller.setMediaItem(mediaItem)
+        controller.seekTo(startPosition)
+        controller.prepare()
+        controller.play()
     }
 
     fun togglePlayPause() {
@@ -571,6 +587,8 @@ class PlayerViewModel @Inject constructor(
 
 
     fun stopPlayback() {
+        loadMediaJob?.cancel()
+        loadMediaJob = null
         val controller = _player.value
         if (controller != null) {
             controller.stop()
@@ -590,11 +608,14 @@ class PlayerViewModel @Inject constructor(
 
         _uiState.value = _uiState.value.copy(
             positionMs = currentPos,
-            streamIndex = streamIndex
+            streamIndex = streamIndex,
+            error = null,
+            isBuffering = true
         )
         currentStreamIndex = streamIndex
 
-        viewModelScope.launch {
+        loadMediaJob?.cancel()
+        loadMediaJob = viewModelScope.launch {
             val info = videoInfo ?: lastResultCache.get(videoId)
             val uri: String
             val audioUri: String?

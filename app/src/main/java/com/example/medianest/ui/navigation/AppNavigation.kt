@@ -291,6 +291,9 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
             val context = LocalContext.current
             val activity = context.findActivity() ?: error("Activity not found")
             val playerViewModel: PlayerViewModel = hiltViewModel(activity)
+            LaunchedEffect(videoId) {
+                playerViewModel.clearQueue()
+            }
             val queue by playerViewModel.queue.collectAsStateWithLifecycle()
             val ctxTitle by playerViewModel.queueContextTitle.collectAsStateWithLifecycle()
             val ctxType by playerViewModel.queueContextType.collectAsStateWithLifecycle()
@@ -300,7 +303,7 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
                 downloadId = downloadId,
                 viewModel = playerViewModel,
                 onBack = { navController.popBackStack() },
-                queue = queue,
+                queue = emptyList(),
                 contextTitle = ctxTitle,
                 contextType = ctxType
             )

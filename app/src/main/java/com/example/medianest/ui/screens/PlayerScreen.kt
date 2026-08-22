@@ -573,8 +573,8 @@ fun PlayerScreen(
                         val fsPrevIdx = currentQueue.indexOfFirst { it.id == state.videoId }
                         IconButton(
                             onClick = {
-                                if (fsPrevIdx > 0) {
-                                    val p = currentQueue[fsPrevIdx - 1]
+                                val p = if (fsPrevIdx > 0) currentQueue.getOrNull(fsPrevIdx - 1) else null
+                                if (p != null) {
                                     if (onQueueItemClick != null) onQueueItemClick(p) else viewModel.initialize(p.id, p.streamIndex, p.downloadId)
                                 }
                             },
@@ -584,24 +584,33 @@ fun PlayerScreen(
                         }
                         IconButton(
                             onClick = { viewModel.togglePlayPause() },
+                            enabled = !state.isBuffering,
                             modifier = Modifier.size(64.dp)
                         ) {
-                            Icon(
-                                painter = painterResource(if (state.isPlaying) R.drawable.ic_mn_pause else R.drawable.ic_mn_play),
-                                contentDescription = if (state.isPlaying) "Pause" else "Play",
-                                tint = MediaNestColors.TextPrimary,
-                                modifier = Modifier.fillMaxSize()
-                            )
+                            if (state.isBuffering) {
+                                CircularProgressIndicator(
+                                    color = MediaNestColors.TextPrimary,
+                                    modifier = Modifier.size(36.dp),
+                                    strokeWidth = 3.dp
+                                )
+                            } else {
+                                Icon(
+                                    painter = painterResource(if (state.isPlaying) R.drawable.ic_mn_pause else R.drawable.ic_mn_play),
+                                    contentDescription = if (state.isPlaying) "Pause" else "Play",
+                                    tint = MediaNestColors.TextPrimary,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
                         }
                         val fsNextIdx = currentQueue.indexOfFirst { it.id == state.videoId }
                         IconButton(
                             onClick = {
-                                if (fsNextIdx != -1 && fsNextIdx + 1 < currentQueue.size) {
-                                    val n = currentQueue[fsNextIdx + 1]
+                                val n = currentQueue.getOrNull(fsNextIdx + 1)
+                                if (n != null) {
                                     if (onQueueItemClick != null) onQueueItemClick(n) else viewModel.initialize(n.id, n.streamIndex, n.downloadId)
                                 }
                             },
-                            enabled = fsNextIdx != -1 && fsNextIdx + 1 < currentQueue.size
+                            enabled = fsNextIdx != -1 && fsNextIdx + 1 < currentQueue.size && currentQueue.isNotEmpty()
                         ) {
                             Icon(painter = painterResource(R.drawable.ic_mn_next), contentDescription = "Next Track", tint = MediaNestColors.TextPrimary, modifier = Modifier.size(36.dp))
                         }
@@ -990,13 +999,12 @@ fun PlayerScreen(
                         ) {
                             Text(
                                 text = state.title,
-                                maxLines = if (isTitleExpanded) Int.MAX_VALUE else 2,
+                                maxLines = Int.MAX_VALUE,
                                 overflow = TextOverflow.Ellipsis,
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.SemiBold,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable { isTitleExpanded = !isTitleExpanded }
                             )
                             if (state.channelName.isNotEmpty()) {
                                 Spacer(Modifier.height(4.dp))
@@ -1094,8 +1102,8 @@ fun PlayerScreen(
                             val nfsPrevIdx = currentQueue.indexOfFirst { it.id == state.videoId }
                             IconButton(
                                 onClick = {
-                                    if (nfsPrevIdx > 0) {
-                                        val p = currentQueue[nfsPrevIdx - 1]
+                                    val p = if (nfsPrevIdx > 0) currentQueue.getOrNull(nfsPrevIdx - 1) else null
+                                    if (p != null) {
                                         if (onQueueItemClick != null) onQueueItemClick(p) else viewModel.initialize(p.id, p.streamIndex, p.downloadId)
                                     }
                                 },
@@ -1105,24 +1113,33 @@ fun PlayerScreen(
                             }
                             IconButton(
                                 onClick = { viewModel.togglePlayPause() },
+                                enabled = !state.isBuffering,
                                 modifier = Modifier.size(56.dp)
                             ) {
-                                Icon(
-                                    painter = painterResource(if (state.isPlaying) R.drawable.ic_mn_pause else R.drawable.ic_mn_play),
-                                    contentDescription = if (state.isPlaying) "Pause" else "Play",
-                                    tint = MediaNestColors.Accent,
-                                    modifier = Modifier.fillMaxSize()
-                                )
+                                if (state.isBuffering) {
+                                    CircularProgressIndicator(
+                                        color = MediaNestColors.Accent,
+                                        modifier = Modifier.size(28.dp),
+                                        strokeWidth = 3.dp
+                                    )
+                                } else {
+                                    Icon(
+                                        painter = painterResource(if (state.isPlaying) R.drawable.ic_mn_pause else R.drawable.ic_mn_play),
+                                        contentDescription = if (state.isPlaying) "Pause" else "Play",
+                                        tint = MediaNestColors.Accent,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                }
                             }
                             val nfsNextIdx = currentQueue.indexOfFirst { it.id == state.videoId }
                             IconButton(
                                 onClick = {
-                                    if (nfsNextIdx != -1 && nfsNextIdx + 1 < currentQueue.size) {
-                                        val n = currentQueue[nfsNextIdx + 1]
+                                    val n = currentQueue.getOrNull(nfsNextIdx + 1)
+                                    if (n != null) {
                                         if (onQueueItemClick != null) onQueueItemClick(n) else viewModel.initialize(n.id, n.streamIndex, n.downloadId)
                                     }
                                 },
-                                enabled = nfsNextIdx != -1 && nfsNextIdx + 1 < currentQueue.size
+                                enabled = nfsNextIdx != -1 && nfsNextIdx + 1 < currentQueue.size && currentQueue.isNotEmpty()
                             ) {
                                 Icon(painter = painterResource(R.drawable.ic_mn_next), contentDescription = "Next Track", tint = MediaNestColors.TextPrimary)
                             }
@@ -1922,47 +1939,10 @@ fun PlayerQueueItemRow(
 
             Spacer(Modifier.width(4.dp))
 
-            // Thumbnail with duration overlay
-            Box(
-                modifier = Modifier
-                    .width(72.dp)
-                    .aspectRatio(16f / 9f)
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-            ) {
-                if (!item.thumbnailUrl.isNullOrEmpty()) {
-                    AsyncImage(
-                        model = item.thumbnailUrl,
-                        contentDescription = item.title,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-                if (item.durationSeconds > 0L) {
-                    Surface(
-                        color = MediaNestColors.PlayerSurface.copy(alpha = 0.75f),
-                        shape = RoundedCornerShape(2.dp),
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(2.dp)
-                    ) {
-                        Text(
-                            text = UiUtils.formatDuration(item.durationSeconds),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MediaNestColors.TextPrimary,
-                            modifier = Modifier.padding(horizontal = 3.dp, vertical = 1.dp)
-                        )
-                    }
-                }
-            }
-
-            Spacer(Modifier.width(10.dp))
-
-            // Title & Channel on Row 1, Channel & Controls on Row 2
+            // Thumbnail with "NOW PLAYING" label above it when current
             Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(end = 2.dp)
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.width(72.dp)
             ) {
                 if (isCurrent) {
                     Row(
@@ -1984,7 +1964,48 @@ fun PlayerQueueItemRow(
                         )
                     }
                 }
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(16f / 9f)
+                        .clip(RoundedCornerShape(6.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    if (!item.thumbnailUrl.isNullOrEmpty()) {
+                        AsyncImage(
+                            model = item.thumbnailUrl,
+                            contentDescription = item.title,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                    if (item.durationSeconds > 0L) {
+                        Surface(
+                            color = MediaNestColors.PlayerSurface.copy(alpha = 0.75f),
+                            shape = RoundedCornerShape(2.dp),
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(2.dp)
+                        ) {
+                            Text(
+                                text = UiUtils.formatDuration(item.durationSeconds),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MediaNestColors.TextPrimary,
+                                modifier = Modifier.padding(horizontal = 3.dp, vertical = 1.dp)
+                            )
+                        }
+                    }
+                }
+            }
 
+            Spacer(Modifier.width(10.dp))
+
+            // Title & Channel on Row 1, Channel & Controls on Row 2
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(end = 2.dp)
+            ) {
                 // Row 1: Full Title with persistent original index
                 val itemNumber = item.originalIndex ?: (index + 1)
                 Text(

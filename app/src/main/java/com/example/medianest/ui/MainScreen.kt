@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -212,6 +213,7 @@ fun MainScreen() {
                     channelName = playerUiState.channelName,
                     thumbnailUrl = playerUiState.thumbnailUrl,
                     isPlaying = playerUiState.isPlaying,
+                    isBuffering = playerUiState.isBuffering,
                     positionMs = playerUiState.positionMs,
                     durationMs = playerUiState.durationMs,
                     bufferedPositionMs = playerUiState.bufferedPositionMs,
@@ -259,6 +261,7 @@ fun MiniPlayer(
     channelName: String,
     thumbnailUrl: String?,
     isPlaying: Boolean,
+    isBuffering: Boolean = false,
     positionMs: Long,
     durationMs: Long,
     bufferedPositionMs: Long,
@@ -355,18 +358,30 @@ fun MiniPlayer(
                             CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
                                 IconButton(
                                     onClick = onTogglePlay,
+                                    enabled = !isBuffering,
                                     modifier = Modifier.size(30.dp)
                                 ) {
-                                    Icon(
-                                        painter = painterResource(if (isPlaying) R.drawable.ic_mn_pause else R.drawable.ic_mn_play),
-                                        contentDescription = if (isPlaying) "Pause" else "Play",
-                                        tint = MediaNestColors.Accent,
-                                        modifier = Modifier.size(18.dp)
-                                    )
+                                    if (isBuffering) {
+                                        CircularProgressIndicator(
+                                            color = MediaNestColors.Accent,
+                                            modifier = Modifier.size(16.dp),
+                                            strokeWidth = 2.dp
+                                        )
+                                    } else {
+                                        Icon(
+                                            painter = painterResource(if (isPlaying) R.drawable.ic_mn_pause else R.drawable.ic_mn_play),
+                                            contentDescription = if (isPlaying) "Pause" else "Play",
+                                            tint = MediaNestColors.Accent,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
                                 }
 
                                 IconButton(
-                                    onClick = { if (canPrev) { val p = q[idx - 1]; playerViewModel.initialize(p.id, p.streamIndex, p.downloadId) } },
+                                    onClick = {
+                                        val p = q.getOrNull(idx - 1)
+                                        if (p != null) playerViewModel.initialize(p.id, p.streamIndex, p.downloadId)
+                                    },
                                     enabled = canPrev,
                                     modifier = Modifier.size(28.dp)
                                 ) {
@@ -379,7 +394,10 @@ fun MiniPlayer(
                                 }
 
                                 IconButton(
-                                    onClick = { if (canNext) { val n = q[idx + 1]; playerViewModel.initialize(n.id, n.streamIndex, n.downloadId) } },
+                                    onClick = {
+                                        val n = q.getOrNull(idx + 1)
+                                        if (n != null) playerViewModel.initialize(n.id, n.streamIndex, n.downloadId)
+                                    },
                                     enabled = canNext,
                                     modifier = Modifier.size(28.dp)
                                 ) {
