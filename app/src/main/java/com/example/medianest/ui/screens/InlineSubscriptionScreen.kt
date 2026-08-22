@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
@@ -16,6 +17,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -30,6 +36,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -53,6 +60,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -62,15 +70,21 @@ import coil.compose.AsyncImage
 import com.example.medianest.data.model.ChannelInfo
 import com.example.medianest.data.model.ExtractedPlaylistInfo
 import com.example.medianest.data.model.ExtractedVideoInfo
+import com.example.medianest.data.local.entity.DownloadStatus
 import com.example.medianest.ui.components.GlassCard
 import com.example.medianest.ui.components.MediaNestSnackbarHost
 import com.example.medianest.ui.components.MediaNestTopAppBar
 import com.example.medianest.ui.components.QuickDownloadMenu
+import com.example.medianest.ui.components.UnifiedVideoCard
+import com.example.medianest.ui.components.UnifiedVideoRow
+import com.example.medianest.ui.components.VideoCardConfig
 import com.example.medianest.ui.components.WatchCountDialog
 import com.example.medianest.ui.components.YoutubeSubscribeButton
 import com.example.medianest.ui.components.EndOfListIndicator
+import com.example.medianest.ui.theme.MediaNestColors
 import com.example.medianest.ui.viewmodel.HomeUiState
 import com.example.medianest.ui.viewmodel.HomeViewModel
+import com.example.medianest.ui.viewmodel.ViewMode
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -96,6 +110,7 @@ fun InlineSubscriptionScreen(
     val fetchedStreams by viewModel.fetchedStreams.collectAsStateWithLifecycle()
     val playbackHistory by viewModel.playbackHistory.collectAsStateWithLifecycle()
     val watchCounts by viewModel.watchCounts.collectAsStateWithLifecycle()
+    val viewMode by viewModel.viewMode.collectAsStateWithLifecycle()
     val showBulkQualityDialog by viewModel.showBulkQualityDialog.collectAsStateWithLifecycle()
     val bulkFetchProgress by viewModel.bulkFetchProgress.collectAsStateWithLifecycle()
     val bulkDownloadConfirmation by viewModel.bulkDownloadConfirmation.collectAsStateWithLifecycle()
@@ -141,8 +156,16 @@ fun InlineSubscriptionScreen(
         viewModel.onUrlSubmitted(url)
     }
 
+    val gridState = rememberLazyGridState()
     val listState = rememberLazyListState()
-    val shouldLoadMore by remember {
+    val shouldLoadMoreGrid by remember {
+        derivedStateOf {
+            val lastVisible = gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+            val totalItems = gridState.layoutInfo.totalItemsCount
+            totalItems > 0 && lastVisible >= totalItems - 3
+        }
+    }
+    val shouldLoadMoreList by remember {
         derivedStateOf {
             val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
             val totalItems = listState.layoutInfo.totalItemsCount
@@ -150,8 +173,8 @@ fun InlineSubscriptionScreen(
         }
     }
 
-    LaunchedEffect(shouldLoadMore) {
-        if (shouldLoadMore) {
+    LaunchedEffect(shouldLoadMoreGrid, shouldLoadMoreList) {
+        if (shouldLoadMoreGrid || shouldLoadMoreList) {
             viewModel.loadNextPage()
         }
     }
@@ -159,15 +182,19 @@ fun InlineSubscriptionScreen(
     Scaffold(
         snackbarHost = { MediaNestSnackbarHost(snackbarHostState) },
         topBar = {
-            val topBarTitle = when (val s = uiState) {
-                is HomeUiState.PlaylistResult -> s.playlist.name
-                is HomeUiState.ChannelResult -> s.channel.name
-                else -> if (sourceType == "playlist") "Back to Playlists" else "Back to Channels"
-            }
             MediaNestTopAppBar(
-                title = topBarTitle,
+                title = "",
                 onNavigateBack = onBack,
-                showBottomDivider = true
+                showBottomDivider = true,
+                actions = {
+                    IconButton(onClick = { viewModel.toggleViewMode() }) {
+                        Icon(
+                            painter = painterResource(if (viewMode == ViewMode.GRID) R.drawable.ic_mn_list else R.drawable.ic_mn_grid),
+                            contentDescription = if (viewMode == ViewMode.GRID) "Switch to list view" else "Switch to grid view",
+                            tint = MediaNestColors.TextPrimary
+                        )
+                    }
+                }
             )
         }
     ) { paddingValues ->
@@ -230,14 +257,12 @@ fun InlineSubscriptionScreen(
                         playlistVideos.filter { !it.isShort }
                     }
 
-                    LazyColumn(
-                        state = listState,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        item {
+                    ExtractedVideoListContent(
+                        videos = filteredVideos,
+                        viewMode = viewMode,
+                        gridState = gridState,
+                        listState = listState,
+                        headerContent = {
                             PlaylistHeader(
                                 playlist = state.playlist,
                                 isSaved = isSaved,
@@ -265,106 +290,46 @@ fun InlineSubscriptionScreen(
                                 showShorts = showShorts,
                                 onToggleShorts = { viewModel.toggleShorts(it) }
                             )
-                        }
-
-                        item {
-                            Text(
-                                text = "Videos",
-                                style = MaterialTheme.typography.titleMedium,
-                                modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
-                            )
-                        }
-
-                        if (filteredVideos.isEmpty()) {
-                            item {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 32.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = "No videos found",
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
+                        },
+                        playbackHistory = playbackHistory,
+                        favoriteVideoIds = favoriteVideoIds,
+                        allDownloads = allDownloads,
+                        watchCounts = watchCounts,
+                        videoFolderMap = videoFolderMap,
+                        expandedDownloadVideoId = expandedDownloadVideoId,
+                        fetchingStreamsFor = fetchingStreamsFor,
+                        fetchedStreams = fetchedStreams,
+                        isFetchingNextPage = state.isFetchingNextPage,
+                        hasMore = state.hasMore,
+                        onVideoClick = { video ->
+                            onPlayFromList(playlistVideos, playlistVideos.indexOfFirst { it.videoId == video.videoId }.coerceAtLeast(0))
+                        },
+                        onFavoriteToggle = { video, fav ->
+                            viewModel.toggleFavorite(video, fav)
+                            coroutineScope.launch {
+                                snackbarHostState.showSnackbar(if (fav) "Added to favorites" else "Removed from favorites")
                             }
-                        } else {
-                            itemsIndexed(
-                                items = filteredVideos,
-                                key = { _, video -> video.videoId }
-                            ) { index, video ->
-                                val history = playbackHistory.find { it.videoId == video.videoId }
-                                val positionMillis = history?.positionMillis ?: 0L
-                                val progressFraction = if (video.durationSeconds > 0 && positionMillis > 0) {
-                                    ((positionMillis.toFloat() / 1000f) / video.durationSeconds.toFloat()).coerceIn(0f, 1f)
-                                } else 0f
-
-                                VideoListItem(
-                                    video = video,
-                                    isFavorite = favoriteVideoIds.contains(video.videoId),
-                                    folders = videoFolderMap[video.videoId] ?: emptyList(),
-                                    playbackProgressFraction = progressFraction,
-                                    watchCount = watchCounts[video.videoId] ?: 0,
-                                    onClick = { onPlayFromList(playlistVideos, playlistVideos.indexOfFirst { it.videoId == video.videoId }.coerceAtLeast(0)) },
-                                    onFavoriteToggle = { videoObj, fav ->
-                                        viewModel.toggleFavorite(videoObj, fav)
-                                        coroutineScope.launch {
-                                            snackbarHostState.showSnackbar(
-                                                if (fav) "Added to favorites" else "Removed from favorites"
-                                            )
-                                        }
-                                    },
-                                    onMarkWatched = {
-                                        val currentCount = watchCounts[video.videoId] ?: 0
-                                        watchCountTargetVideoId = video.videoId
-                                        watchCountTargetTitle = video.title
-                                        watchCountTargetInitialCount = currentCount
-                                        showWatchCountDialog = true
-                                    },
-                                    onMoveToFolder = {
-                                        videoToMove = video
-                                        showMoveToFolderDialog = true
-                                    },
-                                    onDownloadClick = { id ->
-                                        expandedDownloadVideoId = id
-                                        viewModel.fetchStreamsFor(id)
-                                    },
-                                    downloadMenuContent = {
-                                        QuickDownloadMenu(
-                                            isExpanded = expandedDownloadVideoId == video.videoId,
-                                            onDismiss = { expandedDownloadVideoId = null },
-                                            isFetching = fetchingStreamsFor == video.videoId,
-                                            fetchedStreams = fetchedStreams,
-                                            allDownloads = allDownloads,
-                                            videoId = video.videoId,
-                                            onEnqueueDownload = { info, stream -> viewModel.enqueueDownload(info, stream) },
-                                            onDeleteDownload = { entity -> viewModel.deleteDownload(entity) },
-                                            onExtractAudio = { entity -> viewModel.extractAudio(entity) }
-                                        )
-                                    },
-                                    serialNumber = index + 1
-                                )
-                            }
-                        }
-
-                        if (state.isFetchingNextPage) {
-                            item {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 16.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    CircularProgressIndicator()
-                                }
-                            }
-                        } else if (!state.hasMore && filteredVideos.isNotEmpty()) {
-                            item {
-                                EndOfListIndicator()
-                            }
-                        }
-                    }
+                        },
+                        onMoveToFolder = { video ->
+                            videoToMove = video
+                            showMoveToFolderDialog = true
+                        },
+                        onDownloadClick = { id ->
+                            expandedDownloadVideoId = id
+                            viewModel.fetchStreamsFor(id)
+                        },
+                        onMarkWatched = { video ->
+                            val currentCount = watchCounts[video.videoId] ?: 0
+                            watchCountTargetVideoId = video.videoId
+                            watchCountTargetTitle = video.title
+                            watchCountTargetInitialCount = currentCount
+                            showWatchCountDialog = true
+                        },
+                        onDismissDownloadMenu = { expandedDownloadVideoId = null },
+                        onEnqueueDownload = { info, stream -> viewModel.enqueueDownload(info, stream) },
+                        onDeleteDownload = { entity -> viewModel.deleteDownload(entity) },
+                        onExtractAudio = { entity -> viewModel.extractAudio(entity) }
+                    )
                 }
 
                 is HomeUiState.ChannelResult -> {
@@ -386,14 +351,12 @@ fun InlineSubscriptionScreen(
                         channelUploads.filter { !it.isShort }
                     }
 
-                    LazyColumn(
-                        state = listState,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        item {
+                    ExtractedVideoListContent(
+                        videos = filteredVideos,
+                        viewMode = viewMode,
+                        gridState = gridState,
+                        listState = listState,
+                        headerContent = {
                             ChannelHeader(
                                 channel = state.channel,
                                 isSubscribed = isSubscribed,
@@ -433,170 +396,95 @@ fun InlineSubscriptionScreen(
                                 showShorts = showShorts,
                                 onToggleShorts = { viewModel.toggleShorts(it) }
                             )
-                        }
-
-                        item {
-                            Text(
-                                text = "Videos",
-                                style = MaterialTheme.typography.titleMedium,
-                                modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
-                            )
-                        }
-
-                        if (filteredVideos.isEmpty()) {
-                            item {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 32.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = "No videos found",
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
+                        },
+                        playbackHistory = playbackHistory,
+                        favoriteVideoIds = favoriteVideoIds,
+                        allDownloads = allDownloads,
+                        watchCounts = watchCounts,
+                        videoFolderMap = videoFolderMap,
+                        expandedDownloadVideoId = expandedDownloadVideoId,
+                        fetchingStreamsFor = fetchingStreamsFor,
+                        fetchedStreams = fetchedStreams,
+                        isFetchingNextPage = state.isFetchingNextPage,
+                        hasMore = state.hasMore,
+                        onVideoClick = { video ->
+                            onPlayFromList(channelUploads, channelUploads.indexOfFirst { it.videoId == video.videoId }.coerceAtLeast(0))
+                        },
+                        onFavoriteToggle = { video, fav ->
+                            viewModel.toggleFavorite(video, fav)
+                            coroutineScope.launch {
+                                snackbarHostState.showSnackbar(if (fav) "Added to favorites" else "Removed from favorites")
                             }
-                        } else {
-                            itemsIndexed(
-                                items = filteredVideos,
-                                key = { _, video -> video.videoId }
-                            ) { index, video ->
-                                val history = playbackHistory.find { it.videoId == video.videoId }
-                                val positionMillis = history?.positionMillis ?: 0L
-                                val progressFraction = if (video.durationSeconds > 0 && positionMillis > 0) {
-                                    ((positionMillis.toFloat() / 1000f) / video.durationSeconds.toFloat()).coerceIn(0f, 1f)
-                                } else 0f
-
-                                VideoListItem(
-                                    video = video,
-                                    isFavorite = favoriteVideoIds.contains(video.videoId),
-                                    folders = videoFolderMap[video.videoId] ?: emptyList(),
-                                    playbackProgressFraction = progressFraction,
-                                    watchCount = watchCounts[video.videoId] ?: 0,
-                                    onClick = { onPlayFromList(channelUploads, channelUploads.indexOfFirst { it.videoId == video.videoId }.coerceAtLeast(0)) },
-                                    onFavoriteToggle = { videoObj, fav ->
-                                        viewModel.toggleFavorite(videoObj, fav)
-                                        coroutineScope.launch {
-                                            snackbarHostState.showSnackbar(
-                                                if (fav) "Added to favorites" else "Removed from favorites"
-                                            )
-                                        }
-                                    },
-                                    onMarkWatched = {
-                                        val currentCount = watchCounts[video.videoId] ?: 0
-                                        watchCountTargetVideoId = video.videoId
-                                        watchCountTargetTitle = video.title
-                                        watchCountTargetInitialCount = currentCount
-                                        showWatchCountDialog = true
-                                    },
-                                    onMoveToFolder = {
-                                        videoToMove = video
-                                        showMoveToFolderDialog = true
-                                    },
-                                    onDownloadClick = { id ->
-                                        expandedDownloadVideoId = id
-                                        viewModel.fetchStreamsFor(id)
-                                    },
-                                    downloadMenuContent = {
-                                        QuickDownloadMenu(
-                                            isExpanded = expandedDownloadVideoId == video.videoId,
-                                            onDismiss = { expandedDownloadVideoId = null },
-                                            isFetching = fetchingStreamsFor == video.videoId,
-                                            fetchedStreams = fetchedStreams,
-                                            allDownloads = allDownloads,
-                                            videoId = video.videoId,
-                                            onEnqueueDownload = { info, stream -> viewModel.enqueueDownload(info, stream) },
-                                            onDeleteDownload = { entity -> viewModel.deleteDownload(entity) },
-                                            onExtractAudio = { entity -> viewModel.extractAudio(entity) }
-                                        )
-                                    },
-                                    serialNumber = index + 1
-                                )
-                            }
-                        }
-
-                        if (state.isFetchingNextPage) {
-                            item {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 16.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    CircularProgressIndicator()
-                                }
-                            }
-                        } else if (!state.hasMore && filteredVideos.isNotEmpty()) {
-                            item {
-                                EndOfListIndicator()
-                            }
-                        }
-                    }
+                        },
+                        onMoveToFolder = { video ->
+                            videoToMove = video
+                            showMoveToFolderDialog = true
+                        },
+                        onDownloadClick = { id ->
+                            expandedDownloadVideoId = id
+                            viewModel.fetchStreamsFor(id)
+                        },
+                        onMarkWatched = { video ->
+                            val currentCount = watchCounts[video.videoId] ?: 0
+                            watchCountTargetVideoId = video.videoId
+                            watchCountTargetTitle = video.title
+                            watchCountTargetInitialCount = currentCount
+                            showWatchCountDialog = true
+                        },
+                        onDismissDownloadMenu = { expandedDownloadVideoId = null },
+                        onEnqueueDownload = { info, stream -> viewModel.enqueueDownload(info, stream) },
+                        onDeleteDownload = { entity -> viewModel.deleteDownload(entity) },
+                        onExtractAudio = { entity -> viewModel.extractAudio(entity) }
+                    )
                 }
 
                 is HomeUiState.Success -> {
                     viewModel.cacheResult(state.video)
-                    val history = playbackHistory.find { it.videoId == state.video.videoId }
-                    val positionMillis = history?.positionMillis ?: 0L
-                    val progressFraction = if (state.video.durationSeconds > 0 && positionMillis > 0) {
-                        ((positionMillis.toFloat() / 1000f) / state.video.durationSeconds.toFloat()).coerceIn(0f, 1f)
-                    } else 0f
+                    val singleList = listOf(state.video)
 
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(horizontal = 16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        item {
-                            VideoListItem(
-                                video = state.video,
-                                isFavorite = favoriteVideoIds.contains(state.video.videoId),
-                                folders = videoFolderMap[state.video.videoId] ?: emptyList(),
-                                playbackProgressFraction = progressFraction,
-                                watchCount = watchCounts[state.video.videoId] ?: 0,
-                                onClick = { onVideoClick(state.video.videoId) },
-                                onFavoriteToggle = { videoObj, fav ->
-                                    viewModel.toggleFavorite(videoObj, fav)
-                                    coroutineScope.launch {
-                                        snackbarHostState.showSnackbar(
-                                            if (fav) "Added to favorites" else "Removed from favorites"
-                                        )
-                                    }
-                                },
-                                onMarkWatched = {
-                                    val currentCount = watchCounts[state.video.videoId] ?: 0
-                                    watchCountTargetVideoId = state.video.videoId
-                                    watchCountTargetTitle = state.video.title
-                                    watchCountTargetInitialCount = currentCount
-                                    showWatchCountDialog = true
-                                },
-                                onMoveToFolder = {
-                                    videoToMove = state.video
-                                    showMoveToFolderDialog = true
-                                },
-                                onDownloadClick = { id ->
-                                    expandedDownloadVideoId = id
-                                    viewModel.fetchStreamsFor(id)
-                                },
-                                downloadMenuContent = {
-                                    QuickDownloadMenu(
-                                        isExpanded = expandedDownloadVideoId == state.video.videoId,
-                                        onDismiss = { expandedDownloadVideoId = null },
-                                        isFetching = fetchingStreamsFor == state.video.videoId,
-                                        fetchedStreams = fetchedStreams,
-                                        allDownloads = allDownloads,
-                                        videoId = state.video.videoId,
-                                        onEnqueueDownload = { info, stream -> viewModel.enqueueDownload(info, stream) },
-                                        onDeleteDownload = { entity -> viewModel.deleteDownload(entity) },
-                                        onExtractAudio = { entity -> viewModel.extractAudio(entity) }
-                                    )
-                                },
-                                serialNumber = 1
-                            )
-                        }
-                    }
+                    ExtractedVideoListContent(
+                        videos = singleList,
+                        viewMode = viewMode,
+                        gridState = gridState,
+                        listState = listState,
+                        headerContent = {},
+                        playbackHistory = playbackHistory,
+                        favoriteVideoIds = favoriteVideoIds,
+                        allDownloads = allDownloads,
+                        watchCounts = watchCounts,
+                        videoFolderMap = videoFolderMap,
+                        expandedDownloadVideoId = expandedDownloadVideoId,
+                        fetchingStreamsFor = fetchingStreamsFor,
+                        fetchedStreams = fetchedStreams,
+                        isFetchingNextPage = false,
+                        hasMore = false,
+                        onVideoClick = { video -> onVideoClick(video.videoId) },
+                        onFavoriteToggle = { video, fav ->
+                            viewModel.toggleFavorite(video, fav)
+                            coroutineScope.launch {
+                                snackbarHostState.showSnackbar(if (fav) "Added to favorites" else "Removed from favorites")
+                            }
+                        },
+                        onMoveToFolder = { video ->
+                            videoToMove = video
+                            showMoveToFolderDialog = true
+                        },
+                        onDownloadClick = { id ->
+                            expandedDownloadVideoId = id
+                            viewModel.fetchStreamsFor(id)
+                        },
+                        onMarkWatched = { video ->
+                            val currentCount = watchCounts[video.videoId] ?: 0
+                            watchCountTargetVideoId = video.videoId
+                            watchCountTargetTitle = video.title
+                            watchCountTargetInitialCount = currentCount
+                            showWatchCountDialog = true
+                        },
+                        onDismissDownloadMenu = { expandedDownloadVideoId = null },
+                        onEnqueueDownload = { info, stream -> viewModel.enqueueDownload(info, stream) },
+                        onDeleteDownload = { entity -> viewModel.deleteDownload(entity) },
+                        onExtractAudio = { entity -> viewModel.extractAudio(entity) }
+                    )
                 }
             }
         }
@@ -812,6 +700,254 @@ fun InlineSubscriptionScreen(
 }
 
 @Composable
+private fun ExtractedVideoListContent(
+    videos: List<ExtractedVideoInfo>,
+    viewMode: ViewMode,
+    gridState: androidx.compose.foundation.lazy.grid.LazyGridState,
+    listState: androidx.compose.foundation.lazy.LazyListState,
+    headerContent: @Composable () -> Unit,
+    playbackHistory: List<com.example.medianest.data.local.entity.HistoryEntity>,
+    favoriteVideoIds: Set<String>,
+    allDownloads: List<com.example.medianest.data.local.entity.DownloadEntity>,
+    watchCounts: Map<String, Int>,
+    videoFolderMap: Map<String, List<com.example.medianest.data.local.entity.FolderEntity>>,
+    expandedDownloadVideoId: String?,
+    fetchingStreamsFor: String?,
+    fetchedStreams: ExtractedVideoInfo?,
+    isFetchingNextPage: Boolean,
+    hasMore: Boolean,
+    onVideoClick: (ExtractedVideoInfo) -> Unit,
+    onFavoriteToggle: (ExtractedVideoInfo, Boolean) -> Unit,
+    onMoveToFolder: (ExtractedVideoInfo) -> Unit,
+    onDownloadClick: (String) -> Unit,
+    onMarkWatched: (ExtractedVideoInfo) -> Unit,
+    onDismissDownloadMenu: () -> Unit,
+    onEnqueueDownload: (ExtractedVideoInfo, com.example.medianest.data.model.StreamSource) -> Unit,
+    onDeleteDownload: (com.example.medianest.data.local.entity.DownloadEntity) -> Unit,
+    onExtractAudio: (com.example.medianest.data.local.entity.DownloadEntity) -> Unit
+) {
+    if (viewMode == ViewMode.GRID) {
+        LazyVerticalGrid(
+            state = gridState,
+            columns = GridCells.Adaptive(160.dp),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 12.dp),
+            contentPadding = PaddingValues(top = 16.dp, bottom = 80.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                headerContent()
+            }
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Text(
+                    text = "Videos",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+                )
+            }
+            if (videos.isEmpty()) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 32.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "No videos found",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            } else {
+                itemsIndexed(
+                    items = videos,
+                    key = { _, video -> video.videoId }
+                ) { index, video ->
+                    val history = playbackHistory.find { it.videoId == video.videoId }
+                    val positionMillis = history?.positionMillis ?: 0L
+                    val progressFraction = if (video.durationSeconds > 0 && positionMillis > 0) {
+                        ((positionMillis.toFloat() / 1000f) / video.durationSeconds.toFloat()).coerceIn(0f, 1f)
+                    } else 0f
+
+                    val isFavorite = favoriteVideoIds.contains(video.videoId)
+                    val isDownloaded = allDownloads.any { it.videoId == video.videoId && it.status == DownloadStatus.COMPLETED }
+
+                    UnifiedVideoCard(
+                        title = video.title,
+                        serialNumber = index + 1,
+                        channelName = video.channelName,
+                        thumbnailUrl = video.thumbnailUrl,
+                        durationSeconds = video.durationSeconds,
+                        uploadDate = video.uploadDate,
+                        isFavorite = isFavorite,
+                        isDownloaded = isDownloaded,
+                        playbackProgressFraction = progressFraction,
+                        watchCount = watchCounts[video.videoId] ?: 0,
+                        folders = videoFolderMap[video.videoId] ?: emptyList(),
+                        mediaType = "VIDEO",
+                        config = VideoCardConfig(
+                            showFavoriteButton = true,
+                            showMoveToFolderButton = true,
+                            showDownloadButton = true,
+                            showFolderBadges = true,
+                            showPlaybackProgress = true,
+                            showDownloadedBadge = true,
+                            showMarkWatchedButton = true,
+                            showMediaTypeBadge = true
+                        ),
+                        onClick = { onVideoClick(video) },
+                        onFavoriteToggle = { onFavoriteToggle(video, !isFavorite) },
+                        onMoveToFolder = { onMoveToFolder(video) },
+                        onDownloadClick = { onDownloadClick(video.videoId) },
+                        onMarkWatched = { onMarkWatched(video) },
+                        downloadMenuContent = {
+                            QuickDownloadMenu(
+                                isExpanded = expandedDownloadVideoId == video.videoId,
+                                onDismiss = onDismissDownloadMenu,
+                                isFetching = fetchingStreamsFor == video.videoId,
+                                fetchedStreams = fetchedStreams,
+                                allDownloads = allDownloads,
+                                videoId = video.videoId,
+                                onEnqueueDownload = onEnqueueDownload,
+                                onDeleteDownload = onDeleteDownload,
+                                onExtractAudio = onExtractAudio
+                            )
+                        }
+                    )
+                }
+            }
+            if (isFetchingNextPage) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator()
+                    }
+                }
+            } else if (!hasMore && videos.isNotEmpty()) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    EndOfListIndicator()
+                }
+            }
+        }
+    } else {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 12.dp),
+            contentPadding = PaddingValues(top = 16.dp, bottom = 80.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            item {
+                headerContent()
+            }
+            item {
+                Text(
+                    text = "Videos",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+                )
+            }
+            if (videos.isEmpty()) {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 32.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "No videos found",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            } else {
+                itemsIndexed(
+                    items = videos,
+                    key = { _, video -> video.videoId }
+                ) { index, video ->
+                    val history = playbackHistory.find { it.videoId == video.videoId }
+                    val positionMillis = history?.positionMillis ?: 0L
+                    val progressFraction = if (video.durationSeconds > 0 && positionMillis > 0) {
+                        ((positionMillis.toFloat() / 1000f) / video.durationSeconds.toFloat()).coerceIn(0f, 1f)
+                    } else 0f
+
+                    val isFavorite = favoriteVideoIds.contains(video.videoId)
+                    val isDownloaded = allDownloads.any { it.videoId == video.videoId && it.status == DownloadStatus.COMPLETED }
+
+                    UnifiedVideoRow(
+                        title = video.title,
+                        serialNumber = index + 1,
+                        channelName = video.channelName,
+                        thumbnailUrl = video.thumbnailUrl,
+                        durationSeconds = video.durationSeconds,
+                        uploadDate = video.uploadDate,
+                        isFavorite = isFavorite,
+                        isDownloaded = isDownloaded,
+                        playbackProgressFraction = progressFraction,
+                        watchCount = watchCounts[video.videoId] ?: 0,
+                        folders = videoFolderMap[video.videoId] ?: emptyList(),
+                        mediaType = "VIDEO",
+                        config = VideoCardConfig(
+                            showFavoriteButton = true,
+                            showMoveToFolderButton = true,
+                            showDownloadButton = true,
+                            showFolderBadges = true,
+                            showPlaybackProgress = true,
+                            showDownloadedBadge = true,
+                            showMarkWatchedButton = true,
+                            showMediaTypeBadge = true
+                        ),
+                        onClick = { onVideoClick(video) },
+                        onFavoriteToggle = { onFavoriteToggle(video, !isFavorite) },
+                        onMoveToFolder = { onMoveToFolder(video) },
+                        onDownloadClick = { onDownloadClick(video.videoId) },
+                        onMarkWatched = { onMarkWatched(video) },
+                        downloadMenuContent = {
+                            QuickDownloadMenu(
+                                isExpanded = expandedDownloadVideoId == video.videoId,
+                                onDismiss = onDismissDownloadMenu,
+                                isFetching = fetchingStreamsFor == video.videoId,
+                                fetchedStreams = fetchedStreams,
+                                allDownloads = allDownloads,
+                                videoId = video.videoId,
+                                onEnqueueDownload = onEnqueueDownload,
+                                onDeleteDownload = onDeleteDownload,
+                                onExtractAudio = onExtractAudio
+                            )
+                        }
+                    )
+                }
+            }
+            if (isFetchingNextPage) {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 16.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator()
+                    }
+                }
+            } else if (!hasMore && videos.isNotEmpty()) {
+                item {
+                    EndOfListIndicator()
+                }
+            }
+        }
+    }
+}
+
+@Composable
 fun PlaylistHeader(
     playlist: ExtractedPlaylistInfo,
     isSaved: Boolean,
@@ -871,29 +1007,47 @@ fun PlaylistHeader(
                 if (isSaved) {
                     OutlinedButton(
                         onClick = onToggleSave,
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
                         modifier = Modifier.weight(1f)
                     ) {
-                        Icon(painter = painterResource(R.drawable.ic_mn_check), contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Saved to Playlist", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Icon(painter = painterResource(R.drawable.ic_mn_check), contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Saved",
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
                 } else {
                     Button(
                         onClick = onToggleSave,
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
                         modifier = Modifier.weight(1f)
                     ) {
-                        Icon(painter = painterResource(R.drawable.ic_mn_playlist), contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text("Add to Playlist", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Icon(painter = painterResource(R.drawable.ic_mn_playlist), contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Add to Playlist",
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
                 }
                 Button(
                     onClick = onDownloadAll,
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
                     modifier = Modifier.weight(1f)
                 ) {
-                    Icon(painter = painterResource(R.drawable.ic_mn_download), contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Download All", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Icon(painter = painterResource(R.drawable.ic_mn_download), contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "Download All",
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
             }
             Spacer(modifier = Modifier.height(12.dp))
@@ -997,11 +1151,17 @@ fun ChannelHeader(
                 )
                 Button(
                     onClick = onDownloadAll,
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
                     modifier = Modifier.weight(1f)
                 ) {
-                    Icon(painter = painterResource(R.drawable.ic_mn_download), contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Download All", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Icon(painter = painterResource(R.drawable.ic_mn_download), contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "Download All",
+                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
             }
             Spacer(modifier = Modifier.height(12.dp))

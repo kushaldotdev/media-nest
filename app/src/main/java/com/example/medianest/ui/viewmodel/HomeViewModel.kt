@@ -6,6 +6,7 @@ import com.example.medianest.data.local.dao.BulkDownloadDao
 import com.example.medianest.data.model.ChannelInfo
 import com.example.medianest.data.model.ExtractedPlaylistInfo
 import com.example.medianest.data.model.ExtractedVideoInfo
+import com.example.medianest.data.model.StreamSource
 import com.example.medianest.data.repository.SubscriptionRepository
 import com.example.medianest.data.repository.VideoRepository
 import com.example.medianest.extraction.YouTubeExtractor
@@ -28,7 +29,8 @@ import com.example.medianest.data.local.entity.BulkDownloadJobEntity
 import com.example.medianest.data.local.entity.BulkDownloadJobStatus
 import com.example.medianest.data.repository.DownloadRepository
 import com.example.medianest.service.AudioExtractor
-import com.example.medianest.data.model.StreamSource
+import com.example.medianest.data.preferences.CollectionsPreferences
+import com.example.medianest.ui.viewmodel.ViewMode
 import com.example.medianest.data.preferences.DownloadPreferences
 import com.example.medianest.worker.WorkScheduler
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -79,7 +81,8 @@ class HomeViewModel @Inject constructor(
     private val audioExtractor: AudioExtractor,
     private val historyDao: HistoryDao,
     private val downloadPreferences: DownloadPreferences,
-    private val youTubeExtractor: YouTubeExtractor
+    private val youTubeExtractor: YouTubeExtractor,
+    private val collectionsPreferences: CollectionsPreferences
 ) : ViewModel() {
 
     companion object {
@@ -93,6 +96,18 @@ class HomeViewModel @Inject constructor(
 
     private val _showShorts = MutableStateFlow(false)
     val showShorts: StateFlow<Boolean> = _showShorts
+
+    val viewMode: StateFlow<ViewMode> = collectionsPreferences.viewMode
+        .map { if (it == "LIST") ViewMode.LIST else ViewMode.GRID }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ViewMode.GRID)
+
+    fun toggleViewMode() {
+        viewModelScope.launch {
+            val current = viewMode.value
+            val next = if (current == ViewMode.GRID) "LIST" else "GRID"
+            collectionsPreferences.setViewMode(next)
+        }
+    }
 
     val watchCounts: StateFlow<Map<String, Int>> = videoDao.getAllVideos()
         .map { list -> list.associate { it.id to it.watchCount } }

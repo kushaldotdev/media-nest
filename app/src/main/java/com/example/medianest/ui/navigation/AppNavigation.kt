@@ -341,7 +341,7 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
                         val startIdx = startIndex.coerceIn(0, videos.size - 1)
                         val start = videos[startIdx]
                         playerViewModel.setQueue(
-                            videos.map { PlayerQueueItem(id = it.videoId, title = it.title, channelName = it.channelName, durationSeconds = it.durationSeconds, thumbnailUrl = it.thumbnailUrl) },
+                            videos.mapIndexed { idx, it -> PlayerQueueItem(id = it.videoId, title = it.title, channelName = it.channelName, durationSeconds = it.durationSeconds, thumbnailUrl = it.thumbnailUrl, originalIndex = idx + 1) },
                             startVideoId = start.videoId,
                             contextTitle = null,
                             contextType = "playlist"

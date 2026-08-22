@@ -33,7 +33,12 @@ import androidx.compose.ui.res.painterResource
 import com.example.medianest.R
 import com.example.medianest.ui.components.MediaNestBottomNavigation
 import com.example.medianest.ui.theme.MediaNestColors
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.Scaffold
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -247,6 +252,7 @@ fun MainScreen() {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MiniPlayer(
     title: String,
@@ -278,25 +284,24 @@ fun MiniPlayer(
             .clickable { onClick() },
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MediaNestColors.GlassStrong,
+            containerColor = MediaNestColors.Card,
             contentColor = MediaNestColors.TextPrimary
         ),
-        border = BorderStroke(1.dp, MediaNestColors.GlassBorder),
-        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+        border = BorderStroke(1.dp, MediaNestColors.Accent),
+        elevation = CardDefaults.cardElevation(defaultElevation = 10.dp)
     ) {
-        Box(modifier = Modifier.height(72.dp)) {
+        Box(modifier = Modifier.fillMaxWidth()) {
             Row(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(end = 8.dp),
+                    .fillMaxWidth()
+                    .padding(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 AsyncImage(
                     model = thumbnailUrl,
                     contentDescription = null,
                     modifier = Modifier
-                        .padding(8.dp)
-                        .size(52.dp)
+                        .size(60.dp)
                         .clip(RoundedCornerShape(8.dp)),
                     contentScale = ContentScale.Crop
                 )
@@ -304,66 +309,102 @@ fun MiniPlayer(
                 Column(
                     modifier = Modifier
                         .weight(1f)
-                        .padding(vertical = 8.dp, horizontal = 4.dp),
+                        .padding(start = 10.dp, end = 2.dp),
                     verticalArrangement = Arrangement.Center
                 ) {
+                    // Row 1: Video Title (Full width across the card)
                     Text(
                         text = title,
-                        style = MaterialTheme.typography.titleSmall,
+                        style = MaterialTheme.typography.titleSmall.copy(
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 13.sp,
+                            lineHeight = 17.sp
+                        ),
                         color = MediaNestColors.TextPrimary,
-                        maxLines = 1,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = channelName,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MediaNestColors.TextSecondary,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
 
-                IconButton(onClick = onTogglePlay) {
-                    Icon(
-                        painter = painterResource(if (isPlaying) R.drawable.ic_mn_pause else R.drawable.ic_mn_play),
-                        contentDescription = if (isPlaying) "Pause" else "Play",
-                        tint = MediaNestColors.Accent,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
+                    Spacer(modifier = Modifier.height(4.dp))
 
-                IconButton(
-                    onClick = { if (canPrev) { val p = q[idx - 1]; playerViewModel.initialize(p.id, p.streamIndex, p.downloadId) } },
-                    enabled = canPrev
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_mn_prev),
-                        contentDescription = "Previous",
-                        tint = if (canPrev) MediaNestColors.TextPrimary else MediaNestColors.TextSecondary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
+                    // Row 2: Channel Name & Media Controls
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (channelName.isNotEmpty()) {
+                            Text(
+                                text = channelName,
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    fontSize = 11.sp
+                                ),
+                                color = MediaNestColors.TextSecondary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false)
+                            )
+                        } else {
+                            Spacer(Modifier.weight(1f))
+                        }
 
-                IconButton(
-                    onClick = { if (canNext) { val n = q[idx + 1]; playerViewModel.initialize(n.id, n.streamIndex, n.downloadId) } },
-                    enabled = canNext
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_mn_next),
-                        contentDescription = "Next",
-                        tint = if (canNext) MediaNestColors.TextPrimary else MediaNestColors.TextSecondary,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
+                        Row(
+                            horizontalArrangement = Arrangement.End,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
+                                IconButton(
+                                    onClick = onTogglePlay,
+                                    modifier = Modifier.size(30.dp)
+                                ) {
+                                    Icon(
+                                        painter = painterResource(if (isPlaying) R.drawable.ic_mn_pause else R.drawable.ic_mn_play),
+                                        contentDescription = if (isPlaying) "Pause" else "Play",
+                                        tint = MediaNestColors.Accent,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
 
-                IconButton(onClick = onClose) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_mn_close),
-                        contentDescription = "Close",
-                        tint = MediaNestColors.TextSecondary,
-                        modifier = Modifier.size(18.dp)
-                    )
+                                IconButton(
+                                    onClick = { if (canPrev) { val p = q[idx - 1]; playerViewModel.initialize(p.id, p.streamIndex, p.downloadId) } },
+                                    enabled = canPrev,
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_mn_prev),
+                                        contentDescription = "Previous",
+                                        tint = if (canPrev) MediaNestColors.TextPrimary else MediaNestColors.TextSecondary.copy(alpha = 0.35f),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+
+                                IconButton(
+                                    onClick = { if (canNext) { val n = q[idx + 1]; playerViewModel.initialize(n.id, n.streamIndex, n.downloadId) } },
+                                    enabled = canNext,
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_mn_next),
+                                        contentDescription = "Next",
+                                        tint = if (canNext) MediaNestColors.TextPrimary else MediaNestColors.TextSecondary.copy(alpha = 0.35f),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+
+                                IconButton(
+                                    onClick = onClose,
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_mn_close),
+                                        contentDescription = "Close",
+                                        tint = MediaNestColors.TextSecondary,
+                                        modifier = Modifier.size(15.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
@@ -385,7 +426,7 @@ fun MiniPlayer(
                 LinearProgressIndicator(
                     progress = { progress.coerceIn(0f, 1f) },
                     modifier = Modifier.fillMaxSize(),
-                    color = MediaNestColors.Accent,
+                    color = MediaNestColors.YouTubeRed,
                     trackColor = Color.Transparent
                 )
             }

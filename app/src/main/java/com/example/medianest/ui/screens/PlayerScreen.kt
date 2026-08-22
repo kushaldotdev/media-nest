@@ -16,7 +16,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.ui.res.painterResource
@@ -133,7 +137,8 @@ data class PlayerQueueItem(
     val thumbnailUrl: String? = null,
     val isPlaying: Boolean = false,
     val downloadId: Long? = null,
-    val streamIndex: Int = 0
+    val streamIndex: Int = 0,
+    val originalIndex: Int? = null
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -162,7 +167,12 @@ fun PlayerScreen(
     val effectiveContextTitle = contextTitle ?: vmContextTitle
     val effectiveContextType = contextType ?: vmContextType
 
-    var currentQueue by remember(effectiveQueue) { mutableStateOf(effectiveQueue) }
+    val indexedQueue = remember(effectiveQueue) {
+        effectiveQueue.mapIndexed { idx, itm ->
+            if (itm.originalIndex == null) itm.copy(originalIndex = idx + 1) else itm
+        }
+    }
+    var currentQueue by remember(indexedQueue) { mutableStateOf(indexedQueue) }
     var isAutoplayEnabled by remember(autoplayNext) { mutableStateOf(autoplayNext) }
     var showQueueSheet by remember { mutableStateOf(false) }
     val hasQueueContext = currentQueue.isNotEmpty() || !effectiveContextTitle.isNullOrEmpty() || !effectiveContextType.isNullOrEmpty()
@@ -497,26 +507,6 @@ fun PlayerScreen(
                                     .weight(1f, fill = false)
                                     .clickable { isTitleExpanded = !isTitleExpanded }
                             )
-                            val quality = state.videoQuality
-                            val qualityText = if (!quality.isNullOrEmpty()) {
-                                if (state.isLocal) "$quality • Local" else "$quality • Stream"
-                            } else {
-                                if (state.isLocal) "Local" else "Stream"
-                            }
-                            if (qualityText.isNotEmpty()) {
-                                Spacer(Modifier.width(8.dp))
-                                Surface(
-                                    color = MediaNestColors.TextPrimary.copy(alpha = 0.2f),
-                                    shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp)
-                                ) {
-                                    Text(
-                                        text = qualityText,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MediaNestColors.TextPrimary,
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                    )
-                                }
-                            }
                             val watchCount = state.watchCount
                             if (watchCount > 0) {
                                 Spacer(Modifier.width(8.dp))
@@ -534,6 +524,26 @@ fun PlayerScreen(
                                         text = "$watchCount",
                                         color = MediaNestColors.TextPrimary,
                                         style = MaterialTheme.typography.bodyMedium
+                                    )
+                                }
+                            }
+                            val quality = state.videoQuality
+                            val qualityText = if (!quality.isNullOrEmpty()) {
+                                if (state.isLocal) "$quality • Local" else "$quality • Stream"
+                            } else {
+                                if (state.isLocal) "Local" else "Stream"
+                            }
+                            if (qualityText.isNotEmpty()) {
+                                Spacer(Modifier.width(8.dp))
+                                Surface(
+                                    color = MediaNestColors.TextPrimary.copy(alpha = 0.2f),
+                                    shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp)
+                                ) {
+                                    Text(
+                                        text = qualityText,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MediaNestColors.TextPrimary,
+                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                     )
                                 }
                             }
@@ -623,17 +633,30 @@ fun PlayerScreen(
                             track = { sliderState ->
                                 val fraction = if (state.durationMs > 0) (sliderState.value / state.durationMs.toFloat()).coerceIn(0f, 1f) else 0f
                                 val bufferedFraction = if (state.durationMs > 0) (state.bufferedPositionMs.toFloat() / state.durationMs.toFloat()).coerceIn(0f, 1f) else 0f
-                                Canvas(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp))) {
-                                    drawRoundRect(color = Color(0xFF54333C), cornerRadius = CornerRadius(2.dp.toPx()))
-                                    drawRoundRect(color = Color.White.copy(alpha = 0.18f), topLeft = Offset.Zero, size = Size(size.width * bufferedFraction, size.height), cornerRadius = CornerRadius(2.dp.toPx()))
-                                    drawRoundRect(color = Color(0xFFFFB1B6), topLeft = Offset.Zero, size = Size(size.width * fraction, size.height), cornerRadius = CornerRadius(2.dp.toPx()))
+                                Canvas(Modifier.fillMaxWidth().height(16.dp)) {
+                                    val trackH = 4.dp.toPx()
+                                    val top = (size.height - trackH) / 2f
+                                    val r = CornerRadius(2.dp.toPx())
+                                    drawRoundRect(color = Color(0xFF54333C), topLeft = Offset(0f, top), size = Size(size.width, trackH), cornerRadius = r)
+                                    drawRoundRect(color = Color.White.copy(alpha = 0.18f), topLeft = Offset(0f, top), size = Size(size.width * bufferedFraction, trackH), cornerRadius = r)
+                                    drawRoundRect(color = MediaNestColors.YouTubeRed, topLeft = Offset(0f, top), size = Size(size.width * fraction, trackH), cornerRadius = r)
                                 }
                             },
                             thumb = {
-                                Box(Modifier.size(12.dp).background(Color(0xFFFFB1B6), CircleShape).border(2.dp, Color.White.copy(alpha = 0.3f), CircleShape))
+                                Box(
+                                    modifier = Modifier.size(16.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Box(
+                                        Modifier
+                                            .size(14.dp)
+                                            .background(MediaNestColors.YouTubeRed, CircleShape)
+                                            .border(2.dp, Color.White.copy(alpha = 0.3f), CircleShape)
+                                    )
+                                }
                             },
                             colors = SliderDefaults.colors(
-                                thumbColor = Color(0xFFFFB1B6),
+                                thumbColor = MediaNestColors.YouTubeRed,
                                 activeTrackColor = Color.Transparent,
                                 inactiveTrackColor = Color.Transparent
                             )
@@ -681,22 +704,6 @@ fun PlayerScreen(
                     title = "",
                     onNavigateBack = onBack,
                     actions = {
-                        val quality = state.videoQuality
-                        if (!quality.isNullOrEmpty()) {
-                            val qualityText = if (state.isLocal) "$quality • Local" else "$quality • Stream"
-                            Surface(
-                                color = MediaNestColors.Card,
-                                shape = RoundedCornerShape(4.dp)
-                            ) {
-                                Text(
-                                    text = qualityText,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MediaNestColors.TextSecondary,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                )
-                            }
-                            Spacer(Modifier.width(8.dp))
-                        }
                         val watchCount = state.watchCount
                         if (watchCount > 0) {
                             Row(
@@ -713,6 +720,22 @@ fun PlayerScreen(
                                     text = "$watchCount",
                                     color = MediaNestColors.TextSecondary,
                                     style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                            Spacer(Modifier.width(8.dp))
+                        }
+                        val quality = state.videoQuality
+                        if (!quality.isNullOrEmpty()) {
+                            val qualityText = if (state.isLocal) "$quality • Local" else "$quality • Stream"
+                            Surface(
+                                color = MediaNestColors.Card,
+                                shape = RoundedCornerShape(4.dp)
+                            ) {
+                                Text(
+                                    text = qualityText,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MediaNestColors.TextSecondary,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                 )
                             }
                             Spacer(Modifier.width(4.dp))
@@ -1002,17 +1025,30 @@ fun PlayerScreen(
                             track = { sliderState ->
                                 val fraction = if (state.durationMs > 0) (sliderState.value / state.durationMs.toFloat()).coerceIn(0f, 1f) else 0f
                                 val bufferedFraction = if (state.durationMs > 0) (state.bufferedPositionMs.toFloat() / state.durationMs.toFloat()).coerceIn(0f, 1f) else 0f
-                                Canvas(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp))) {
-                                    drawRoundRect(color = Color(0xFF54333C), cornerRadius = CornerRadius(2.dp.toPx()))
-                                    drawRoundRect(color = Color.White.copy(alpha = 0.18f), topLeft = Offset.Zero, size = Size(size.width * bufferedFraction, size.height), cornerRadius = CornerRadius(2.dp.toPx()))
-                                    drawRoundRect(color = Color(0xFFFFB1B6), topLeft = Offset.Zero, size = Size(size.width * fraction, size.height), cornerRadius = CornerRadius(2.dp.toPx()))
+                                Canvas(Modifier.fillMaxWidth().height(16.dp)) {
+                                    val trackH = 4.dp.toPx()
+                                    val top = (size.height - trackH) / 2f
+                                    val r = CornerRadius(2.dp.toPx())
+                                    drawRoundRect(color = Color(0xFF54333C), topLeft = Offset(0f, top), size = Size(size.width, trackH), cornerRadius = r)
+                                    drawRoundRect(color = Color.White.copy(alpha = 0.18f), topLeft = Offset(0f, top), size = Size(size.width * bufferedFraction, trackH), cornerRadius = r)
+                                    drawRoundRect(color = MediaNestColors.YouTubeRed, topLeft = Offset(0f, top), size = Size(size.width * fraction, trackH), cornerRadius = r)
                                 }
                             },
                             thumb = {
-                                Box(Modifier.size(12.dp).background(Color(0xFFFFB1B6), CircleShape).border(2.dp, Color.White.copy(alpha = 0.3f), CircleShape))
+                                Box(
+                                    modifier = Modifier.size(16.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Box(
+                                        Modifier
+                                            .size(14.dp)
+                                            .background(MediaNestColors.YouTubeRed, CircleShape)
+                                            .border(2.dp, Color.White.copy(alpha = 0.3f), CircleShape)
+                                    )
+                                }
                             },
                             colors = SliderDefaults.colors(
-                                thumbColor = Color(0xFFFFB1B6),
+                                thumbColor = MediaNestColors.YouTubeRed,
                                 activeTrackColor = Color.Transparent,
                                 inactiveTrackColor = Color.Transparent
                             )
@@ -1432,29 +1468,27 @@ fun PlayerScreen(
         ModalBottomSheet(
             onDismissRequest = { showQueueSheet = false },
             sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-            containerColor = Color(0xFF1A1014),
+            containerColor = MediaNestColors.Raised,
             contentColor = MediaNestColors.TextPrimary,
+            scrimColor = MediaNestColors.Scrim,
             dragHandle = {
                 Box(
-                    Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Box(
-                        Modifier
-                            .width(32.dp)
-                            .height(4.dp)
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(MediaNestColors.Border)
-                    )
-                }
+                    modifier = Modifier
+                        .padding(top = 10.dp, bottom = 4.dp)
+                        .width(40.dp)
+                        .height(4.dp)
+                        .clip(CircleShape)
+                        .background(MediaNestColors.Border)
+                )
             },
-            shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
+            shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
         ) {
             Column(
                 Modifier
                     .fillMaxWidth()
+                    .heightIn(max = 460.dp)
                     .padding(horizontal = 16.dp)
-                    .padding(bottom = 32.dp)
+                    .padding(bottom = 24.dp)
             ) {
                 // Header: 'Up Next' + count + autoplay toggle inline
                 Row(
@@ -1512,7 +1546,10 @@ fun PlayerScreen(
                         )
                     }
                 } else {
-                    LazyColumn {
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
                         items(currentQueue.size) { i ->
                             val item = currentQueue[i]
                             val idx = i
@@ -1523,20 +1560,12 @@ fun PlayerScreen(
                                 isCurrent = item.id == state.videoId,
                                 onMoveUp = {
                                     if (idx > 0) {
-                                        currentQueue = currentQueue.toMutableList().also {
-                                            val t = it[idx]
-                                            it[idx] = it[idx - 1]
-                                            it[idx - 1] = t
-                                        }
+                                        moveQueueItem(idx, idx - 1)
                                     }
                                 },
                                 onMoveDown = {
                                     if (idx < currentQueue.size - 1) {
-                                        currentQueue = currentQueue.toMutableList().also {
-                                            val t = it[idx]
-                                            it[idx] = it[idx + 1]
-                                            it[idx + 1] = t
-                                        }
+                                        moveQueueItem(idx, idx + 1)
                                     }
                                 },
                                 onDragMove = { targetIdx -> moveQueueItem(idx, targetIdx) },
@@ -1549,7 +1578,9 @@ fun PlayerScreen(
                                 },
                                 onRemove = {
                                     currentQueue = currentQueue.toMutableList().also {
-                                        it.removeAt(idx)
+                                        val removed = it.removeAt(idx)
+                                        onQueueReordered?.invoke(it)
+                                        onRemoveFromQueue?.invoke(removed)
                                     }
                                 }
                             )
@@ -1836,7 +1867,7 @@ fun PlayerQueueItemRow(
         modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
-        shape = RoundedCornerShape(8.dp),
+        shape = RoundedCornerShape(10.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (isCurrent) {
                 MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
@@ -1856,7 +1887,7 @@ fun PlayerQueueItemRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 6.dp),
+                .padding(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Drag handle with draggable modifier
@@ -1894,9 +1925,9 @@ fun PlayerQueueItemRow(
             // Thumbnail with duration overlay
             Box(
                 modifier = Modifier
-                    .width(68.dp)
+                    .width(72.dp)
                     .aspectRatio(16f / 9f)
-                    .clip(RoundedCornerShape(4.dp))
+                    .clip(RoundedCornerShape(6.dp))
                     .background(MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 if (!item.thumbnailUrl.isNullOrEmpty()) {
@@ -1927,11 +1958,11 @@ fun PlayerQueueItemRow(
 
             Spacer(Modifier.width(10.dp))
 
-            // Title & Channel
+            // Title & Channel on Row 1, Channel & Controls on Row 2
             Column(
                 modifier = Modifier
                     .weight(1f)
-                    .padding(end = 4.dp)
+                    .padding(end = 2.dp)
             ) {
                 if (isCurrent) {
                     Row(
@@ -1953,65 +1984,84 @@ fun PlayerQueueItemRow(
                         )
                     }
                 }
+
+                // Row 1: Full Title with persistent original index
+                val itemNumber = item.originalIndex ?: (index + 1)
                 Text(
-                    text = item.title,
-                    style = MaterialTheme.typography.bodyMedium,
+                    text = if (item.title.isNotEmpty()) "$itemNumber. ${item.title}" else item.title,
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontSize = 13.sp,
+                        lineHeight = 17.sp
+                    ),
                     fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Medium,
                     color = if (isCurrent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
-                if (item.channelName.isNotEmpty()) {
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        text = item.channelName,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
 
-            // Up / Down Reorder Buttons + Remove Button
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(0.dp)
-            ) {
-                IconButton(
-                    onClick = onMoveUp,
-                    enabled = index > 0,
-                    modifier = Modifier.size(28.dp)
+                Spacer(Modifier.height(4.dp))
+
+                // Row 2: Channel Name & Up / Down / Remove Controls
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_mn_chevron_up),
-                        contentDescription = "Move Up",
-                        tint = if (index > 0) MediaNestColors.TextPrimary else MediaNestColors.TextSecondary.copy(alpha = 0.25f),
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-                IconButton(
-                    onClick = onMoveDown,
-                    enabled = index < totalCount - 1,
-                    modifier = Modifier.size(28.dp)
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_mn_chevron_down),
-                        contentDescription = "Move Down",
-                        tint = if (index < totalCount - 1) MediaNestColors.TextPrimary else MediaNestColors.TextSecondary.copy(alpha = 0.25f),
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-                IconButton(
-                    onClick = onRemove,
-                    modifier = Modifier.size(28.dp)
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_mn_close),
-                        contentDescription = "Remove from Queue",
-                        tint = MediaNestColors.TextSecondary,
-                        modifier = Modifier.size(16.dp)
-                    )
+                    if (item.channelName.isNotEmpty()) {
+                        Text(
+                            text = item.channelName,
+                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                        )
+                    } else {
+                        Spacer(Modifier.weight(1f))
+                    }
+
+                    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
+                        Row(
+                            horizontalArrangement = Arrangement.End,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            IconButton(
+                                onClick = onMoveUp,
+                                enabled = index > 0,
+                                modifier = Modifier.size(26.dp)
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_mn_chevron_up),
+                                    contentDescription = "Move Up",
+                                    tint = if (index > 0) MediaNestColors.TextPrimary else MediaNestColors.TextSecondary.copy(alpha = 0.25f),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                            IconButton(
+                                onClick = onMoveDown,
+                                enabled = index < totalCount - 1,
+                                modifier = Modifier.size(26.dp)
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_mn_chevron_down),
+                                    contentDescription = "Move Down",
+                                    tint = if (index < totalCount - 1) MediaNestColors.TextPrimary else MediaNestColors.TextSecondary.copy(alpha = 0.25f),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                            IconButton(
+                                onClick = onRemove,
+                                modifier = Modifier.size(26.dp)
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_mn_close),
+                                    contentDescription = "Remove from Queue",
+                                    tint = MediaNestColors.TextSecondary,
+                                    modifier = Modifier.size(15.dp)
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }

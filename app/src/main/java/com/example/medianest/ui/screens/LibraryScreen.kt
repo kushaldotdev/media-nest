@@ -12,6 +12,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
@@ -185,6 +186,7 @@ fun LibraryScreen(
     var watchCountTargetVideoId by remember { mutableStateOf<String?>(null) }
     var watchCountTargetTitle by remember { mutableStateOf("") }
     var watchCountTargetInitialCount by remember { mutableStateOf(0) }
+    val tabScrollState = rememberScrollState()
 
     // Intercept back navigation
     BackHandler(enabled = uiState.isSelectionMode || uiState.selectedFolder != null || uiState.searchQuery.isNotEmpty()) {
@@ -264,18 +266,6 @@ fun LibraryScreen(
                     },
                     actions = {
                         if (!uiState.isSelectionMode) {
-                            NotificationBellAction(onClick = onNavigateToNotifications)
-                            MediaNestIconButton(
-                                onClick = onNavigateToStatistics,
-                                contentDescription = "Statistics"
-                            ) {
-                                Icon(
-                                    painter = painterResource(R.drawable.ic_mn_chart),
-                                    contentDescription = "Statistics",
-                                    tint = MediaNestColors.TextPrimary,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
                             MediaNestIconButton(
                                 onClick = { viewModel.toggleViewMode() },
                                 contentDescription = if (uiState.viewMode == ViewMode.GRID) "Switch to list view" else "Switch to grid view"
@@ -289,6 +279,18 @@ fun LibraryScreen(
                                     modifier = Modifier.size(20.dp)
                                 )
                             }
+                            MediaNestIconButton(
+                                onClick = onNavigateToStatistics,
+                                contentDescription = "Statistics"
+                            ) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_mn_chart),
+                                    contentDescription = "Statistics",
+                                    tint = MediaNestColors.TextPrimary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                            NotificationBellAction(onClick = onNavigateToNotifications)
                         }
                     }
                 )
@@ -317,6 +319,7 @@ fun LibraryScreen(
             val headerContent: @Composable () -> Unit = {
                 LibraryHeaderBlock(
                     currentTab = uiState.currentTab,
+                    tabScrollState = tabScrollState,
                     searchQuery = uiState.searchQuery,
                     onTabSelect = { tab -> viewModel.setTab(tab) },
                     onSearchQueryChange = { viewModel.setSearchQuery(it) },
@@ -1241,6 +1244,7 @@ private fun VideoEntity.toExtractedVideoInfo() = ExtractedVideoInfo(
 @Composable
 private fun LibraryHeaderBlock(
     currentTab: LibraryTab,
+    tabScrollState: ScrollState = rememberScrollState(),
     searchQuery: String,
     onTabSelect: (LibraryTab) -> Unit,
     onSearchQueryChange: (String) -> Unit,
@@ -1292,6 +1296,7 @@ private fun LibraryHeaderBlock(
                     LibraryTab.SUBSCRIPTIONS -> R.drawable.ic_mn_channel
                 }
             },
+            scrollState = tabScrollState,
             modifier = Modifier.fillMaxWidth(),
             contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp)
         )

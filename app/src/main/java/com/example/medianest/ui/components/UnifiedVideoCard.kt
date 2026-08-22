@@ -162,6 +162,7 @@ fun UnifiedVideoCard(
     onSelectionToggle: () -> Unit = {},
     downloadMenuContent: (@Composable () -> Unit)? = null,
     modifier: Modifier = Modifier,
+    serialNumber: Int? = null,
     mediaType: String = "VIDEO"
 ) {
     var isTitleExpanded by remember { mutableStateOf(false) }
@@ -308,8 +309,9 @@ fun UnifiedVideoCard(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         // Title (Tap to expand/collapse)
+                        val displayTitle = if (serialNumber != null && title.isNotEmpty()) "$serialNumber. $title" else title
                         Text(
-                            text = title,
+                            text = displayTitle,
                             style = MaterialTheme.typography.titleSmall,
                             maxLines = if (isTitleExpanded) Int.MAX_VALUE else 2,
                             overflow = TextOverflow.Ellipsis,
@@ -357,6 +359,19 @@ fun UnifiedVideoCard(
                         horizontalArrangement = Arrangement.End,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        if (isFavorite || config.showFavoriteButton) {
+                            IconButton(
+                                onClick = onFavoriteToggle,
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    painter = painterResource(if (isFavorite) R.drawable.ic_mn_heart_filled else R.drawable.ic_mn_heart),
+                                    contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites",
+                                    tint = if (isFavorite) MediaNestColors.Accent else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
                         Box {
                             IconButton(
                                 onClick = { showActionSheet = true },
@@ -398,7 +413,7 @@ fun UnifiedVideoCard(
                 VideoActionItem(
                     id = "favorite",
                     label = if (isFavorite) "Remove from Favorites" else "Add to Favorites",
-                    iconRes = R.drawable.ic_mn_heart,
+                    iconRes = if (isFavorite) R.drawable.ic_mn_heart_filled else R.drawable.ic_mn_heart,
                     active = isFavorite
                 ),
                 VideoActionItem(
@@ -628,7 +643,7 @@ fun UnifiedVideoRow(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         // Title (Tap to expand/collapse)
-                        val displayTitle = if (serialNumber != null) "$serialNumber. $title" else title
+                        val displayTitle = if (serialNumber != null && title.isNotEmpty()) "$serialNumber. $title" else title
                         Text(
                             text = displayTitle,
                             style = MaterialTheme.typography.titleSmall,
@@ -677,6 +692,19 @@ fun UnifiedVideoRow(
                         horizontalArrangement = Arrangement.End,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        if (isFavorite || config.showFavoriteButton) {
+                            IconButton(
+                                onClick = onFavoriteToggle,
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    painter = painterResource(if (isFavorite) R.drawable.ic_mn_heart_filled else R.drawable.ic_mn_heart),
+                                    contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites",
+                                    tint = if (isFavorite) MediaNestColors.Accent else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
                         Box {
                             IconButton(
                                 onClick = { showActionSheet = true },
@@ -718,7 +746,7 @@ fun UnifiedVideoRow(
                 VideoActionItem(
                     id = "favorite",
                     label = if (isFavorite) "Remove from Favorites" else "Add to Favorites",
-                    iconRes = R.drawable.ic_mn_heart,
+                    iconRes = if (isFavorite) R.drawable.ic_mn_heart_filled else R.drawable.ic_mn_heart,
                     active = isFavorite
                 ),
                 VideoActionItem(

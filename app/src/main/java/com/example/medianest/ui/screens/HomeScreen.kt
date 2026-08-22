@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -94,10 +95,15 @@ import com.example.medianest.data.local.entity.VideoEntity
 import com.example.medianest.data.model.ExtractedPlaylistInfo
 import com.example.medianest.data.model.ExtractedVideoInfo
 import com.example.medianest.data.model.StreamSource
+import com.example.medianest.ui.viewmodel.ViewMode
 import com.example.medianest.ui.components.EndOfListIndicator
 import com.example.medianest.ui.components.MediaNestSnackbarHost
 import com.example.medianest.ui.components.MediaNestTopAppBar
 import com.example.medianest.ui.components.NotificationBellAction
+import com.example.medianest.ui.components.QuickDownloadMenu
+import com.example.medianest.ui.components.UnifiedVideoCard
+import com.example.medianest.ui.components.UnifiedVideoRow
+import com.example.medianest.ui.components.VideoCardConfig
 import com.example.medianest.ui.components.WatchCountDialog
 import com.example.medianest.ui.theme.MediaNestColors
 import com.example.medianest.ui.utils.UiUtils
@@ -138,6 +144,7 @@ fun HomeScreen(
     val playbackHistory by viewModel.playbackHistory.collectAsStateWithLifecycle()
     val watchCounts by viewModel.watchCounts.collectAsStateWithLifecycle()
     val continueWatchingVideos by viewModel.continueWatchingVideos.collectAsStateWithLifecycle()
+    val viewMode by viewModel.viewMode.collectAsStateWithLifecycle()
 
     val showBulkQualityDialog by viewModel.showBulkQualityDialog.collectAsStateWithLifecycle()
     val bulkFetchProgress by viewModel.bulkFetchProgress.collectAsStateWithLifecycle()
@@ -146,6 +153,7 @@ fun HomeScreen(
     var urlInput by remember { mutableStateOf("") }
     var selectedFormatFilter by remember { mutableStateOf("All") } // "All", "Videos", "Audio"
     val expandedTitles = remember { mutableStateOf(setOf<String>()) }
+    var expandedDownloadVideoId by remember { mutableStateOf<String?>(null) }
 
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusManager = LocalFocusManager.current
@@ -194,6 +202,8 @@ fun HomeScreen(
     Scaffold(
         topBar = {
             HomeTopBar(
+                viewMode = viewMode,
+                onToggleViewMode = { viewModel.toggleViewMode() },
                 onNotificationsClick = onNavigateToNotifications
             )
         },
@@ -330,6 +340,8 @@ fun HomeScreen(
                         val progressFraction = if (state.video.durationSeconds > 0 && positionMillis > 0) {
                             ((positionMillis.toFloat() / 1000f) / state.video.durationSeconds.toFloat()).coerceIn(0f, 1f)
                         } else 0f
+                        val isFavorite = favoriteVideoIds.contains(state.video.videoId)
+                        val isDownloaded = allDownloads.any { it.videoId == state.video.videoId && it.status == DownloadStatus.COMPLETED }
 
                         Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                             SectionHeader(
@@ -338,32 +350,127 @@ fun HomeScreen(
                                 onActionClick = { onVideoSelected(state.video.videoId) }
                             )
                             Spacer(Modifier.height(8.dp))
-                            HomeMediaRow(
-                                video = state.video,
-                                isFavorite = favoriteVideoIds.contains(state.video.videoId),
-                                playbackProgressFraction = progressFraction,
-                                watchCount = watchCounts[state.video.videoId] ?: 0,
-                                isExpanded = expandedTitles.value.contains(state.video.videoId),
-                                onTitleToggle = {
-                                    expandedTitles.value = if (expandedTitles.value.contains(state.video.videoId)) {
-                                        expandedTitles.value - state.video.videoId
-                                    } else {
-                                        expandedTitles.value + state.video.videoId
+                            if (viewMode == ViewMode.GRID) {
+                                UnifiedVideoCard(
+                                    title = state.video.title,
+                                    serialNumber = 1,
+                                    channelName = state.video.channelName,
+                                    thumbnailUrl = state.video.thumbnailUrl,
+                                    durationSeconds = state.video.durationSeconds,
+                                    uploadDate = state.video.uploadDate,
+                                    isFavorite = isFavorite,
+                                    isDownloaded = isDownloaded,
+                                    playbackProgressFraction = progressFraction,
+                                    watchCount = watchCounts[state.video.videoId] ?: 0,
+                                    folders = videoFolderMap[state.video.videoId] ?: emptyList(),
+                                    mediaType = "VIDEO",
+                                    config = VideoCardConfig(
+                                        showFavoriteButton = true,
+                                        showMoveToFolderButton = true,
+                                        showDownloadButton = true,
+                                        showFolderBadges = true,
+                                        showPlaybackProgress = true,
+                                        showDownloadedBadge = true,
+                                        showMarkWatchedButton = true,
+                                        showMediaTypeBadge = true
+                                    ),
+                                    onClick = { onVideoSelected(state.video.videoId) },
+                                    onFavoriteToggle = {
+                                        viewModel.toggleFavorite(state.video, !isFavorite)
+                                        coroutineScope.launch {
+                                            snackbarHostState.showSnackbar(if (!isFavorite) "Added to favorites" else "Removed from favorites")
+                                        }
+                                    },
+                                    onMoveToFolder = {
+                                        activeVideoForSheet = state.video
+                                        showMoveToFolderSheet = true
+                                    },
+                                    onDownloadClick = {
+                                        expandedDownloadVideoId = state.video.videoId
+                                        viewModel.fetchStreamsFor(state.video.videoId)
+                                    },
+                                    onMarkWatched = {
+                                        val currentCount = watchCounts[state.video.videoId] ?: 0
+                                        watchCountTargetVideoId = state.video.videoId
+                                        watchCountTargetTitle = state.video.title
+                                        watchCountTargetInitialCount = currentCount
+                                        showWatchCountDialog = true
+                                    },
+                                    downloadMenuContent = {
+                                        QuickDownloadMenu(
+                                            isExpanded = expandedDownloadVideoId == state.video.videoId,
+                                            onDismiss = { expandedDownloadVideoId = null },
+                                            isFetching = fetchingStreamsFor == state.video.videoId,
+                                            fetchedStreams = fetchedStreams,
+                                            allDownloads = allDownloads,
+                                            videoId = state.video.videoId,
+                                            onEnqueueDownload = { info, stream -> viewModel.enqueueDownload(info, stream) },
+                                            onDeleteDownload = { entity -> viewModel.deleteDownload(entity) },
+                                            onExtractAudio = { entity -> viewModel.extractAudio(entity) }
+                                        )
                                     }
-                                },
-                                onClick = { onVideoSelected(state.video.videoId) },
-                                onFavoriteToggle = {
-                                    val fav = !favoriteVideoIds.contains(state.video.videoId)
-                                    viewModel.toggleFavorite(state.video, fav)
-                                    coroutineScope.launch {
-                                        snackbarHostState.showSnackbar(if (fav) "Added to favorites" else "Removed from favorites")
+                                )
+                            } else {
+                                UnifiedVideoRow(
+                                    title = state.video.title,
+                                    serialNumber = 1,
+                                    channelName = state.video.channelName,
+                                    thumbnailUrl = state.video.thumbnailUrl,
+                                    durationSeconds = state.video.durationSeconds,
+                                    uploadDate = state.video.uploadDate,
+                                    isFavorite = isFavorite,
+                                    isDownloaded = isDownloaded,
+                                    playbackProgressFraction = progressFraction,
+                                    watchCount = watchCounts[state.video.videoId] ?: 0,
+                                    folders = videoFolderMap[state.video.videoId] ?: emptyList(),
+                                    mediaType = "VIDEO",
+                                    config = VideoCardConfig(
+                                        showFavoriteButton = true,
+                                        showMoveToFolderButton = true,
+                                        showDownloadButton = true,
+                                        showFolderBadges = true,
+                                        showPlaybackProgress = true,
+                                        showDownloadedBadge = true,
+                                        showMarkWatchedButton = true,
+                                        showMediaTypeBadge = true
+                                    ),
+                                    onClick = { onVideoSelected(state.video.videoId) },
+                                    onFavoriteToggle = {
+                                        viewModel.toggleFavorite(state.video, !isFavorite)
+                                        coroutineScope.launch {
+                                            snackbarHostState.showSnackbar(if (!isFavorite) "Added to favorites" else "Removed from favorites")
+                                        }
+                                    },
+                                    onMoveToFolder = {
+                                        activeVideoForSheet = state.video
+                                        showMoveToFolderSheet = true
+                                    },
+                                    onDownloadClick = {
+                                        expandedDownloadVideoId = state.video.videoId
+                                        viewModel.fetchStreamsFor(state.video.videoId)
+                                    },
+                                    onMarkWatched = {
+                                        val currentCount = watchCounts[state.video.videoId] ?: 0
+                                        watchCountTargetVideoId = state.video.videoId
+                                        watchCountTargetTitle = state.video.title
+                                        watchCountTargetInitialCount = currentCount
+                                        showWatchCountDialog = true
+                                    },
+                                    downloadMenuContent = {
+                                        QuickDownloadMenu(
+                                            isExpanded = expandedDownloadVideoId == state.video.videoId,
+                                            onDismiss = { expandedDownloadVideoId = null },
+                                            isFetching = fetchingStreamsFor == state.video.videoId,
+                                            fetchedStreams = fetchedStreams,
+                                            allDownloads = allDownloads,
+                                            videoId = state.video.videoId,
+                                            onEnqueueDownload = { info, stream -> viewModel.enqueueDownload(info, stream) },
+                                            onDeleteDownload = { entity -> viewModel.deleteDownload(entity) },
+                                            onExtractAudio = { entity -> viewModel.extractAudio(entity) }
+                                        )
                                     }
-                                },
-                                onMoreClick = {
-                                    activeVideoForSheet = state.video
-                                    showActionSheet = true
-                                }
-                            )
+                                )
+                            }
                         }
                     }
                 }
@@ -397,41 +504,163 @@ fun HomeScreen(
                         else -> baseVideos
                     }
 
-                    itemsIndexed(filteredVideos, key = { _, v -> "playlist_${v.videoId}" }) { index, video ->
-                        val history = playbackHistory.find { it.videoId == video.videoId }
-                        val positionMillis = history?.positionMillis ?: 0L
-                        val progressFraction = if (video.durationSeconds > 0 && positionMillis > 0) {
-                            ((positionMillis.toFloat() / 1000f) / video.durationSeconds.toFloat()).coerceIn(0f, 1f)
-                        } else 0f
+                    if (viewMode == ViewMode.GRID) {
+                        val chunkedVideos = filteredVideos.chunked(2)
+                        itemsIndexed(chunkedVideos, key = { chunkIdx, _ -> "playlist_chunk_$chunkIdx" }) { chunkIdx, chunk ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                chunk.forEachIndexed { i, video ->
+                                    val index = chunkIdx * 2 + i
+                                    val history = playbackHistory.find { it.videoId == video.videoId }
+                                    val positionMillis = history?.positionMillis ?: 0L
+                                    val progressFraction = if (video.durationSeconds > 0 && positionMillis > 0) {
+                                        ((positionMillis.toFloat() / 1000f) / video.durationSeconds.toFloat()).coerceIn(0f, 1f)
+                                    } else 0f
+                                    val isFavorite = favoriteVideoIds.contains(video.videoId)
+                                    val isDownloaded = allDownloads.any { it.videoId == video.videoId && it.status == DownloadStatus.COMPLETED }
 
-                        Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-                            HomeMediaRow(
-                                video = video,
-                                serialNumber = index + 1,
-                                isFavorite = favoriteVideoIds.contains(video.videoId),
-                                playbackProgressFraction = progressFraction,
-                                watchCount = watchCounts[video.videoId] ?: 0,
-                                isExpanded = expandedTitles.value.contains(video.videoId),
-                                onTitleToggle = {
-                                    expandedTitles.value = if (expandedTitles.value.contains(video.videoId)) {
-                                        expandedTitles.value - video.videoId
-                                    } else {
-                                        expandedTitles.value + video.videoId
+                                    Box(modifier = Modifier.weight(1f)) {
+                                        UnifiedVideoCard(
+                                            title = video.title,
+                                            serialNumber = index + 1,
+                                            channelName = video.channelName,
+                                            thumbnailUrl = video.thumbnailUrl,
+                                            durationSeconds = video.durationSeconds,
+                                            uploadDate = video.uploadDate,
+                                            isFavorite = isFavorite,
+                                            isDownloaded = isDownloaded,
+                                            playbackProgressFraction = progressFraction,
+                                            watchCount = watchCounts[video.videoId] ?: 0,
+                                            folders = videoFolderMap[video.videoId] ?: emptyList(),
+                                            mediaType = "VIDEO",
+                                            config = VideoCardConfig(
+                                                showFavoriteButton = true,
+                                                showMoveToFolderButton = true,
+                                                showDownloadButton = true,
+                                                showFolderBadges = true,
+                                                showPlaybackProgress = true,
+                                                showDownloadedBadge = true,
+                                                showMarkWatchedButton = true,
+                                                showMediaTypeBadge = true
+                                            ),
+                                            onClick = { onVideoSelected(video.videoId) },
+                                            onFavoriteToggle = {
+                                                viewModel.toggleFavorite(video, !isFavorite)
+                                                coroutineScope.launch {
+                                                    snackbarHostState.showSnackbar(if (!isFavorite) "Added to favorites" else "Removed from favorites")
+                                                }
+                                            },
+                                            onMoveToFolder = {
+                                                activeVideoForSheet = video
+                                                showMoveToFolderSheet = true
+                                            },
+                                            onDownloadClick = {
+                                                expandedDownloadVideoId = video.videoId
+                                                viewModel.fetchStreamsFor(video.videoId)
+                                            },
+                                            onMarkWatched = {
+                                                val currentCount = watchCounts[video.videoId] ?: 0
+                                                watchCountTargetVideoId = video.videoId
+                                                watchCountTargetTitle = video.title
+                                                watchCountTargetInitialCount = currentCount
+                                                showWatchCountDialog = true
+                                            },
+                                            downloadMenuContent = {
+                                                QuickDownloadMenu(
+                                                    isExpanded = expandedDownloadVideoId == video.videoId,
+                                                    onDismiss = { expandedDownloadVideoId = null },
+                                                    isFetching = fetchingStreamsFor == video.videoId,
+                                                    fetchedStreams = fetchedStreams,
+                                                    allDownloads = allDownloads,
+                                                    videoId = video.videoId,
+                                                    onEnqueueDownload = { info, stream -> viewModel.enqueueDownload(info, stream) },
+                                                    onDeleteDownload = { entity -> viewModel.deleteDownload(entity) },
+                                                    onExtractAudio = { entity -> viewModel.extractAudio(entity) }
+                                                )
+                                            }
+                                        )
                                     }
-                                },
-                                onClick = { onVideoSelected(video.videoId) },
-                                onFavoriteToggle = {
-                                    val fav = !favoriteVideoIds.contains(video.videoId)
-                                    viewModel.toggleFavorite(video, fav)
-                                    coroutineScope.launch {
-                                        snackbarHostState.showSnackbar(if (fav) "Added to favorites" else "Removed from favorites")
-                                    }
-                                },
-                                onMoreClick = {
-                                    activeVideoForSheet = video
-                                    showActionSheet = true
                                 }
-                            )
+                                if (chunk.size == 1) {
+                                    Spacer(modifier = Modifier.weight(1f))
+                                }
+                            }
+                        }
+                    } else {
+                        itemsIndexed(filteredVideos, key = { _, v -> "playlist_${v.videoId}" }) { index, video ->
+                            val history = playbackHistory.find { it.videoId == video.videoId }
+                            val positionMillis = history?.positionMillis ?: 0L
+                            val progressFraction = if (video.durationSeconds > 0 && positionMillis > 0) {
+                                ((positionMillis.toFloat() / 1000f) / video.durationSeconds.toFloat()).coerceIn(0f, 1f)
+                            } else 0f
+                            val isFavorite = favoriteVideoIds.contains(video.videoId)
+                            val isDownloaded = allDownloads.any { it.videoId == video.videoId && it.status == DownloadStatus.COMPLETED }
+
+                            Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                                UnifiedVideoRow(
+                                    title = video.title,
+                                    serialNumber = index + 1,
+                                    channelName = video.channelName,
+                                    thumbnailUrl = video.thumbnailUrl,
+                                    durationSeconds = video.durationSeconds,
+                                    uploadDate = video.uploadDate,
+                                    isFavorite = isFavorite,
+                                    isDownloaded = isDownloaded,
+                                    playbackProgressFraction = progressFraction,
+                                    watchCount = watchCounts[video.videoId] ?: 0,
+                                    folders = videoFolderMap[video.videoId] ?: emptyList(),
+                                    mediaType = "VIDEO",
+                                    config = VideoCardConfig(
+                                        showFavoriteButton = true,
+                                        showMoveToFolderButton = true,
+                                        showDownloadButton = true,
+                                        showFolderBadges = true,
+                                        showPlaybackProgress = true,
+                                        showDownloadedBadge = true,
+                                        showMarkWatchedButton = true,
+                                        showMediaTypeBadge = true
+                                    ),
+                                    onClick = { onVideoSelected(video.videoId) },
+                                    onFavoriteToggle = {
+                                        viewModel.toggleFavorite(video, !isFavorite)
+                                        coroutineScope.launch {
+                                            snackbarHostState.showSnackbar(if (!isFavorite) "Added to favorites" else "Removed from favorites")
+                                        }
+                                    },
+                                    onMoveToFolder = {
+                                        activeVideoForSheet = video
+                                        showMoveToFolderSheet = true
+                                    },
+                                    onDownloadClick = {
+                                        expandedDownloadVideoId = video.videoId
+                                        viewModel.fetchStreamsFor(video.videoId)
+                                    },
+                                    onMarkWatched = {
+                                        val currentCount = watchCounts[video.videoId] ?: 0
+                                        watchCountTargetVideoId = video.videoId
+                                        watchCountTargetTitle = video.title
+                                        watchCountTargetInitialCount = currentCount
+                                        showWatchCountDialog = true
+                                    },
+                                    downloadMenuContent = {
+                                        QuickDownloadMenu(
+                                            isExpanded = expandedDownloadVideoId == video.videoId,
+                                            onDismiss = { expandedDownloadVideoId = null },
+                                            isFetching = fetchingStreamsFor == video.videoId,
+                                            fetchedStreams = fetchedStreams,
+                                            allDownloads = allDownloads,
+                                            videoId = video.videoId,
+                                            onEnqueueDownload = { info, stream -> viewModel.enqueueDownload(info, stream) },
+                                            onDeleteDownload = { entity -> viewModel.deleteDownload(entity) },
+                                            onExtractAudio = { entity -> viewModel.extractAudio(entity) }
+                                        )
+                                    }
+                                )
+                            }
                         }
                     }
 
@@ -501,41 +730,163 @@ fun HomeScreen(
                         else -> baseUploads
                     }
 
-                    itemsIndexed(filteredUploads, key = { _, v -> "channel_${v.videoId}" }) { index, video ->
-                        val history = playbackHistory.find { it.videoId == video.videoId }
-                        val positionMillis = history?.positionMillis ?: 0L
-                        val progressFraction = if (video.durationSeconds > 0 && positionMillis > 0) {
-                            ((positionMillis.toFloat() / 1000f) / video.durationSeconds.toFloat()).coerceIn(0f, 1f)
-                        } else 0f
+                    if (viewMode == ViewMode.GRID) {
+                        val chunkedUploads = filteredUploads.chunked(2)
+                        itemsIndexed(chunkedUploads, key = { chunkIdx, _ -> "channel_chunk_$chunkIdx" }) { chunkIdx, chunk ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                chunk.forEachIndexed { i, video ->
+                                    val index = chunkIdx * 2 + i
+                                    val history = playbackHistory.find { it.videoId == video.videoId }
+                                    val positionMillis = history?.positionMillis ?: 0L
+                                    val progressFraction = if (video.durationSeconds > 0 && positionMillis > 0) {
+                                        ((positionMillis.toFloat() / 1000f) / video.durationSeconds.toFloat()).coerceIn(0f, 1f)
+                                    } else 0f
+                                    val isFavorite = favoriteVideoIds.contains(video.videoId)
+                                    val isDownloaded = allDownloads.any { it.videoId == video.videoId && it.status == DownloadStatus.COMPLETED }
 
-                        Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-                            HomeMediaRow(
-                                video = video,
-                                serialNumber = index + 1,
-                                isFavorite = favoriteVideoIds.contains(video.videoId),
-                                playbackProgressFraction = progressFraction,
-                                watchCount = watchCounts[video.videoId] ?: 0,
-                                isExpanded = expandedTitles.value.contains(video.videoId),
-                                onTitleToggle = {
-                                    expandedTitles.value = if (expandedTitles.value.contains(video.videoId)) {
-                                        expandedTitles.value - video.videoId
-                                    } else {
-                                        expandedTitles.value + video.videoId
+                                    Box(modifier = Modifier.weight(1f)) {
+                                        UnifiedVideoCard(
+                                            title = video.title,
+                                            serialNumber = index + 1,
+                                            channelName = video.channelName,
+                                            thumbnailUrl = video.thumbnailUrl,
+                                            durationSeconds = video.durationSeconds,
+                                            uploadDate = video.uploadDate,
+                                            isFavorite = isFavorite,
+                                            isDownloaded = isDownloaded,
+                                            playbackProgressFraction = progressFraction,
+                                            watchCount = watchCounts[video.videoId] ?: 0,
+                                            folders = videoFolderMap[video.videoId] ?: emptyList(),
+                                            mediaType = "VIDEO",
+                                            config = VideoCardConfig(
+                                                showFavoriteButton = true,
+                                                showMoveToFolderButton = true,
+                                                showDownloadButton = true,
+                                                showFolderBadges = true,
+                                                showPlaybackProgress = true,
+                                                showDownloadedBadge = true,
+                                                showMarkWatchedButton = true,
+                                                showMediaTypeBadge = true
+                                            ),
+                                            onClick = { onVideoSelected(video.videoId) },
+                                            onFavoriteToggle = {
+                                                viewModel.toggleFavorite(video, !isFavorite)
+                                                coroutineScope.launch {
+                                                    snackbarHostState.showSnackbar(if (!isFavorite) "Added to favorites" else "Removed from favorites")
+                                                }
+                                            },
+                                            onMoveToFolder = {
+                                                activeVideoForSheet = video
+                                                showMoveToFolderSheet = true
+                                            },
+                                            onDownloadClick = {
+                                                expandedDownloadVideoId = video.videoId
+                                                viewModel.fetchStreamsFor(video.videoId)
+                                            },
+                                            onMarkWatched = {
+                                                val currentCount = watchCounts[video.videoId] ?: 0
+                                                watchCountTargetVideoId = video.videoId
+                                                watchCountTargetTitle = video.title
+                                                watchCountTargetInitialCount = currentCount
+                                                showWatchCountDialog = true
+                                            },
+                                            downloadMenuContent = {
+                                                QuickDownloadMenu(
+                                                    isExpanded = expandedDownloadVideoId == video.videoId,
+                                                    onDismiss = { expandedDownloadVideoId = null },
+                                                    isFetching = fetchingStreamsFor == video.videoId,
+                                                    fetchedStreams = fetchedStreams,
+                                                    allDownloads = allDownloads,
+                                                    videoId = video.videoId,
+                                                    onEnqueueDownload = { info, stream -> viewModel.enqueueDownload(info, stream) },
+                                                    onDeleteDownload = { entity -> viewModel.deleteDownload(entity) },
+                                                    onExtractAudio = { entity -> viewModel.extractAudio(entity) }
+                                                )
+                                            }
+                                        )
                                     }
-                                },
-                                onClick = { onVideoSelected(video.videoId) },
-                                onFavoriteToggle = {
-                                    val fav = !favoriteVideoIds.contains(video.videoId)
-                                    viewModel.toggleFavorite(video, fav)
-                                    coroutineScope.launch {
-                                        snackbarHostState.showSnackbar(if (fav) "Added to favorites" else "Removed from favorites")
-                                    }
-                                },
-                                onMoreClick = {
-                                    activeVideoForSheet = video
-                                    showActionSheet = true
                                 }
-                            )
+                                if (chunk.size == 1) {
+                                    Spacer(modifier = Modifier.weight(1f))
+                                }
+                            }
+                        }
+                    } else {
+                        itemsIndexed(filteredUploads, key = { _, v -> "channel_${v.videoId}" }) { index, video ->
+                            val history = playbackHistory.find { it.videoId == video.videoId }
+                            val positionMillis = history?.positionMillis ?: 0L
+                            val progressFraction = if (video.durationSeconds > 0 && positionMillis > 0) {
+                                ((positionMillis.toFloat() / 1000f) / video.durationSeconds.toFloat()).coerceIn(0f, 1f)
+                            } else 0f
+                            val isFavorite = favoriteVideoIds.contains(video.videoId)
+                            val isDownloaded = allDownloads.any { it.videoId == video.videoId && it.status == DownloadStatus.COMPLETED }
+
+                            Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                                UnifiedVideoRow(
+                                    title = video.title,
+                                    serialNumber = index + 1,
+                                    channelName = video.channelName,
+                                    thumbnailUrl = video.thumbnailUrl,
+                                    durationSeconds = video.durationSeconds,
+                                    uploadDate = video.uploadDate,
+                                    isFavorite = isFavorite,
+                                    isDownloaded = isDownloaded,
+                                    playbackProgressFraction = progressFraction,
+                                    watchCount = watchCounts[video.videoId] ?: 0,
+                                    folders = videoFolderMap[video.videoId] ?: emptyList(),
+                                    mediaType = "VIDEO",
+                                    config = VideoCardConfig(
+                                        showFavoriteButton = true,
+                                        showMoveToFolderButton = true,
+                                        showDownloadButton = true,
+                                        showFolderBadges = true,
+                                        showPlaybackProgress = true,
+                                        showDownloadedBadge = true,
+                                        showMarkWatchedButton = true,
+                                        showMediaTypeBadge = true
+                                    ),
+                                    onClick = { onVideoSelected(video.videoId) },
+                                    onFavoriteToggle = {
+                                        viewModel.toggleFavorite(video, !isFavorite)
+                                        coroutineScope.launch {
+                                            snackbarHostState.showSnackbar(if (!isFavorite) "Added to favorites" else "Removed from favorites")
+                                        }
+                                    },
+                                    onMoveToFolder = {
+                                        activeVideoForSheet = video
+                                        showMoveToFolderSheet = true
+                                    },
+                                    onDownloadClick = {
+                                        expandedDownloadVideoId = video.videoId
+                                        viewModel.fetchStreamsFor(video.videoId)
+                                    },
+                                    onMarkWatched = {
+                                        val currentCount = watchCounts[video.videoId] ?: 0
+                                        watchCountTargetVideoId = video.videoId
+                                        watchCountTargetTitle = video.title
+                                        watchCountTargetInitialCount = currentCount
+                                        showWatchCountDialog = true
+                                    },
+                                    downloadMenuContent = {
+                                        QuickDownloadMenu(
+                                            isExpanded = expandedDownloadVideoId == video.videoId,
+                                            onDismiss = { expandedDownloadVideoId = null },
+                                            isFetching = fetchingStreamsFor == video.videoId,
+                                            fetchedStreams = fetchedStreams,
+                                            allDownloads = allDownloads,
+                                            videoId = video.videoId,
+                                            onEnqueueDownload = { info, stream -> viewModel.enqueueDownload(info, stream) },
+                                            onDeleteDownload = { entity -> viewModel.deleteDownload(entity) },
+                                            onExtractAudio = { entity -> viewModel.extractAudio(entity) }
+                                        )
+                                    }
+                                )
+                            }
                         }
                     }
 
@@ -633,6 +984,9 @@ fun HomeScreen(
                                     keyboardController?.hide()
                                     focusManager.clearFocus()
                                     viewModel.onUrlSubmitted(item.url)
+                                    coroutineScope.launch {
+                                        listState.animateScrollToItem(0)
+                                    }
                                 },
                                 onDelete = { historyItemToDelete = item }
                             )
@@ -1114,6 +1468,8 @@ fun HomeScreen(
 
 @Composable
 fun HomeTopBar(
+    viewMode: ViewMode = ViewMode.GRID,
+    onToggleViewMode: () -> Unit = {},
     onNotificationsClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -1155,6 +1511,13 @@ fun HomeTopBar(
             }
         },
         actions = {
+            IconButton(onClick = onToggleViewMode) {
+                Icon(
+                    painter = painterResource(if (viewMode == ViewMode.GRID) R.drawable.ic_mn_list else R.drawable.ic_mn_grid),
+                    contentDescription = if (viewMode == ViewMode.GRID) "Switch to list view" else "Switch to grid view",
+                    tint = MediaNestColors.TextPrimary
+                )
+            }
             NotificationBellAction(onClick = onNotificationsClick)
         }
     )
@@ -2317,7 +2680,7 @@ fun VideoActionBottomSheetContent(
         ActionRowItem(iconRes = R.drawable.ic_mn_folder, title = "Move to Folder", onClick = onMoveToFolder)
         ActionRowItem(iconRes = R.drawable.ic_mn_eye, title = "Mark as Watched", onClick = onMarkWatched)
         ActionRowItem(
-            iconRes = R.drawable.ic_mn_heart,
+            iconRes = if (isFavorite) R.drawable.ic_mn_heart_filled else R.drawable.ic_mn_heart,
             title = if (isFavorite) "Remove from Favorites" else "Add to Favorites",
             iconTint = if (isFavorite) MediaNestColors.Accent else MediaNestColors.TextPrimary,
             onClick = onToggleFavorite

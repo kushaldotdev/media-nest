@@ -136,10 +136,30 @@ object UiUtils {
 
     fun formatReleaseDate(rawDate: String?): String? {
         if (rawDate.isNullOrBlank()) return null
-        if (rawDate.contains("ago", ignoreCase = true) || rawDate.contains("now", ignoreCase = true)) {
-            return rawDate
+        val trimmed = rawDate.trim()
+        if (trimmed.contains("ago", ignoreCase = true)) {
+            val regex = Regex("""(\d+)\s*(year|yr|month|mo|week|wk|day|d|hour|hr|minute|min|second|sec)s?\s*ago""", RegexOption.IGNORE_CASE)
+            val match = regex.find(trimmed)
+            if (match != null) {
+                val count = match.groupValues[1]
+                val unit = match.groupValues[2].lowercase()
+                return when {
+                    unit.startsWith("y") -> "${count}y"
+                    unit.startsWith("mo") -> "${count}mo"
+                    unit.startsWith("w") -> "${count}w"
+                    unit.startsWith("d") -> "${count}d"
+                    unit.startsWith("h") -> "${count}h"
+                    unit.startsWith("m") -> "${count}m"
+                    unit.startsWith("s") -> "${count}s"
+                    else -> trimmed
+                }
+            }
+            return trimmed
         }
-        val date = parseUploadDate(rawDate) ?: return rawDate
+        if (trimmed.equals("just now", ignoreCase = true) || trimmed.equals("now", ignoreCase = true)) {
+            return "just now"
+        }
+        val date = parseUploadDate(trimmed) ?: return trimmed
         return formatRelativeTime(date, abbreviated = true)
     }
 
