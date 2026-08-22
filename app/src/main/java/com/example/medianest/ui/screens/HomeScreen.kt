@@ -482,6 +482,7 @@ fun HomeScreen(
                             playlist = state.playlist,
                             isSaved = isSaved,
                             showShorts = showShorts,
+                            hasMore = state.hasMore,
                             onToggleSave = {
                                 if (isSaved) {
                                     viewModel.unsubscribe(state.playlist.playlistId)
@@ -698,6 +699,7 @@ fun HomeScreen(
                             channel = state.channel,
                             isSubscribed = isSubscribed,
                             showShorts = showShorts,
+                            hasMore = state.hasMore,
                             onToggleSubscribe = {
                                 if (isSubscribed) {
                                     val matchedSub = subscriptions.firstOrNull { sub ->
@@ -2009,6 +2011,7 @@ fun PlaylistResultHeader(
     onToggleSave: () -> Unit,
     onDownloadAll: () -> Unit,
     onToggleShorts: (Boolean) -> Unit,
+    hasMore: Boolean = false,
     description: String? = null,
     modifier: Modifier = Modifier
 ) {
@@ -2020,18 +2023,20 @@ fun PlaylistResultHeader(
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
             // Cover Image
-            AsyncImage(
-                model = playlist.thumbnailUrl,
-                contentDescription = playlist.name,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(16f / 9f)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(MediaNestColors.PlayerSurface)
-            )
-
-            Spacer(Modifier.height(12.dp))
+            val coverUrl = UiUtils.upgradePlaylistThumbnail(playlist.thumbnailUrl, playlist.videos.firstOrNull()?.thumbnailUrl)
+            if (!coverUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = coverUrl,
+                    contentDescription = playlist.name,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(16f / 9f)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MediaNestColors.PlayerSurface)
+                )
+                Spacer(Modifier.height(12.dp))
+            }
 
             Text(
                 text = "PLAYLIST",
@@ -2043,8 +2048,18 @@ fun PlaylistResultHeader(
                 style = TextStyle(fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MediaNestColors.TextPrimary)
             )
             Spacer(Modifier.height(2.dp))
+            val videoCountText = if (hasMore) {
+                if (playlist.videoCount > playlist.videos.size) {
+                    "Videos: ${playlist.videos.size} loaded of ${playlist.videoCount} • Scroll to load more"
+                } else {
+                    "Videos: ${playlist.videos.size} loaded • Scroll to load more"
+                }
+            } else {
+                "Videos: ${if (playlist.videos.isNotEmpty()) playlist.videos.size else playlist.videoCount}"
+            } + if (!playlist.uploaderName.isNullOrBlank()) " · ${playlist.uploaderName}" else ""
+
             Text(
-                text = "Videos: ${playlist.videoCount}" + if (!playlist.uploaderName.isNullOrBlank()) " · ${playlist.uploaderName}" else "",
+                text = videoCountText,
                 style = TextStyle(fontSize = 13.sp, color = MediaNestColors.TextSecondary)
             )
 
@@ -2141,6 +2156,7 @@ fun ChannelResultHeader(
     onToggleSubscribe: () -> Unit,
     onDownloadAll: () -> Unit,
     onToggleShorts: (Boolean) -> Unit,
+    hasMore: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     Surface(
@@ -2150,14 +2166,30 @@ fun ChannelResultHeader(
         modifier = modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(16.dp)) {
-            // Channel Banner / Top Box
+            // Channel Banner (only if real banner exists)
+            val bannerUrl = channel.bannerUrl?.takeIf { it.isNotBlank() && it != channel.avatarUrl }
+            if (!bannerUrl.isNullOrBlank()) {
+                AsyncImage(
+                    model = UiUtils.upgradeBannerUrl(bannerUrl),
+                    contentDescription = "Channel Banner",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(16f / 9f)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MediaNestColors.PlayerSurface)
+                )
+                Spacer(Modifier.height(12.dp))
+            }
+
+            // Channel Avatar & Title Row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 AsyncImage(
-                    model = channel.avatarUrl,
+                    model = UiUtils.upgradeAvatarUrl(channel.avatarUrl),
                     contentDescription = channel.name,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
@@ -2173,12 +2205,15 @@ fun ChannelResultHeader(
                     )
                     Text(
                         text = channel.name,
-                        style = TextStyle(fontSize = 17.sp, fontWeight = FontWeight.Bold, color = MediaNestColors.TextPrimary),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        style = TextStyle(fontSize = 17.sp, fontWeight = FontWeight.Bold, color = MediaNestColors.TextPrimary)
                     )
+                    val videoCountText = if (hasMore) {
+                        "Videos: ${channel.uploads.size} loaded • Scroll to load more"
+                    } else {
+                        "Videos: ${channel.uploads.size}"
+                    }
                     Text(
-                        text = "Videos: ${channel.videoCount}",
+                        text = videoCountText,
                         style = TextStyle(fontSize = 12.sp, color = MediaNestColors.TextSecondary)
                     )
                 }

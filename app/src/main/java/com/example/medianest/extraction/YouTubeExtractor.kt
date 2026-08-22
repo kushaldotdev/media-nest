@@ -181,7 +181,9 @@ class YouTubeExtractor @Inject constructor() {
         val playlistInfo = ExtractedPlaylistInfo(
             playlistId = info.id,
             name = info.name ?: "Unknown",
-            thumbnailUrl = info.thumbnails?.firstOrNull()?.url ?: "",
+            thumbnailUrl = info.thumbnails?.maxByOrNull { it.height * it.width }?.url
+                ?: info.thumbnails?.lastOrNull()?.url
+                ?: "",
             uploaderName = info.uploaderName,
             videoCount = videoCount,
             videos = videos
@@ -334,7 +336,11 @@ class YouTubeExtractor @Inject constructor() {
             channelId = info.id,
             url = info.url ?: cleanChannelUrl,
             name = info.name ?: "Unknown",
-            avatarUrl = info.avatars?.firstOrNull()?.url ?: "",
+            avatarUrl = info.avatars?.maxByOrNull { it.height * it.width }?.url
+                ?: info.avatars?.lastOrNull()?.url
+                ?: "",
+            bannerUrl = info.banners?.maxByOrNull { it.height * it.width }?.url
+                ?: info.banners?.lastOrNull()?.url,
             subscriberCount = info.subscriberCount,
             description = info.description?.take(500),
             videoCount = uploads.size,

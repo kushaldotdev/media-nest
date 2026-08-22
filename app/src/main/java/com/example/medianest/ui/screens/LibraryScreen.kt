@@ -27,6 +27,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -91,13 +92,17 @@ fun LibraryScreen(
     onPlayFromList: (List<ExtractedVideoInfo>, startIndex: Int) -> Unit = { _, _ -> },
     viewModel: LibraryViewModel = hiltViewModel()
 ) {
-    var selectedSubscription by remember { mutableStateOf<Pair<String, String>?>(null) }
+    var selectedSubscriptionType by rememberSaveable { mutableStateOf<String?>(null) }
+    var selectedSubscriptionId by rememberSaveable { mutableStateOf<String?>(null) }
 
-    if (selectedSubscription != null) {
+    if (selectedSubscriptionType != null && selectedSubscriptionId != null) {
         InlineSubscriptionScreen(
-            sourceType = selectedSubscription!!.first,
-            sourceId = selectedSubscription!!.second,
-            onBack = { selectedSubscription = null },
+            sourceType = selectedSubscriptionType!!,
+            sourceId = selectedSubscriptionId!!,
+            onBack = {
+                selectedSubscriptionType = null
+                selectedSubscriptionId = null
+            },
             onVideoClick = onVideoClick,
             onPlayFromList = onPlayFromList
         )
@@ -678,7 +683,8 @@ fun LibraryScreen(
                                 searchQuery = uiState.searchQuery,
                                 viewMode = uiState.viewMode,
                                 onSubscriptionClick = { type, id ->
-                                    selectedSubscription = Pair(type, id)
+                                    selectedSubscriptionType = type
+                                    selectedSubscriptionId = id
                                     onSubscriptionClick(type, id)
                                 }
                             )
@@ -697,7 +703,8 @@ fun LibraryScreen(
                                 searchQuery = uiState.searchQuery,
                                 viewMode = uiState.viewMode,
                                 onSubscriptionClick = { type, id ->
-                                    selectedSubscription = Pair(type, id)
+                                    selectedSubscriptionType = type
+                                    selectedSubscriptionId = id
                                     onSubscriptionClick(type, id)
                                 }
                             )

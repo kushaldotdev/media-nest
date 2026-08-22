@@ -163,6 +163,7 @@ fun PlayerScreen(
     val vmQueue by viewModel.queue.collectAsStateWithLifecycle()
     val vmContextTitle by viewModel.queueContextTitle.collectAsStateWithLifecycle()
     val vmContextType by viewModel.queueContextType.collectAsStateWithLifecycle()
+    val playbackHistory by viewModel.playbackHistory.collectAsStateWithLifecycle()
     val effectiveQueue = if (queue.isNotEmpty()) queue else vmQueue
     val effectiveContextTitle = contextTitle ?: vmContextTitle
     val effectiveContextType = contextType ?: vmContextType
@@ -1578,11 +1579,22 @@ fun PlayerScreen(
                         items(currentQueue.size) { i ->
                             val item = currentQueue[i]
                             val idx = i
+                            val isCurrent = item.id == state.videoId
+                            val history = playbackHistory.find { it.videoId == item.id }
+                            val progressFraction = if (isCurrent) {
+                                if (state.durationMs > 0) (state.positionMs.toFloat() / state.durationMs.toFloat()).coerceIn(0f, 1f) else 0f
+                            } else {
+                                val pos = history?.positionMillis ?: 0L
+                                if (item.durationSeconds > 0 && pos > 0) {
+                                    ((pos.toFloat() / 1000f) / item.durationSeconds.toFloat()).coerceIn(0f, 1f)
+                                } else 0f
+                            }
                             PlayerQueueItemRow(
                                 item = item,
                                 index = idx,
                                 totalCount = currentQueue.size,
-                                isCurrent = item.id == state.videoId,
+                                isCurrent = isCurrent,
+                                playbackProgressFraction = progressFraction,
                                 onMoveUp = {
                                     if (idx > 0) {
                                         moveQueueItem(idx, idx - 1)
@@ -1878,6 +1890,7 @@ fun PlayerQueueItemRow(
     index: Int,
     totalCount: Int,
     isCurrent: Boolean,
+    playbackProgressFraction: Float = 0f,
     onMoveUp: () -> Unit,
     onMoveDown: () -> Unit,
     onDragMove: (targetIndex: Int) -> Unit,
@@ -2000,6 +2013,23 @@ fun PlayerQueueItemRow(
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MediaNestColors.TextPrimary,
                                 modifier = Modifier.padding(horizontal = 3.dp, vertical = 1.dp)
+                            )
+                        }
+                    }
+                    // Playback progress bar (bottom edge of thumbnail)
+                    if (playbackProgressFraction > 0f) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(3.dp)
+                                .align(Alignment.BottomStart)
+                                .background(MediaNestColors.ProgressTrack.copy(alpha = 0.3f))
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth(playbackProgressFraction.coerceIn(0f, 1f))
+                                    .fillMaxHeight()
+                                    .background(MediaNestColors.YouTubeRed)
                             )
                         }
                     }

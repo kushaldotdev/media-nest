@@ -5,6 +5,7 @@ data class ChannelInfo(
     val url: String,
     val name: String,
     val avatarUrl: String?,
+    val bannerUrl: String? = null,
     val subscriberCount: Long?,
     val description: String?,
     val videoCount: Int,

@@ -384,18 +384,13 @@ fun VideoDetailScreen(
                     // Title & Media Type Badge / Resolution Pill
                     item {
                         Spacer(Modifier.height(14.dp))
-                        var titleExpanded by remember { mutableStateOf(false) }
                         Text(
                             text = videoInfo.title,
                             style = MaterialTheme.typography.titleLarge.copy(
                                 fontWeight = FontWeight.SemiBold,
                                 color = MediaNestColors.TextPrimary
                             ),
-                            maxLines = if (titleExpanded) Int.MAX_VALUE else 2,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { titleExpanded = !titleExpanded }
+                            modifier = Modifier.fillMaxWidth()
                         )
                         Spacer(Modifier.height(8.dp))
 

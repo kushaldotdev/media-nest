@@ -180,4 +180,38 @@ object UiUtils {
             formatter.format(date)
         }
     }
+
+    fun upgradeAvatarUrl(url: String?): String? {
+        if (url.isNullOrBlank()) return url
+        var upgraded = url
+        if (upgraded.contains("yt3.ggpht.com") || upgraded.contains("googleusercontent.com")) {
+            upgraded = upgraded.replace(Regex("=s\\d+(?:-[^-?&]+)*"), "=s800")
+        }
+        return upgraded
+    }
+
+    fun upgradeBannerUrl(url: String?): String? {
+        if (url.isNullOrBlank()) return url
+        var upgraded = url
+        if (upgraded.contains("yt3.ggpht.com") || upgraded.contains("googleusercontent.com")) {
+            upgraded = upgraded.replace(Regex("=w\\d+(?:-[^-?&]+)*"), "=w2120")
+            upgraded = upgraded.replace(Regex("=s\\d+(?:-[^-?&]+)*"), "=s1600")
+        }
+        return upgraded
+    }
+
+    fun upgradePlaylistThumbnail(url: String?, firstVideoThumbnail: String? = null): String? {
+        val target = if (!url.isNullOrBlank()) url else firstVideoThumbnail
+        if (target.isNullOrBlank()) return null
+        var upgraded = target
+        if (upgraded.contains("i.ytimg.com") || upgraded.contains("youtube.com")) {
+            upgraded = upgraded.replace("/default.jpg", "/hqdefault.jpg")
+            upgraded = upgraded.replace("/mqdefault.jpg", "/hqdefault.jpg")
+        }
+        if (upgraded.contains("yt3.ggpht.com") || upgraded.contains("googleusercontent.com")) {
+            upgraded = upgraded.replace(Regex("=s\\d+(?:-[^-?&]+)*"), "=s800")
+            upgraded = upgraded.replace(Regex("=w\\d+(?:-[^-?&]+)*"), "=w1280")
+        }
+        return upgraded
+    }
 }

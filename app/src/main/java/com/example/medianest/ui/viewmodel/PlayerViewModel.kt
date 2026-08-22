@@ -34,9 +34,11 @@ import com.example.medianest.ui.screens.PlayerQueueItem
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 data class PlayerUiState(
@@ -89,6 +91,9 @@ class PlayerViewModel @Inject constructor(
 
     private val _queueContextType = MutableStateFlow<String?>(null)
     val queueContextType: StateFlow<String?> = _queueContextType.asStateFlow()
+
+    val playbackHistory: StateFlow<List<HistoryEntity>> = historyDao.getAllHistory()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private var positionTrackingJob: Job? = null
     private var currentVideoId: String? = null
@@ -209,15 +214,21 @@ class PlayerViewModel @Inject constructor(
     private suspend fun ensureInfo(videoId: String): ExtractedVideoInfo? {
         var info = lastResultCache.get(videoId) ?: if (videoInfo?.videoId == videoId) videoInfo else null
         if (info == null) {
-            try {
-                val extracted = youTubeExtractor.extractVideo("https://www.youtube.com/watch?v=$videoId")
-                videoInfo = extracted
-                lastResultCache.put(videoId, extracted)
-                info = extracted
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                e.printStackTrace()
+            val url = "https://www.youtube.com/watch?v=$videoId"
+            for (attempt in 1..2) {
+                try {
+                    val extracted = youTubeExtractor.extractVideo(url)
+                    videoInfo = extracted
+                    lastResultCache.put(videoId, extracted)
+                    info = extracted
+                    break
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    if (attempt < 2) kotlinx.coroutines.delay(400) else e.printStackTrace()
+                }
+            }
+            if (info == null) {
                 _uiState.value = _uiState.value.copy(isBuffering = false)
             }
         } else {

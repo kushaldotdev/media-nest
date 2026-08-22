@@ -90,6 +90,7 @@ import com.example.medianest.ui.viewmodel.HomeViewModel
 import com.example.medianest.ui.viewmodel.SortCategory
 import com.example.medianest.ui.viewmodel.SortDirection
 import com.example.medianest.ui.viewmodel.ViewMode
+import com.example.medianest.ui.utils.UiUtils
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -284,6 +285,7 @@ fun InlineSubscriptionScreen(
                             PlaylistHeader(
                                 playlist = state.playlist,
                                 isSaved = isSaved,
+                                hasMore = state.hasMore,
                                 onToggleSave = {
                                     if (isSaved) {
                                         viewModel.unsubscribe(state.playlist.playlistId)
@@ -437,6 +439,7 @@ fun InlineSubscriptionScreen(
                             ChannelHeader(
                                 channel = state.channel,
                                 isSubscribed = isSubscribed,
+                                hasMore = state.hasMore,
                                 onToggleSubscribe = {
                                     if (isSubscribed) {
                                         val matchedSub = subscriptions.firstOrNull { sub ->
@@ -1088,13 +1091,15 @@ fun PlaylistHeader(
     onDownloadAll: () -> Unit,
     showShorts: Boolean,
     onToggleShorts: (Boolean) -> Unit,
+    hasMore: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     GlassCard(modifier = modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(12.dp)) {
-            if (!playlist.thumbnailUrl.isNullOrBlank()) {
+            val coverUrl = UiUtils.upgradePlaylistThumbnail(playlist.thumbnailUrl, playlist.videos.firstOrNull()?.thumbnailUrl)
+            if (!coverUrl.isNullOrBlank()) {
                 AsyncImage(
-                    model = playlist.thumbnailUrl,
+                    model = coverUrl,
                     contentDescription = playlist.name,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
@@ -1112,13 +1117,20 @@ fun PlaylistHeader(
             Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = playlist.name,
-                style = MaterialTheme.typography.titleMedium,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
+                style = MaterialTheme.typography.titleMedium
             )
             Spacer(modifier = Modifier.height(2.dp))
+            val videoCountText = if (hasMore) {
+                if (playlist.videoCount > playlist.videos.size) {
+                    "Videos: ${playlist.videos.size} loaded of ${playlist.videoCount} • Scroll to load more"
+                } else {
+                    "Videos: ${playlist.videos.size} loaded • Scroll to load more"
+                }
+            } else {
+                "Videos: ${if (playlist.videos.isNotEmpty()) playlist.videos.size else playlist.videoCount}"
+            }
             Text(
-                text = "Videos: ${playlist.videoCount}",
+                text = videoCountText,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -1127,9 +1139,7 @@ fun PlaylistHeader(
                 Text(
                     text = playlist.uploaderName,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             Spacer(modifier = Modifier.height(12.dp))
@@ -1211,14 +1221,15 @@ fun ChannelHeader(
     onDownloadAll: () -> Unit,
     showShorts: Boolean,
     onToggleShorts: (Boolean) -> Unit,
+    hasMore: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     GlassCard(modifier = modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(12.dp)) {
-            val bannerUrl = channel.avatarUrl
+            val bannerUrl = channel.bannerUrl?.takeIf { it.isNotBlank() && it != channel.avatarUrl }
             if (!bannerUrl.isNullOrBlank()) {
                 AsyncImage(
-                    model = bannerUrl,
+                    model = UiUtils.upgradeBannerUrl(bannerUrl),
                     contentDescription = "Channel Banner",
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
@@ -1234,7 +1245,7 @@ fun ChannelHeader(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 AsyncImage(
-                    model = channel.avatarUrl,
+                    model = UiUtils.upgradeAvatarUrl(channel.avatarUrl),
                     contentDescription = channel.name,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
@@ -1250,13 +1261,16 @@ fun ChannelHeader(
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = channel.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        style = MaterialTheme.typography.titleMedium
                     )
                     Spacer(modifier = Modifier.height(2.dp))
+                    val videoCountText = if (hasMore) {
+                        "Videos: ${channel.uploads.size} loaded • Scroll to load more"
+                    } else {
+                        "Videos: ${channel.uploads.size}"
+                    }
                     Text(
-                        text = "Videos: ${channel.videoCount}",
+                        text = videoCountText,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
