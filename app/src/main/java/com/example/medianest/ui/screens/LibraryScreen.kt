@@ -87,7 +87,7 @@ fun LibraryScreen(
     onSubscriptionClick: (String, String) -> Unit = { _, _ -> },
     onNavigateToStatistics: () -> Unit = {},
     onNavigateToNotifications: () -> Unit = {},
-    onPlayPlaylist: (List<ExtractedVideoInfo>, startIndex: Int) -> Unit = { _, _ -> },
+    onPlayFromList: (List<ExtractedVideoInfo>, startIndex: Int) -> Unit = { _, _ -> },
     viewModel: LibraryViewModel = hiltViewModel()
 ) {
     var selectedSubscription by remember { mutableStateOf<Pair<String, String>?>(null) }
@@ -98,7 +98,7 @@ fun LibraryScreen(
             sourceId = selectedSubscription!!.second,
             onBack = { selectedSubscription = null },
             onVideoClick = onVideoClick,
-            onPlayAll = onPlayPlaylist
+            onPlayFromList = onPlayFromList
         )
         return
     }
@@ -391,7 +391,7 @@ fun LibraryScreen(
                                 playbackHistory = playbackHistory,
                                 showContinueWatching = true,
                                 isEndReached = videos.isNotEmpty() && videos.size < historyLimit,
-                                onVideoClick = onVideoClick,
+                                onVideoClick = { videoId -> onPlayFromList(videos.map { it.toExtractedVideoInfo() }, videos.indexOfFirst { it.id == videoId }.coerceAtLeast(0)) },
                                 onVideoLongClick = { videoId ->
                                     if (!uiState.isSelectionMode) {
                                         viewModel.toggleSelectionMode()
@@ -470,7 +470,7 @@ fun LibraryScreen(
                                 allDownloads = allDownloads,
                                 playbackHistory = playbackHistory,
                                 isEndReached = favoriteVideos.isNotEmpty() && favoriteVideos.size < favoritesLimit,
-                                onVideoClick = onVideoClick,
+                                onVideoClick = { videoId -> onPlayFromList(favoriteVideos.map { it.toExtractedVideoInfo() }, favoriteVideos.indexOfFirst { it.id == videoId }.coerceAtLeast(0)) },
                                 onVideoLongClick = { videoId ->
                                     if (!uiState.isSelectionMode) {
                                         viewModel.toggleSelectionMode()
@@ -549,7 +549,7 @@ fun LibraryScreen(
                                 allDownloads = allDownloads,
                                 playbackHistory = playbackHistory,
                                 isEndReached = watchedVideos.isNotEmpty() && watchedVideos.size < watchedLimit,
-                                onVideoClick = onVideoClick,
+                                onVideoClick = { videoId -> onPlayFromList(watchedVideos.map { it.toExtractedVideoInfo() }, watchedVideos.indexOfFirst { it.id == videoId }.coerceAtLeast(0)) },
                                 onVideoLongClick = { videoId ->
                                     if (!uiState.isSelectionMode) {
                                         viewModel.toggleSelectionMode()
@@ -618,7 +618,7 @@ fun LibraryScreen(
                                 deleteDownloadsWithFolder = false
                             },
                             onNavigateBack = { viewModel.navigateBackFromFolder() },
-                            onVideoClick = onVideoClick,
+                            onVideoClick = { videoId -> onPlayFromList(folderVideos.map { it.toExtractedVideoInfo() }, folderVideos.indexOfFirst { it.id == videoId }.coerceAtLeast(0)) },
                             onVideoLongClick = { videoId ->
                                 if (!uiState.isSelectionMode) {
                                     viewModel.toggleSelectionMode()
@@ -1219,6 +1219,17 @@ fun LibraryScreen(
         )
     }
 }
+
+private fun VideoEntity.toExtractedVideoInfo() = ExtractedVideoInfo(
+    videoId = id,
+    title = title,
+    channelName = channelName,
+    channelId = channelId,
+    durationSeconds = durationSeconds,
+    thumbnailUrl = thumbnailUrl,
+    description = description,
+    uploadDate = uploadDate
+)
 
 /**
  * Design 2.0 Pill Search Bar for MediaNest Library.

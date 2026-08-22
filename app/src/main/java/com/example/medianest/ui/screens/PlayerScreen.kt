@@ -30,8 +30,11 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.material3.MenuDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -86,6 +89,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.CircleShape
 
 import androidx.compose.foundation.lazy.LazyColumn
@@ -98,6 +103,9 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.layout.ContentScale
 import com.example.medianest.ui.theme.MediaNestColors
 import com.example.medianest.ui.theme.MediaNestSemanticColors
@@ -156,7 +164,7 @@ fun PlayerScreen(
 
     var currentQueue by remember(effectiveQueue) { mutableStateOf(effectiveQueue) }
     var isAutoplayEnabled by remember(autoplayNext) { mutableStateOf(autoplayNext) }
-    var isQueueExpanded by rememberSaveable { mutableStateOf(true) }
+    var showQueueSheet by remember { mutableStateOf(false) }
     val hasQueueContext = currentQueue.isNotEmpty() || !effectiveContextTitle.isNullOrEmpty() || !effectiveContextType.isNullOrEmpty()
 
     fun moveQueueItem(fromIndex: Int, toIndex: Int) {
@@ -552,13 +560,16 @@ fun PlayerScreen(
                         IconButton(onClick = { viewModel.seekRelative(-5_000L) }) {
                             Icon(painter = painterResource(R.drawable.ic_mn_rewind5), contentDescription = "Rewind 5s", tint = MediaNestColors.TextPrimary, modifier = Modifier.size(36.dp))
                         }
-                        IconButton(onClick = {
-                            val idx = currentQueue.indexOfFirst { it.id == state.videoId }
-                            if (idx > 0) {
-                                val p = currentQueue[idx - 1]
-                                if (onQueueItemClick != null) onQueueItemClick(p) else viewModel.initialize(p.id, p.streamIndex, p.downloadId)
-                            }
-                        }) {
+                        val fsPrevIdx = currentQueue.indexOfFirst { it.id == state.videoId }
+                        IconButton(
+                            onClick = {
+                                if (fsPrevIdx > 0) {
+                                    val p = currentQueue[fsPrevIdx - 1]
+                                    if (onQueueItemClick != null) onQueueItemClick(p) else viewModel.initialize(p.id, p.streamIndex, p.downloadId)
+                                }
+                            },
+                            enabled = fsPrevIdx > 0
+                        ) {
                             Icon(painter = painterResource(R.drawable.ic_mn_prev), contentDescription = "Previous Track", tint = MediaNestColors.TextPrimary, modifier = Modifier.size(36.dp))
                         }
                         IconButton(
@@ -572,13 +583,16 @@ fun PlayerScreen(
                                 modifier = Modifier.fillMaxSize()
                             )
                         }
-                        IconButton(onClick = {
-                            val idx = currentQueue.indexOfFirst { it.id == state.videoId }
-                            if (idx != -1 && idx + 1 < currentQueue.size) {
-                                val n = currentQueue[idx + 1]
-                                if (onQueueItemClick != null) onQueueItemClick(n) else viewModel.initialize(n.id, n.streamIndex, n.downloadId)
-                            }
-                        }) {
+                        val fsNextIdx = currentQueue.indexOfFirst { it.id == state.videoId }
+                        IconButton(
+                            onClick = {
+                                if (fsNextIdx != -1 && fsNextIdx + 1 < currentQueue.size) {
+                                    val n = currentQueue[fsNextIdx + 1]
+                                    if (onQueueItemClick != null) onQueueItemClick(n) else viewModel.initialize(n.id, n.streamIndex, n.downloadId)
+                                }
+                            },
+                            enabled = fsNextIdx != -1 && fsNextIdx + 1 < currentQueue.size
+                        ) {
                             Icon(painter = painterResource(R.drawable.ic_mn_next), contentDescription = "Next Track", tint = MediaNestColors.TextPrimary, modifier = Modifier.size(36.dp))
                         }
                         IconButton(onClick = { viewModel.seekRelative(5_000L) }) {
@@ -595,45 +609,35 @@ fun PlayerScreen(
                             .fillMaxWidth()
                             .padding(16.dp)
                     ) {
-                        Box(
-                            modifier = Modifier.fillMaxWidth(),
-                            contentAlignment = Alignment.CenterStart
-                        ) {
-                            LinearProgressIndicator(
-                                progress = { (state.bufferedPositionMs.toFloat() / maxOf(state.durationMs, 1L).toFloat()).coerceIn(0f, 1f) },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 6.dp)
-                                    .height(5.dp)
-                                    .clip(RoundedCornerShape(3.dp)),
-                                color = Color.White.copy(alpha = 0.18f),
-                                trackColor = Color.Transparent
+                        Slider(
+                            value = localPosition ?: state.positionMs.toFloat(),
+                            onValueChange = { localPosition = it },
+                            onValueChangeFinished = {
+                                localPosition?.let {
+                                    viewModel.seekTo(it.toLong())
+                                    localPosition = null
+                                }
+                            },
+                            valueRange = 0f..maxOf(state.durationMs, 1L).toFloat(),
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp),
+                            track = { sliderState ->
+                                val fraction = if (state.durationMs > 0) (sliderState.value / state.durationMs.toFloat()).coerceIn(0f, 1f) else 0f
+                                val bufferedFraction = if (state.durationMs > 0) (state.bufferedPositionMs.toFloat() / state.durationMs.toFloat()).coerceIn(0f, 1f) else 0f
+                                Canvas(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp))) {
+                                    drawRoundRect(color = Color(0xFF54333C), cornerRadius = CornerRadius(2.dp.toPx()))
+                                    drawRoundRect(color = Color.White.copy(alpha = 0.18f), topLeft = Offset.Zero, size = Size(size.width * bufferedFraction, size.height), cornerRadius = CornerRadius(2.dp.toPx()))
+                                    drawRoundRect(color = Color(0xFFFFB1B6), topLeft = Offset.Zero, size = Size(size.width * fraction, size.height), cornerRadius = CornerRadius(2.dp.toPx()))
+                                }
+                            },
+                            thumb = {
+                                Box(Modifier.size(12.dp).background(Color(0xFFFFB1B6), CircleShape).border(2.dp, Color.White.copy(alpha = 0.3f), CircleShape))
+                            },
+                            colors = SliderDefaults.colors(
+                                thumbColor = Color(0xFFFFB1B6),
+                                activeTrackColor = Color.Transparent,
+                                inactiveTrackColor = Color.Transparent
                             )
-                            Slider(
-                                value = localPosition ?: state.positionMs.toFloat(),
-                                onValueChange = { localPosition = it },
-                                onValueChangeFinished = {
-                                    localPosition?.let {
-                                        viewModel.seekTo(it.toLong())
-                                        localPosition = null
-                                    }
-                                },
-                                valueRange = 0f..maxOf(state.durationMs, 1L).toFloat(),
-                                colors = SliderDefaults.colors(
-                                    thumbColor = MediaNestColors.Accent,
-                                    activeTrackColor = MediaNestColors.Accent,
-                                    inactiveTrackColor = MediaNestColors.ProgressTrack
-                                ),
-                                thumb = {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(14.dp)
-                                            .background(MediaNestColors.Accent, CircleShape)
-                                    )
-                                },
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        }
+                        )
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -984,45 +988,35 @@ fun PlayerScreen(
                             }
                         }
 
-                        Box(
-                            modifier = Modifier.fillMaxWidth(),
-                            contentAlignment = Alignment.CenterStart
-                        ) {
-                            LinearProgressIndicator(
-                                progress = { (state.bufferedPositionMs.toFloat() / maxOf(state.durationMs, 1L).toFloat()).coerceIn(0f, 1f) },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 6.dp)
-                                    .height(5.dp)
-                                    .clip(RoundedCornerShape(3.dp)),
-                                color = Color.White.copy(alpha = 0.18f),
-                                trackColor = Color.Transparent
+                        Slider(
+                            value = localPosition ?: state.positionMs.toFloat(),
+                            onValueChange = { localPosition = it },
+                            onValueChangeFinished = {
+                                localPosition?.let {
+                                    viewModel.seekTo(it.toLong())
+                                    localPosition = null
+                                }
+                            },
+                            valueRange = 0f..maxOf(state.durationMs, 1L).toFloat(),
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp),
+                            track = { sliderState ->
+                                val fraction = if (state.durationMs > 0) (sliderState.value / state.durationMs.toFloat()).coerceIn(0f, 1f) else 0f
+                                val bufferedFraction = if (state.durationMs > 0) (state.bufferedPositionMs.toFloat() / state.durationMs.toFloat()).coerceIn(0f, 1f) else 0f
+                                Canvas(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp))) {
+                                    drawRoundRect(color = Color(0xFF54333C), cornerRadius = CornerRadius(2.dp.toPx()))
+                                    drawRoundRect(color = Color.White.copy(alpha = 0.18f), topLeft = Offset.Zero, size = Size(size.width * bufferedFraction, size.height), cornerRadius = CornerRadius(2.dp.toPx()))
+                                    drawRoundRect(color = Color(0xFFFFB1B6), topLeft = Offset.Zero, size = Size(size.width * fraction, size.height), cornerRadius = CornerRadius(2.dp.toPx()))
+                                }
+                            },
+                            thumb = {
+                                Box(Modifier.size(12.dp).background(Color(0xFFFFB1B6), CircleShape).border(2.dp, Color.White.copy(alpha = 0.3f), CircleShape))
+                            },
+                            colors = SliderDefaults.colors(
+                                thumbColor = Color(0xFFFFB1B6),
+                                activeTrackColor = Color.Transparent,
+                                inactiveTrackColor = Color.Transparent
                             )
-                            Slider(
-                                value = localPosition ?: state.positionMs.toFloat(),
-                                onValueChange = { localPosition = it },
-                                onValueChangeFinished = {
-                                    localPosition?.let {
-                                        viewModel.seekTo(it.toLong())
-                                        localPosition = null
-                                    }
-                                },
-                                valueRange = 0f..maxOf(state.durationMs, 1L).toFloat(),
-                                colors = SliderDefaults.colors(
-                                    thumbColor = MediaNestColors.Accent,
-                                    activeTrackColor = MediaNestColors.Accent,
-                                    inactiveTrackColor = MediaNestColors.ProgressTrack
-                                ),
-                                thumb = {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(14.dp)
-                                            .background(MediaNestColors.Accent, CircleShape)
-                                    )
-                                },
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                        }
+                        )
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -1061,13 +1055,16 @@ fun PlayerScreen(
                             IconButton(onClick = { viewModel.seekRelative(-5_000L) }) {
                                 Icon(painter = painterResource(R.drawable.ic_mn_rewind5), contentDescription = "Rewind 5s", tint = MediaNestColors.TextPrimary)
                             }
-                            IconButton(onClick = {
-                                val idx = currentQueue.indexOfFirst { it.id == state.videoId }
-                                if (idx > 0) {
-                                    val p = currentQueue[idx - 1]
-                                    if (onQueueItemClick != null) onQueueItemClick(p) else viewModel.initialize(p.id, p.streamIndex, p.downloadId)
-                                }
-                            }) {
+                            val nfsPrevIdx = currentQueue.indexOfFirst { it.id == state.videoId }
+                            IconButton(
+                                onClick = {
+                                    if (nfsPrevIdx > 0) {
+                                        val p = currentQueue[nfsPrevIdx - 1]
+                                        if (onQueueItemClick != null) onQueueItemClick(p) else viewModel.initialize(p.id, p.streamIndex, p.downloadId)
+                                    }
+                                },
+                                enabled = nfsPrevIdx > 0
+                            ) {
                                 Icon(painter = painterResource(R.drawable.ic_mn_prev), contentDescription = "Previous Track", tint = MediaNestColors.TextPrimary)
                             }
                             IconButton(
@@ -1081,13 +1078,16 @@ fun PlayerScreen(
                                     modifier = Modifier.fillMaxSize()
                                 )
                             }
-                            IconButton(onClick = {
-                                val idx = currentQueue.indexOfFirst { it.id == state.videoId }
-                                if (idx != -1 && idx + 1 < currentQueue.size) {
-                                    val n = currentQueue[idx + 1]
-                                    if (onQueueItemClick != null) onQueueItemClick(n) else viewModel.initialize(n.id, n.streamIndex, n.downloadId)
-                                }
-                            }) {
+                            val nfsNextIdx = currentQueue.indexOfFirst { it.id == state.videoId }
+                            IconButton(
+                                onClick = {
+                                    if (nfsNextIdx != -1 && nfsNextIdx + 1 < currentQueue.size) {
+                                        val n = currentQueue[nfsNextIdx + 1]
+                                        if (onQueueItemClick != null) onQueueItemClick(n) else viewModel.initialize(n.id, n.streamIndex, n.downloadId)
+                                    }
+                                },
+                                enabled = nfsNextIdx != -1 && nfsNextIdx + 1 < currentQueue.size
+                            ) {
                                 Icon(painter = painterResource(R.drawable.ic_mn_next), contentDescription = "Next Track", tint = MediaNestColors.TextPrimary)
                             }
                             IconButton(onClick = { viewModel.seekRelative(5_000L) }) {
@@ -1313,9 +1313,7 @@ fun PlayerScreen(
                                         modifier = Modifier
                                             .weight(1f)
                                             .fillMaxSize()
-                                            .clickable {
-                                                isQueueExpanded = !isQueueExpanded
-                                            },
+                                            .clickable { showQueueSheet = true },
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Row(
@@ -1325,14 +1323,14 @@ fun PlayerScreen(
                                             Icon(
                                                 painter = painterResource(R.drawable.ic_mn_playlist),
                                                 contentDescription = "Up Next queue",
-                                                tint = if (isQueueExpanded) MediaNestColors.Accent else MediaNestColors.TextSecondary,
+                                                tint = MediaNestColors.TextSecondary,
                                                 modifier = Modifier.size(18.dp)
                                             )
                                             Text(
                                                 text = if (currentQueue.isNotEmpty()) "Queue (${currentQueue.size})" else "Queue",
                                                 style = MaterialTheme.typography.bodyMedium,
-                                                fontWeight = if (isQueueExpanded) FontWeight.SemiBold else FontWeight.Normal,
-                                                color = if (isQueueExpanded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                                fontWeight = FontWeight.Normal,
+                                                color = MaterialTheme.colorScheme.onSurface
                                             )
                                         }
                                     }
@@ -1341,94 +1339,6 @@ fun PlayerScreen(
                         }
                     }
 
-                    if (hasQueueContext) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .then(if (isQueueExpanded) Modifier.weight(1f) else Modifier)
-                                .padding(horizontal = 12.dp, vertical = 4.dp)
-                        ) {
-                            AutoplayQueueHeader(
-                                contextTitle = effectiveContextTitle,
-                                contextType = effectiveContextType,
-                                queueSize = currentQueue.size,
-                                isAutoplayEnabled = isAutoplayEnabled,
-                                isExpanded = isQueueExpanded,
-                                onAutoplayToggle = {
-                                    isAutoplayEnabled = it
-                                    onAutoplayToggle?.invoke(it)
-                                },
-                                onExpandToggle = {
-                                    isQueueExpanded = !isQueueExpanded
-                                }
-                            )
-
-                            if (isQueueExpanded) {
-                                Spacer(Modifier.height(6.dp))
-
-                                if (currentQueue.isEmpty()) {
-                                    Box(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .weight(1f),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                            Icon(
-                                                painter = painterResource(R.drawable.ic_mn_playlist),
-                                                contentDescription = null,
-                                                tint = MediaNestColors.TextSecondary.copy(alpha = 0.5f),
-                                                modifier = Modifier.size(36.dp)
-                                            )
-                                            Spacer(Modifier.height(6.dp))
-                                            Text(
-                                                text = "Queue is empty",
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                    }
-                                } else {
-                                    LazyColumn(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .weight(1f),
-                                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                                        contentPadding = PaddingValues(vertical = 4.dp)
-                                    ) {
-                                        itemsIndexed(
-                                            items = currentQueue,
-                                            key = { _, item -> "${item.id}_${item.streamIndex}_${item.downloadId}" }
-                                        ) { index, item ->
-                                            PlayerQueueItemRow(
-                                                item = item,
-                                                index = index,
-                                                totalCount = currentQueue.size,
-                                                isCurrent = item.id == state.videoId || item.isPlaying,
-                                                onMoveUp = { moveQueueItem(index, index - 1) },
-                                                onMoveDown = { moveQueueItem(index, index + 1) },
-                                                onDragMove = { targetIdx -> moveQueueItem(index, targetIdx) },
-                                                onClick = {
-                                                    if (onQueueItemClick != null) {
-                                                        onQueueItemClick(item)
-                                                    } else {
-                                                        viewModel.initialize(item.id, item.streamIndex, item.downloadId)
-                                                    }
-                                                },
-                                                onRemove = {
-                                                    val updated = currentQueue.toMutableList()
-                                                    updated.removeAt(index)
-                                                    currentQueue = updated
-                                                    onRemoveFromQueue?.invoke(item)
-                                                    onQueueReordered?.invoke(updated)
-                                                }
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
                 }
 
                 // Floating Alerts Column
@@ -1511,6 +1421,138 @@ fun PlayerScreen(
                             }
                             Spacer(Modifier.height(4.dp))
                             Text("Tap to dismiss", color = MediaNestColors.TextSecondary)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (showQueueSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showQueueSheet = false },
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+            containerColor = Color(0xFF1A1014),
+            contentColor = MediaNestColors.TextPrimary,
+            dragHandle = {
+                Box(
+                    Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Box(
+                        Modifier
+                            .width(32.dp)
+                            .height(4.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(MediaNestColors.Border)
+                    )
+                }
+            },
+            shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
+        ) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 32.dp)
+            ) {
+                // Header: 'Up Next' + count + autoplay toggle inline
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_mn_play),
+                        contentDescription = null,
+                        tint = MediaNestColors.Accent,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = "Up Next",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Text(
+                        text = "${currentQueue.size}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MediaNestColors.TextSecondary
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        text = "Autoplay",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MediaNestColors.TextSecondary
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Switch(
+                        checked = isAutoplayEnabled,
+                        onCheckedChange = {
+                            isAutoplayEnabled = it
+                            onAutoplayToggle?.invoke(it)
+                        },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = MediaNestColors.Accent,
+                            checkedTrackColor = MediaNestColors.Accent.copy(alpha = 0.5f)
+                        )
+                    )
+                }
+                Spacer(Modifier.height(12.dp))
+                HorizontalDivider(color = MediaNestColors.Border, thickness = 0.5.dp)
+                Spacer(Modifier.height(8.dp))
+                if (currentQueue.isEmpty()) {
+                    Box(
+                        Modifier.fillMaxWidth().height(120.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Nothing in the queue",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MediaNestColors.TextSecondary
+                        )
+                    }
+                } else {
+                    LazyColumn {
+                        items(currentQueue.size) { i ->
+                            val item = currentQueue[i]
+                            val idx = i
+                            PlayerQueueItemRow(
+                                item = item,
+                                index = idx,
+                                totalCount = currentQueue.size,
+                                isCurrent = item.id == state.videoId,
+                                onMoveUp = {
+                                    if (idx > 0) {
+                                        currentQueue = currentQueue.toMutableList().also {
+                                            val t = it[idx]
+                                            it[idx] = it[idx - 1]
+                                            it[idx - 1] = t
+                                        }
+                                    }
+                                },
+                                onMoveDown = {
+                                    if (idx < currentQueue.size - 1) {
+                                        currentQueue = currentQueue.toMutableList().also {
+                                            val t = it[idx]
+                                            it[idx] = it[idx + 1]
+                                            it[idx + 1] = t
+                                        }
+                                    }
+                                },
+                                onDragMove = { targetIdx -> moveQueueItem(idx, targetIdx) },
+                                onClick = {
+                                    if (onQueueItemClick != null) onQueueItemClick(item) else viewModel.initialize(
+                                        item.id,
+                                        item.streamIndex,
+                                        item.downloadId
+                                    )
+                                },
+                                onRemove = {
+                                    currentQueue = currentQueue.toMutableList().also {
+                                        it.removeAt(idx)
+                                    }
+                                }
+                            )
                         }
                     }
                 }

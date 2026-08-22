@@ -65,6 +65,7 @@ import com.example.medianest.ui.navigation.BottomNavItem
 import com.example.medianest.ui.navigation.NavigationRoutes
 import com.example.medianest.ui.theme.MediaNestTheme
 import com.example.medianest.ui.viewmodel.PendingRestartConfirmation
+import com.example.medianest.ui.screens.PlayerQueueItem
 import com.example.medianest.ui.viewmodel.PlayerViewModel
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
@@ -260,6 +261,16 @@ fun MiniPlayer(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val activity = context.findActivity() ?: return
+    val playerViewModel: PlayerViewModel = hiltViewModel(activity)
+    val queue by playerViewModel.queue.collectAsStateWithLifecycle()
+    val currentVideoId = playerViewModel.uiState.collectAsStateWithLifecycle().value.videoId
+    val q = queue
+    val idx = q.indexOfFirst { it.id == currentVideoId }
+    val canPrev = idx > 0
+    val canNext = idx != -1 && idx + 1 < q.size
+
     Card(
         modifier = modifier
             .widthIn(max = 500.dp)
@@ -322,11 +333,26 @@ fun MiniPlayer(
                     )
                 }
 
-                IconButton(onClick = {}) {
+                IconButton(
+                    onClick = { if (canPrev) { val p = q[idx - 1]; playerViewModel.initialize(p.id, p.streamIndex, p.downloadId) } },
+                    enabled = canPrev
+                ) {
+                    Icon(
+                        painter = painterResource(R.drawable.ic_mn_prev),
+                        contentDescription = "Previous",
+                        tint = if (canPrev) MediaNestColors.TextPrimary else MediaNestColors.TextSecondary,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+
+                IconButton(
+                    onClick = { if (canNext) { val n = q[idx + 1]; playerViewModel.initialize(n.id, n.streamIndex, n.downloadId) } },
+                    enabled = canNext
+                ) {
                     Icon(
                         painter = painterResource(R.drawable.ic_mn_next),
                         contentDescription = "Next",
-                        tint = MediaNestColors.TextPrimary,
+                        tint = if (canNext) MediaNestColors.TextPrimary else MediaNestColors.TextSecondary,
                         modifier = Modifier.size(20.dp)
                     )
                 }

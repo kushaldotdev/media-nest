@@ -336,26 +336,17 @@ fun AppNavigation(navController: NavHostController, modifier: Modifier = Modifie
                         navController.navigate(NavigationRoutes.STATISTICS)
                     },
                     onNavigateToNotifications = { navController.navigate(NavigationRoutes.NOTIFICATIONS) },
-                    onPlayPlaylist = { videos, startIndex ->
-                        if (videos.isNotEmpty()) {
-                            val startIdx = startIndex.coerceIn(0, videos.size - 1)
-                            val start = videos[startIdx]
-                            playerViewModel.setQueue(
-                                videos.map {
-                                    PlayerQueueItem(
-                                        id = it.videoId,
-                                        title = it.title,
-                                        channelName = it.channelName,
-                                        durationSeconds = it.durationSeconds,
-                                        thumbnailUrl = it.thumbnailUrl
-                                    )
-                                },
-                                startVideoId = start.videoId,
-                                contextTitle = null,
-                                contextType = "playlist"
-                            )
-                            navController.navigate("player/${start.videoId}?streamIndex=0")
-                        }
+                    onPlayFromList = { videos, startIndex ->
+                        if (videos.isEmpty()) return@LibraryScreen
+                        val startIdx = startIndex.coerceIn(0, videos.size - 1)
+                        val start = videos[startIdx]
+                        playerViewModel.setQueue(
+                            videos.map { PlayerQueueItem(id = it.videoId, title = it.title, channelName = it.channelName, durationSeconds = it.durationSeconds, thumbnailUrl = it.thumbnailUrl) },
+                            startVideoId = start.videoId,
+                            contextTitle = null,
+                            contextType = "playlist"
+                        )
+                        navController.navigate("player/${start.videoId}?streamIndex=0")
                     }
                 )
             }

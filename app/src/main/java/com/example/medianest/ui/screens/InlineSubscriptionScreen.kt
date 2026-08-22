@@ -30,7 +30,6 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -41,7 +40,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -66,6 +64,7 @@ import com.example.medianest.data.model.ExtractedPlaylistInfo
 import com.example.medianest.data.model.ExtractedVideoInfo
 import com.example.medianest.ui.components.GlassCard
 import com.example.medianest.ui.components.MediaNestSnackbarHost
+import com.example.medianest.ui.components.MediaNestTopAppBar
 import com.example.medianest.ui.components.QuickDownloadMenu
 import com.example.medianest.ui.components.WatchCountDialog
 import com.example.medianest.ui.components.YoutubeSubscribeButton
@@ -81,7 +80,7 @@ fun InlineSubscriptionScreen(
     sourceId: String,
     onBack: () -> Unit,
     onVideoClick: (String) -> Unit,
-    onPlayAll: (List<ExtractedVideoInfo>, startIndex: Int) -> Unit = { _, _ -> },
+    onPlayFromList: (List<ExtractedVideoInfo>, startIndex: Int) -> Unit = { _, _ -> },
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     BackHandler(enabled = true, onBack = onBack)
@@ -160,21 +159,15 @@ fun InlineSubscriptionScreen(
     Scaffold(
         snackbarHost = { MediaNestSnackbarHost(snackbarHostState) },
         topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = if (sourceType == "playlist") "Back to Playlists" else "Back to Channels",
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_mn_back),
-                            contentDescription = "Back"
-                        )
-                    }
-                }
+            val topBarTitle = when (val s = uiState) {
+                is HomeUiState.PlaylistResult -> s.playlist.name
+                is HomeUiState.ChannelResult -> s.channel.name
+                else -> if (sourceType == "playlist") "Back to Playlists" else "Back to Channels"
+            }
+            MediaNestTopAppBar(
+                title = topBarTitle,
+                onNavigateBack = onBack,
+                showBottomDivider = true
             )
         }
     ) { paddingValues ->
@@ -230,10 +223,11 @@ fun InlineSubscriptionScreen(
 
                 is HomeUiState.PlaylistResult -> {
                     val isSaved = subscriptions.any { it.sourceType == "playlist" && it.sourceId == state.playlist.playlistId }
+                    val playlistVideos = state.playlist.videos
                     val filteredVideos = if (showShorts) {
-                        state.playlist.videos
+                        playlistVideos
                     } else {
-                        state.playlist.videos.filter { !it.isShort }
+                        playlistVideos.filter { !it.isShort }
                     }
 
                     LazyColumn(
@@ -264,9 +258,6 @@ fun InlineSubscriptionScreen(
                                             snackbarHostState.showSnackbar("Added to Playlist")
                                         }
                                     }
-                                },
-                                onPlayAll = {
-                                    onPlayAll(state.playlist.videos, 0)
                                 },
                                 onDownloadAll = {
                                     viewModel.setBulkQualityDialogVisible(true)
@@ -315,7 +306,7 @@ fun InlineSubscriptionScreen(
                                     folders = videoFolderMap[video.videoId] ?: emptyList(),
                                     playbackProgressFraction = progressFraction,
                                     watchCount = watchCounts[video.videoId] ?: 0,
-                                    onClick = { onVideoClick(video.videoId) },
+                                    onClick = { onPlayFromList(playlistVideos, playlistVideos.indexOfFirst { it.videoId == video.videoId }.coerceAtLeast(0)) },
                                     onFavoriteToggle = { videoObj, fav ->
                                         viewModel.toggleFavorite(videoObj, fav)
                                         coroutineScope.launch {
@@ -388,10 +379,11 @@ fun InlineSubscriptionScreen(
                             ))
                         )
                     }
+                    val channelUploads = state.channel.uploads
                     val filteredVideos = if (showShorts) {
-                        state.channel.uploads
+                        channelUploads
                     } else {
-                        state.channel.uploads.filter { !it.isShort }
+                        channelUploads.filter { !it.isShort }
                     }
 
                     LazyColumn(
@@ -434,9 +426,6 @@ fun InlineSubscriptionScreen(
                                             snackbarHostState.showSnackbar("Subscribed to Channel")
                                         }
                                     }
-                                },
-                                onPlayAll = {
-                                    onPlayAll(state.channel.uploads, 0)
                                 },
                                 onDownloadAll = {
                                     viewModel.setBulkQualityDialogVisible(true)
@@ -485,7 +474,7 @@ fun InlineSubscriptionScreen(
                                     folders = videoFolderMap[video.videoId] ?: emptyList(),
                                     playbackProgressFraction = progressFraction,
                                     watchCount = watchCounts[video.videoId] ?: 0,
-                                    onClick = { onVideoClick(video.videoId) },
+                                    onClick = { onPlayFromList(channelUploads, channelUploads.indexOfFirst { it.videoId == video.videoId }.coerceAtLeast(0)) },
                                     onFavoriteToggle = { videoObj, fav ->
                                         viewModel.toggleFavorite(videoObj, fav)
                                         coroutineScope.launch {
@@ -827,7 +816,6 @@ fun PlaylistHeader(
     playlist: ExtractedPlaylistInfo,
     isSaved: Boolean,
     onToggleSave: () -> Unit,
-    onPlayAll: () -> Unit = {},
     onDownloadAll: () -> Unit,
     showShorts: Boolean,
     onToggleShorts: (Boolean) -> Unit,
@@ -880,14 +868,6 @@ fun PlaylistHeader(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Button(
-                    onClick = onPlayAll,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(painter = painterResource(R.drawable.ic_mn_play), contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Play All", maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
                 if (isSaved) {
                     OutlinedButton(
                         onClick = onToggleSave,
@@ -941,7 +921,6 @@ fun ChannelHeader(
     channel: ChannelInfo,
     isSubscribed: Boolean,
     onToggleSubscribe: () -> Unit,
-    onPlayAll: () -> Unit = {},
     onDownloadAll: () -> Unit,
     showShorts: Boolean,
     onToggleShorts: (Boolean) -> Unit,
@@ -1011,14 +990,6 @@ fun ChannelHeader(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Button(
-                    onClick = onPlayAll,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(painter = painterResource(R.drawable.ic_mn_play), contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("Play All", maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
                 YoutubeSubscribeButton(
                     isSubscribed = isSubscribed,
                     onClick = onToggleSubscribe,

@@ -528,8 +528,13 @@ class PlayerViewModel @Inject constructor(
 
     fun retry() {
         val videoId = currentVideoId ?: return
+        val streamIndex = currentStreamIndex
+        val downloadId = currentDownloadId
+        currentVideoId = null
+        currentStreamIndex = -1
+        currentDownloadId = null
         _uiState.value = _uiState.value.copy(error = null)
-        initialize(videoId, currentStreamIndex, currentDownloadId)
+        initialize(videoId, if (streamIndex < 0) 0 else streamIndex, downloadId)
     }
 
     fun resetError() {
@@ -576,7 +581,7 @@ class PlayerViewModel @Inject constructor(
 
     fun changeStreamQuality(streamIndex: Int) {
         val controller = _player.value ?: return
-        val videoId = _uiState.value.videoId ?: return
+        val videoId = _uiState.value.videoId ?: currentVideoId ?: return
         val currentPos = controller.currentPosition
         val isPlaying = controller.isPlaying
 

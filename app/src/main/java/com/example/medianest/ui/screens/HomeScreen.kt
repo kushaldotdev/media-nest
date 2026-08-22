@@ -1130,14 +1130,14 @@ fun HomeTopBar(
                     painter = painterResource(R.mipmap.ic_launcher_foreground),
                     contentDescription = "MediaNest Icon",
                     modifier = Modifier
-                        .size(34.dp)
+                        .size(40.dp)
                         .clip(RoundedCornerShape(8.dp))
                 )
                 Column {
                     Text(
                         text = "MediaNest",
                         style = TextStyle(
-                            fontSize = 20.sp,
+                            fontSize = 28.sp,
                             fontWeight = FontWeight.Bold,
                             color = MediaNestColors.TextPrimary,
                             letterSpacing = (-0.3).sp
