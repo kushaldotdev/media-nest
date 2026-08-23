@@ -2773,51 +2773,20 @@ fun LinkHistoryItemRow(
 
 @Composable
 fun ExtractionLoadingView(modifier: Modifier = Modifier) {
-    Column(modifier = modifier.fillMaxWidth()) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
         Text(
             text = "Extracting…",
             style = TextStyle(fontSize = 12.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.2.sp, color = MediaNestColors.Accent),
-            modifier = Modifier.padding(bottom = 8.dp)
+            modifier = Modifier.padding(bottom = 12.dp)
         )
-        for (i in 0 until 4) {
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = MediaNestColors.Card,
-                border = androidx.compose.foundation.BorderStroke(1.dp, MediaNestColors.Border),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp)
-            ) {
-                Row(
-                    modifier = Modifier.padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .width(116.dp)
-                            .aspectRatio(16f / 9f)
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(MediaNestColors.Raised)
-                    )
-                    Spacer(Modifier.width(12.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth(0.85f)
-                                .height(14.dp)
-                                .background(MediaNestColors.Raised, RoundedCornerShape(4.dp))
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth(0.5f)
-                                .height(10.dp)
-                                .background(MediaNestColors.Raised, RoundedCornerShape(4.dp))
-                        )
-                    }
-                }
-            }
-        }
+        CircularProgressIndicator(
+            color = MediaNestColors.Accent,
+            modifier = Modifier.size(32.dp),
+            strokeWidth = 3.dp
+        )
     }
 }
 
