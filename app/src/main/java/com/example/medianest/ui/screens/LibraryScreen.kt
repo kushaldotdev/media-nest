@@ -435,7 +435,7 @@ fun LibraryScreen(
                                 playbackHistory = playbackHistory,
                                 showContinueWatching = true,
                                 isEndReached = currentVideos.isNotEmpty() && currentVideos.size < historyLimit,
-                                onVideoClick = { videoId -> onPlayFromList(currentVideos.map { it.toExtractedVideoInfo() }, currentVideos.indexOfFirst { it.id == videoId }.coerceAtLeast(0)) },
+                                onVideoClick = onVideoClick,
                                 onVideoLongClick = { videoId ->
                                     if (!uiState.isSelectionMode) {
                                         viewModel.toggleSelectionMode()
@@ -531,7 +531,7 @@ fun LibraryScreen(
                                 allDownloads = allDownloads,
                                 playbackHistory = playbackHistory,
                                 isEndReached = currentFavorites.isNotEmpty() && currentFavorites.size < favoritesLimit,
-                                onVideoClick = { videoId -> onPlayFromList(currentFavorites.map { it.toExtractedVideoInfo() }, currentFavorites.indexOfFirst { it.id == videoId }.coerceAtLeast(0)) },
+                                onVideoClick = onVideoClick,
                                 onVideoLongClick = { videoId ->
                                     if (!uiState.isSelectionMode) {
                                         viewModel.toggleSelectionMode()
@@ -627,7 +627,7 @@ fun LibraryScreen(
                                 allDownloads = allDownloads,
                                 playbackHistory = playbackHistory,
                                 isEndReached = currentWatched.isNotEmpty() && currentWatched.size < watchedLimit,
-                                onVideoClick = { videoId -> onPlayFromList(currentWatched.map { it.toExtractedVideoInfo() }, currentWatched.indexOfFirst { it.id == videoId }.coerceAtLeast(0)) },
+                                onVideoClick = onVideoClick,
                                 onVideoLongClick = { videoId ->
                                     if (!uiState.isSelectionMode) {
                                         viewModel.toggleSelectionMode()
@@ -698,7 +698,7 @@ fun LibraryScreen(
                                 deleteDownloadsWithFolder = false
                             },
                             onNavigateBack = { viewModel.navigateBackFromFolder() },
-                            onVideoClick = { videoId -> val list = folderVideos ?: emptyList(); onPlayFromList(list.map { it.toExtractedVideoInfo() }, list.indexOfFirst { it.id == videoId }.coerceAtLeast(0)) },
+                            onVideoClick = onVideoClick,
                             onVideoLongClick = { videoId ->
                                 if (!uiState.isSelectionMode) {
                                     viewModel.toggleSelectionMode()
