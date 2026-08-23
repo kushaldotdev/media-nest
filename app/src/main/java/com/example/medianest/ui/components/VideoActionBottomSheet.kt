@@ -21,6 +21,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
@@ -87,6 +88,8 @@ fun VideoActionBottomSheetContent(
                     AsyncImage(
                         model = thumbnailUrl,
                         contentDescription = title,
+                        placeholder = ColorPainter(MediaNestColors.ThumbnailPlaceholder),
+                        error = ColorPainter(MediaNestColors.ThumbnailPlaceholder),
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
                     )

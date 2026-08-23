@@ -47,6 +47,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextAlign
@@ -61,9 +62,9 @@ import com.example.medianest.data.preferences.SubscriptionsPreferences
 import com.example.medianest.ui.components.GlassCard
 import com.example.medianest.ui.components.EndOfListIndicator
 import com.example.medianest.ui.components.FullTitlesToggle
+import com.example.medianest.ui.components.LoadingState
 import com.example.medianest.ui.components.LocalFullTitles
 import com.example.medianest.ui.components.MediaNestSnackbarHost
-import com.example.medianest.ui.components.SubscriptionListSkeleton
 import com.example.medianest.ui.viewmodel.SubscriptionsViewModel
 import com.example.medianest.ui.viewmodel.ViewMode
 import kotlinx.coroutines.launch
@@ -148,12 +149,14 @@ fun SubscriptionsScreen(
             }
 
             if (currentSubs == null) {
-                SubscriptionListSkeleton(
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1f)
-                        .padding(horizontal = 8.dp)
-                )
+                        .weight(1f),
+                    contentAlignment = Alignment.Center
+                ) {
+                    LoadingState()
+                }
             } else if (filtered.isEmpty()) {
                 Box(
                     modifier = Modifier
@@ -338,6 +341,8 @@ private fun SubscriptionCard(
                 AsyncImage(
                     model = subscription.thumbnailUrl,
                     contentDescription = subscription.name,
+                    placeholder = ColorPainter(MediaNestColors.ThumbnailPlaceholder),
+                    error = ColorPainter(MediaNestColors.ThumbnailPlaceholder),
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
                         .size(52.dp)

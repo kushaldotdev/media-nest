@@ -189,7 +189,7 @@ class LibraryViewModel @Inject constructor(
     ) { rawVideos, query, (mediaType, sortCat, sortDir), limit ->
         val sorted = sortAndFilterVideos(rawVideos, query, mediaType, sortCat, sortDir)
         sorted.take(limit)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    }.stateIn(viewModelScope, SharingStarted.Lazily, null)
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val favoriteVideos: StateFlow<List<VideoEntity>?> = combine(
@@ -200,7 +200,7 @@ class LibraryViewModel @Inject constructor(
     ) { rawVideos, query, (mediaType, sortCat, sortDir), limit ->
         val sorted = sortAndFilterVideos(rawVideos, query, mediaType, sortCat, sortDir)
         sorted.take(limit)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    }.stateIn(viewModelScope, SharingStarted.Lazily, null)
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val watchedVideos: StateFlow<List<VideoEntity>?> = combine(
@@ -211,7 +211,7 @@ class LibraryViewModel @Inject constructor(
     ) { rawVideos, query, (mediaType, sortCat, sortDir), limit ->
         val sorted = sortAndFilterVideos(rawVideos, query, mediaType, sortCat, sortDir)
         sorted.take(limit)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    }.stateIn(viewModelScope, SharingStarted.Lazily, null)
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val folderVideos: StateFlow<List<VideoEntity>?> = combine(
@@ -239,7 +239,7 @@ class LibraryViewModel @Inject constructor(
                 }
             }
         }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    }.stateIn(viewModelScope, SharingStarted.Lazily, null)
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val rootFolders: StateFlow<List<FolderEntity>?> = combine(
@@ -257,7 +257,7 @@ class LibraryViewModel @Inject constructor(
             else -> compareBy(String.CASE_INSENSITIVE_ORDER) { it.name }
         }
         if (sortDir == SortDirection.ASC) list.sortedWith(comparator) else list.sortedWith(comparator.reversed())
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+    }.stateIn(viewModelScope, SharingStarted.Lazily, null)
 
     @OptIn(ExperimentalCoroutinesApi::class)
     val childFolders: StateFlow<List<FolderEntity>> = combine(

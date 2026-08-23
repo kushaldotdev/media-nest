@@ -77,7 +77,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
+import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.media3.ui.PlayerView
 import androidx.media3.ui.AspectRatioFrameLayout
 import com.example.medianest.ui.viewmodel.PlayerViewModel
@@ -321,9 +322,28 @@ fun PlayerScreen(
                             .clip(RoundedCornerShape(20.dp)),
                         contentAlignment = Alignment.BottomCenter
                     ) {
-                        AsyncImage(
+                        SubcomposeAsyncImage(
                             model = state.thumbnailUrl,
                             contentDescription = state.title,
+                            loading = {
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(32.dp),
+                                        color = MediaNestColors.Accent,
+                                        strokeWidth = 3.dp
+                                    )
+                                }
+                            },
+                            error = {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(MediaNestColors.ThumbnailPlaceholder)
+                                )
+                            },
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize()
                         )
@@ -832,9 +852,28 @@ fun PlayerScreen(
                                         .clip(RoundedCornerShape(20.dp)),
                                     contentAlignment = Alignment.BottomCenter
                                 ) {
-                                    AsyncImage(
+                                    SubcomposeAsyncImage(
                                         model = state.thumbnailUrl,
                                         contentDescription = state.title,
+                                        loading = {
+                                            Box(
+                                                modifier = Modifier.fillMaxSize(),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                CircularProgressIndicator(
+                                                    modifier = Modifier.size(32.dp),
+                                                    color = MediaNestColors.Accent,
+                                                    strokeWidth = 3.dp
+                                                )
+                                            }
+                                        },
+                                        error = {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .background(MediaNestColors.ThumbnailPlaceholder)
+                                            )
+                                        },
                                         contentScale = ContentScale.Crop,
                                         modifier = Modifier.fillMaxSize()
                                     )
@@ -1961,9 +2000,28 @@ fun PlayerQueueItemRow(
                         .background(MaterialTheme.colorScheme.surfaceVariant)
                 ) {
                     if (!item.thumbnailUrl.isNullOrEmpty()) {
-                        AsyncImage(
+                        SubcomposeAsyncImage(
                             model = item.thumbnailUrl,
                             contentDescription = item.title,
+                            loading = {
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(32.dp),
+                                        color = MediaNestColors.Accent,
+                                        strokeWidth = 3.dp
+                                    )
+                                }
+                            },
+                            error = {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(MediaNestColors.ThumbnailPlaceholder)
+                                )
+                            },
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize()
                         )

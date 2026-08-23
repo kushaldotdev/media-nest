@@ -70,6 +70,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
@@ -85,6 +86,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
 import com.example.medianest.R
 import com.example.medianest.data.local.entity.DownloadEntity
 import com.example.medianest.data.local.entity.DownloadStatus
@@ -99,6 +101,7 @@ import com.example.medianest.data.preferences.CollectionsPreferences
 import com.example.medianest.ui.viewmodel.ViewMode
 import com.example.medianest.ui.components.EndOfListIndicator
 import com.example.medianest.ui.components.FullTitlesToggle
+import com.example.medianest.ui.components.LoadingState
 import com.example.medianest.ui.components.LocalFullTitles
 import com.example.medianest.ui.components.MediaNestSnackbarHost
 import com.example.medianest.ui.components.MediaNestTopAppBar
@@ -188,7 +191,7 @@ fun HomeScreen(
                 is HomeUiState.ChannelResult -> viewModel.loadNextPage()
                 is HomeUiState.PlaylistResult -> viewModel.loadNextPage()
                 else -> {
-                    if (linkHistory.isNotEmpty()) {
+                    if (!linkHistory.isNullOrEmpty()) {
                         viewModel.loadMoreLinkHistory()
                     }
                 }
@@ -216,7 +219,8 @@ fun HomeScreen(
             contentPadding = PaddingValues(bottom = 96.dp)
         ) {
             // Continue Watching Section (horizontal LazyRow carousel of ~220dp cards)
-            if (continueWatchingVideos.isNotEmpty() && uiState is HomeUiState.Idle) {
+            val currentContinueWatching = continueWatchingVideos
+            if (!currentContinueWatching.isNullOrEmpty() && uiState is HomeUiState.Idle) {
                 item {
                     Column(
                         modifier = Modifier
@@ -232,7 +236,7 @@ fun HomeScreen(
                             contentPadding = PaddingValues(horizontal = 16.dp),
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            items(continueWatchingVideos, key = { it.first.id }) { (vEntity, hEntity) ->
+                            items(currentContinueWatching, key = { it.first.id }) { (vEntity, hEntity) ->
                                 val totalSec = vEntity.durationSeconds
                                 val posSec = hEntity.positionMillis / 1000L
                                 val progressFraction = if (totalSec > 0) (posSec.toFloat() / totalSec.toFloat()).coerceIn(0f, 1f) else 0f
@@ -919,126 +923,133 @@ fun HomeScreen(
 
             // 6. Link History / Recent Activity Section
             if (uiState !is HomeUiState.Loading) {
-                val filteredHistory = when (selectedFormatFilter) {
-                    "Videos" -> linkHistory.filter { it.linkType.equals("VIDEO", ignoreCase = true) }
-                    "Audio" -> linkHistory.filter { it.linkType.equals("AUDIO", ignoreCase = true) }
-                    else -> linkHistory
-                }
-
-                item {
-                    Spacer(Modifier.height(16.dp))
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "History",
-                            style = TextStyle(
-                                fontSize = 17.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MediaNestColors.TextPrimary,
-                                letterSpacing = (-0.2).sp
-                            )
-                        )
-                        if (filteredHistory.isNotEmpty()) {
-                            Row(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .clickable { showClearHistoryDialog = true }
-                                    .padding(horizontal = 6.dp, vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Icon(
-                                    painter = painterResource(R.drawable.ic_mn_trash),
-                                    contentDescription = null,
-                                    tint = MediaNestColors.Destructive,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Text(
-                                    text = "Clear all",
-                                    style = TextStyle(
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = MediaNestColors.Destructive
-                                    )
-                                )
-                            }
-                        }
-                    }
-                    Spacer(Modifier.height(8.dp))
-                }
-
-                if (filteredHistory.isEmpty()) {
+                val currentHistory = linkHistory
+                if (currentHistory == null) {
                     item {
-                        Surface(
-                            shape = RoundedCornerShape(16.dp),
-                            color = MediaNestColors.Card,
-                            border = androidx.compose.foundation.BorderStroke(1.dp, MediaNestColors.Border),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 8.dp)
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(24.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Icon(
-                                    painter = painterResource(R.drawable.ic_mn_history),
-                                    contentDescription = null,
-                                    tint = MediaNestColors.Accent.copy(alpha = 0.7f),
-                                    modifier = Modifier.size(40.dp)
-                                )
-                                Spacer(Modifier.height(12.dp))
-                                Text(
-                                    text = "No link history",
-                                    style = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = MediaNestColors.TextPrimary)
-                                )
-                                Spacer(Modifier.height(4.dp))
-                                Text(
-                                    text = "Links you extract will appear here for quick re-load.",
-                                    style = TextStyle(fontSize = 13.sp, color = MediaNestColors.TextSecondary),
-                                    lineHeight = 18.sp
-                                )
-                            }
-                        }
+                        LoadingState(modifier = Modifier.padding(horizontal = 16.dp))
                     }
                 } else {
-                    items(filteredHistory, key = { "history_${it.url}" }) { item ->
-                        Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
-                            LinkHistoryItemRow(
-                                item = item,
-                                fullTitles = fullTitlesHome,
-                                onClick = {
-                                    try {
-                                        val clipboardManager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                        val clip = ClipData.newPlainText("YouTube Link", item.url)
-                                        clipboardManager.setPrimaryClip(clip)
-                                        coroutineScope.launch { snackbarHostState.showSnackbar("Link copied to clipboard") }
-                                    } catch (e: Exception) {
-                                        coroutineScope.launch { snackbarHostState.showSnackbar("Failed to copy link") }
-                                    }
-                                },
-                                onReExtract = {
-                                    urlInput = item.url
-                                    keyboardController?.hide()
-                                    focusManager.clearFocus()
-                                    viewModel.onUrlSubmitted(item.url)
-                                    coroutineScope.launch {
-                                        listState.animateScrollToItem(0)
-                                    }
-                                },
-                                onDelete = { historyItemToDelete = item }
-                            )
-                        }
+                    val filteredHistory = when (selectedFormatFilter) {
+                        "Videos" -> currentHistory.filter { it.linkType.equals("VIDEO", ignoreCase = true) }
+                        "Audio" -> currentHistory.filter { it.linkType.equals("AUDIO", ignoreCase = true) }
+                        else -> currentHistory
                     }
 
-                    if (linkHistory.size < linkHistoryLimit) {
+                    item {
+                        Spacer(Modifier.height(16.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "History",
+                                style = TextStyle(
+                                    fontSize = 17.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MediaNestColors.TextPrimary,
+                                    letterSpacing = (-0.2).sp
+                                )
+                            )
+                            if (filteredHistory.isNotEmpty()) {
+                                Row(
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .clickable { showClearHistoryDialog = true }
+                                        .padding(horizontal = 6.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_mn_trash),
+                                        contentDescription = null,
+                                        tint = MediaNestColors.Destructive,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Text(
+                                        text = "Clear all",
+                                        style = TextStyle(
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MediaNestColors.Destructive
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                        Spacer(Modifier.height(8.dp))
+                    }
+
+                    if (filteredHistory.isEmpty()) {
                         item {
-                            EndOfListIndicator()
+                            Surface(
+                                shape = RoundedCornerShape(16.dp),
+                                color = MediaNestColors.Card,
+                                border = androidx.compose.foundation.BorderStroke(1.dp, MediaNestColors.Border),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 8.dp)
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(24.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Icon(
+                                        painter = painterResource(R.drawable.ic_mn_history),
+                                        contentDescription = null,
+                                        tint = MediaNestColors.Accent.copy(alpha = 0.7f),
+                                        modifier = Modifier.size(40.dp)
+                                    )
+                                    Spacer(Modifier.height(12.dp))
+                                    Text(
+                                        text = "No link history",
+                                        style = TextStyle(fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = MediaNestColors.TextPrimary)
+                                    )
+                                    Spacer(Modifier.height(4.dp))
+                                    Text(
+                                        text = "Links you extract will appear here for quick re-load.",
+                                        style = TextStyle(fontSize = 13.sp, color = MediaNestColors.TextSecondary),
+                                        lineHeight = 18.sp
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        items(filteredHistory, key = { "history_${it.url}" }) { item ->
+                            Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
+                                LinkHistoryItemRow(
+                                    item = item,
+                                    fullTitles = fullTitlesHome,
+                                    onClick = {
+                                        try {
+                                            val clipboardManager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                            val clip = ClipData.newPlainText("YouTube Link", item.url)
+                                            clipboardManager.setPrimaryClip(clip)
+                                            coroutineScope.launch { snackbarHostState.showSnackbar("Link copied to clipboard") }
+                                        } catch (e: Exception) {
+                                            coroutineScope.launch { snackbarHostState.showSnackbar("Failed to copy link") }
+                                        }
+                                    },
+                                    onReExtract = {
+                                        urlInput = item.url
+                                        keyboardController?.hide()
+                                        focusManager.clearFocus()
+                                        viewModel.onUrlSubmitted(item.url)
+                                        coroutineScope.launch {
+                                            listState.animateScrollToItem(0)
+                                        }
+                                    },
+                                    onDelete = { historyItemToDelete = item }
+                                )
+                            }
+                        }
+
+                        if (currentHistory.size < linkHistoryLimit) {
+                            item {
+                                EndOfListIndicator()
+                            }
                         }
                     }
                 }
@@ -1589,9 +1600,28 @@ fun ContinueWatchingCard(
                     .clip(RoundedCornerShape(10.dp))
                     .background(MediaNestColors.PlayerSurface)
             ) {
-                AsyncImage(
+                SubcomposeAsyncImage(
                     model = video.thumbnailUrl,
                     contentDescription = video.title,
+                    loading = {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(32.dp),
+                                color = MediaNestColors.Accent,
+                                strokeWidth = 3.dp
+                            )
+                        }
+                    },
+                    error = {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(MediaNestColors.ThumbnailPlaceholder)
+                        )
+                    },
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
                 )
@@ -2079,9 +2109,28 @@ fun PlaylistResultHeader(
             // Cover Image
             val coverUrl = UiUtils.upgradePlaylistThumbnail(playlist.thumbnailUrl, playlist.videos.firstOrNull()?.thumbnailUrl)
             if (!coverUrl.isNullOrBlank()) {
-                AsyncImage(
+                SubcomposeAsyncImage(
                     model = coverUrl,
                     contentDescription = playlist.name,
+                    loading = {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(32.dp),
+                                color = MediaNestColors.Accent,
+                                strokeWidth = 3.dp
+                            )
+                        }
+                    },
+                    error = {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(MediaNestColors.ThumbnailPlaceholder)
+                        )
+                    },
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -2219,9 +2268,28 @@ fun ChannelResultHeader(
             // Channel Banner (only if real banner exists)
             val bannerUrl = channel.bannerUrl?.takeIf { it.isNotBlank() && it != channel.avatarUrl }
             if (!bannerUrl.isNullOrBlank()) {
-                AsyncImage(
+                SubcomposeAsyncImage(
                     model = UiUtils.upgradeBannerUrl(bannerUrl),
                     contentDescription = "Channel Banner",
+                    loading = {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(32.dp),
+                                color = MediaNestColors.Accent,
+                                strokeWidth = 3.dp
+                            )
+                        }
+                    },
+                    error = {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(MediaNestColors.ThumbnailPlaceholder)
+                        )
+                    },
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -2241,6 +2309,8 @@ fun ChannelResultHeader(
                 AsyncImage(
                     model = UiUtils.upgradeAvatarUrl(channel.avatarUrl),
                     contentDescription = channel.name,
+                    placeholder = ColorPainter(MediaNestColors.ThumbnailPlaceholder),
+                    error = ColorPainter(MediaNestColors.ThumbnailPlaceholder),
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
                         .size(52.dp)
@@ -2392,6 +2462,8 @@ fun HomeMediaRow(
                 AsyncImage(
                     model = video.thumbnailUrl,
                     contentDescription = video.title,
+                    placeholder = ColorPainter(MediaNestColors.ThumbnailPlaceholder),
+                    error = ColorPainter(MediaNestColors.ThumbnailPlaceholder),
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
                 )
@@ -2737,6 +2809,8 @@ fun VideoActionBottomSheetContent(
             AsyncImage(
                 model = video.thumbnailUrl,
                 contentDescription = video.title,
+                placeholder = ColorPainter(MediaNestColors.ThumbnailPlaceholder),
+                error = ColorPainter(MediaNestColors.ThumbnailPlaceholder),
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .size(width = 64.dp, height = 36.dp)

@@ -123,7 +123,7 @@ class HomeViewModel @Inject constructor(
         .map { list -> list.associate { it.id to it.watchCount } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
-    val continueWatchingVideos: StateFlow<List<Pair<VideoEntity, HistoryEntity>>> = combine(
+    val continueWatchingVideos: StateFlow<List<Pair<VideoEntity, HistoryEntity>>?> = combine(
         videoDao.getAllVideos(),
         historyDao.getAllHistory()
     ) { videos, histories ->
@@ -137,7 +137,7 @@ class HomeViewModel @Inject constructor(
                 } else null
             } else null
         }.sortedByDescending { it.second.playedAt }
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    }.stateIn(viewModelScope, SharingStarted.Lazily, null)
 
     fun toggleShorts(show: Boolean) {
         _showShorts.value = show
@@ -425,10 +425,10 @@ class HomeViewModel @Inject constructor(
 
     val favoriteVideoIds: StateFlow<Set<String>> = repository.getAllVideos()
         .map { list -> list.filter { it.favorite }.map { it.id }.toSet() }
-        .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000), emptySet())
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptySet())
 
     val folders: StateFlow<List<FolderEntity>> = folderDao.getAllFolders()
-        .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000), emptyList())
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val videoFolderMap: StateFlow<Map<String, List<FolderEntity>>> = combine(
         folderDao.getAllFolders(),
@@ -437,7 +437,7 @@ class HomeViewModel @Inject constructor(
         val folderMap = folders.associateBy { it.id }
         joins.groupBy({ it.videoId }, { folderMap[it.folderId] })
             .mapValues { (_, list) -> list.filterNotNull() }
-    }.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000), emptyMap())
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     fun moveVideoToFolder(video: ExtractedVideoInfo, folderId: Long) {
         viewModelScope.launch {
@@ -456,7 +456,7 @@ class HomeViewModel @Inject constructor(
     val fetchedStreams: StateFlow<ExtractedVideoInfo?> = _fetchedStreams
 
     val allDownloads: StateFlow<List<DownloadEntity>> = downloadRepository.getAllDownloads()
-        .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000), emptyList())
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun fetchStreamsFor(videoId: String) {
         _fetchingStreamsFor.value = videoId
@@ -550,7 +550,7 @@ class HomeViewModel @Inject constructor(
     }
 
     val subscriptions: StateFlow<List<com.example.medianest.data.local.entity.SubscriptionEntity>> = subscriptionRepository.getAllSubscriptions()
-        .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000), emptyList())
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val defaultResolution: StateFlow<String> = downloadPreferences.defaultResolution
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), DownloadPreferences.DEFAULT_RESOLUTION)
@@ -559,16 +559,16 @@ class HomeViewModel @Inject constructor(
     val linkHistoryLimit: StateFlow<Int> = _linkHistoryLimit
 
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
-    val linkHistory: StateFlow<List<LinkHistoryEntity>> = _linkHistoryLimit.flatMapLatest { limit ->
+    val linkHistory: StateFlow<List<LinkHistoryEntity>?> = _linkHistoryLimit.flatMapLatest { limit ->
         linkHistoryDao.getLinkHistoryPaged(limit)
-    }.stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000), emptyList())
+    }.stateIn(viewModelScope, SharingStarted.Lazily, null)
 
     fun loadMoreLinkHistory() {
         _linkHistoryLimit.value += 10
     }
 
     val playbackHistory: StateFlow<List<HistoryEntity>> = historyDao.getAllHistory()
-        .stateIn(viewModelScope, kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000), emptyList())
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     private fun saveLinkToHistory(url: String, state: HomeUiState) {
         val (title, linkType) = when (state) {

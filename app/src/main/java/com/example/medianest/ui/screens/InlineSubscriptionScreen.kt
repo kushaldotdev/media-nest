@@ -2,6 +2,7 @@ package com.example.medianest.ui.screens
 
 import android.text.format.Formatter
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -60,6 +61,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -69,6 +71,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
 import com.example.medianest.data.model.ChannelInfo
 import com.example.medianest.data.model.ExtractedPlaylistInfo
 import com.example.medianest.data.model.ExtractedVideoInfo
@@ -1152,9 +1155,28 @@ fun PlaylistHeader(
         Column(modifier = Modifier.padding(12.dp)) {
             val coverUrl = UiUtils.upgradePlaylistThumbnail(playlist.thumbnailUrl, playlist.videos.firstOrNull()?.thumbnailUrl)
             if (!coverUrl.isNullOrBlank()) {
-                AsyncImage(
+                SubcomposeAsyncImage(
                     model = coverUrl,
                     contentDescription = playlist.name,
+                    loading = {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(32.dp),
+                                color = MediaNestColors.Accent,
+                                strokeWidth = 3.dp
+                            )
+                        }
+                    },
+                    error = {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(MediaNestColors.ThumbnailPlaceholder)
+                        )
+                    },
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1284,9 +1306,28 @@ fun ChannelHeader(
         Column(modifier = Modifier.padding(12.dp)) {
             val bannerUrl = channel.bannerUrl?.takeIf { it.isNotBlank() && it != channel.avatarUrl }
             if (!bannerUrl.isNullOrBlank()) {
-                AsyncImage(
+                SubcomposeAsyncImage(
                     model = UiUtils.upgradeBannerUrl(bannerUrl),
                     contentDescription = "Channel Banner",
+                    loading = {
+                        Box(
+                            modifier = Modifier.fillMaxSize(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(32.dp),
+                                color = MediaNestColors.Accent,
+                                strokeWidth = 3.dp
+                            )
+                        }
+                    },
+                    error = {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(MediaNestColors.ThumbnailPlaceholder)
+                        )
+                    },
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1303,6 +1344,8 @@ fun ChannelHeader(
                 AsyncImage(
                     model = UiUtils.upgradeAvatarUrl(channel.avatarUrl),
                     contentDescription = channel.name,
+                    placeholder = ColorPainter(MediaNestColors.ThumbnailPlaceholder),
+                    error = ColorPainter(MediaNestColors.ThumbnailPlaceholder),
                     contentScale = ContentScale.Crop,
                     modifier = Modifier
                         .size(52.dp)

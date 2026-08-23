@@ -14,6 +14,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -198,6 +199,8 @@ fun UnifiedVideoCard(
                 AsyncImage(
                     model = thumbnailUrl,
                     contentDescription = title,
+                    placeholder = ColorPainter(MediaNestColors.ThumbnailPlaceholder),
+                    error = ColorPainter(MediaNestColors.ThumbnailPlaceholder),
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
                 )
@@ -538,6 +541,8 @@ fun UnifiedVideoRow(
                     AsyncImage(
                         model = thumbnailUrl,
                         contentDescription = title,
+                        placeholder = ColorPainter(MediaNestColors.ThumbnailPlaceholder),
+                        error = ColorPainter(MediaNestColors.ThumbnailPlaceholder),
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
                     )

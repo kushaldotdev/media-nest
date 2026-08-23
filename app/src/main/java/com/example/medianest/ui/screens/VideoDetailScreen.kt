@@ -30,6 +30,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -53,6 +54,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -62,7 +64,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.text.HtmlCompat
-import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
 import com.example.medianest.R
 import com.example.medianest.data.local.entity.DownloadEntity
 import com.example.medianest.data.local.entity.DownloadStatus
@@ -201,9 +203,28 @@ fun VideoDetailScreen(
                                 .clip(RoundedCornerShape(12.dp))
                                 .background(MediaNestColors.PlayerSurface)
                         ) {
-                            AsyncImage(
+                            SubcomposeAsyncImage(
                                 model = videoInfo.thumbnailUrl,
                                 contentDescription = videoInfo.title,
+                                loading = {
+                                    Box(
+                                        modifier = Modifier.fillMaxSize(),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(32.dp),
+                                            color = MediaNestColors.Accent,
+                                            strokeWidth = 3.dp
+                                        )
+                                    }
+                                },
+                                error = {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .background(MediaNestColors.ThumbnailPlaceholder)
+                                    )
+                                },
                                 modifier = Modifier.fillMaxSize(),
                                 contentScale = ContentScale.Crop
                             )

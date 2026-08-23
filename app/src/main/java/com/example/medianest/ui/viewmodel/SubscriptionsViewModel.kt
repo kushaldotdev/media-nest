@@ -18,7 +18,7 @@ class SubscriptionsViewModel @Inject constructor(
 
     val subscriptions: StateFlow<List<SubscriptionEntity>?> =
         subscriptionRepository.getAllSubscriptions()
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+            .stateIn(viewModelScope, SharingStarted.Lazily, null)
 
     fun unsubscribe(id: Long) {
         viewModelScope.launch {

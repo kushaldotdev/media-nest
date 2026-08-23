@@ -111,7 +111,7 @@ class DownloadsViewModel @Inject constructor(
                 mapped
             }
         }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+        .stateIn(viewModelScope, SharingStarted.Lazily, null)
 
     /**
      * Clears [VideoEntity.localFilePath] for [videoId] when no completed download for that

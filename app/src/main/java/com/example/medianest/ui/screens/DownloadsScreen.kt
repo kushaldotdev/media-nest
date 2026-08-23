@@ -52,6 +52,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -75,6 +76,7 @@ import com.example.medianest.ui.components.EndOfListIndicator
 import com.example.medianest.ui.components.GlassCard
 import com.example.medianest.ui.components.FullTitlesToggle
 import com.example.medianest.ui.components.LocalFullTitles
+import com.example.medianest.ui.components.LoadingState
 import com.example.medianest.ui.components.MediaNestButton
 import com.example.medianest.ui.components.MediaNestButtonSize
 import com.example.medianest.ui.components.MediaNestButtonVariant
@@ -86,7 +88,6 @@ import com.example.medianest.ui.components.MediaNestSortBottomSheet
 import com.example.medianest.ui.components.MediaNestSortOption
 import com.example.medianest.ui.components.MediaNestTopAppBar
 import com.example.medianest.ui.components.NotificationBellAction
-import com.example.medianest.ui.components.VideoListSkeleton
 import com.example.medianest.ui.theme.MediaNestColors
 import com.example.medianest.ui.theme.MediaNestSemanticColors
 import com.example.medianest.ui.theme.MediaNestShapes
@@ -786,7 +787,7 @@ fun DownloadsScreen(
             val currentDlList = downloads
             if (currentDlList == null) {
                 item {
-                    VideoListSkeleton(modifier = Modifier.padding(top = 8.dp))
+                    LoadingState()
                 }
             } else if (currentDlList.isEmpty()) {
                 item {
@@ -1662,6 +1663,8 @@ private fun ActiveDownloadCard(
                         AsyncImage(
                             model = download.thumbnailUrl,
                             contentDescription = null,
+                            placeholder = ColorPainter(MediaNestColors.ThumbnailPlaceholder),
+                            error = ColorPainter(MediaNestColors.ThumbnailPlaceholder),
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize()
                         )
@@ -2085,6 +2088,8 @@ private fun CompletedDownloadCard(
                         AsyncImage(
                             model = download.thumbnailUrl,
                             contentDescription = null,
+                            placeholder = ColorPainter(MediaNestColors.ThumbnailPlaceholder),
+                            error = ColorPainter(MediaNestColors.ThumbnailPlaceholder),
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize()
                         )

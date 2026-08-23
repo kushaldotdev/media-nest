@@ -11,6 +11,7 @@ object MediaNestColors {
     val NavigationBar = Color(0xFF241417)    // #241417 — Bottom nav & persistent chrome
     val Card = Color(0xFF2A1A1F)             // #2A1A1F — Media cards, list rows, stream cards
     val Raised = Color(0xFF382027)           // #382027 — Hero panels, dialogs, elevated chips
+    val ThumbnailPlaceholder = Color(0xFF4A3A40) // #4A3A40 — Muted neutral placeholder for loading/unloaded thumbnails
     val Border = Color(0xFF4B2B33)           // #4B2B33 — Dividers and card borders
     val TextPrimary = Color(0xFFFFF7F8)      // #FFF7F8 — Titles and primary text
     val TextSecondary = Color(0xFFC8AEB4)    // #C8AEB4 — Metadata, timestamps, supporting copy

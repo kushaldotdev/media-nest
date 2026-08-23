@@ -33,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.painter.ColorPainter
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -388,11 +389,7 @@ fun LibraryScreen(
                             ) {
                                 item { headerContent() }
                                 item {
-                                    if (uiState.viewMode == ViewMode.GRID) {
-                                        VideoGridSkeleton(modifier = Modifier.padding(top = 8.dp))
-                                    } else {
-                                        VideoListSkeleton(modifier = Modifier.padding(top = 8.dp))
-                                    }
+                                    LoadingState()
                                 }
                             }
                         } else if (currentVideos.isEmpty()) {
@@ -485,11 +482,7 @@ fun LibraryScreen(
                             ) {
                                 item { headerContent() }
                                 item {
-                                    if (uiState.viewMode == ViewMode.GRID) {
-                                        VideoGridSkeleton(modifier = Modifier.padding(top = 8.dp))
-                                    } else {
-                                        VideoListSkeleton(modifier = Modifier.padding(top = 8.dp))
-                                    }
+                                    LoadingState()
                                 }
                             }
                         } else if (currentFavorites.isEmpty()) {
@@ -581,11 +574,7 @@ fun LibraryScreen(
                             ) {
                                 item { headerContent() }
                                 item {
-                                    if (uiState.viewMode == ViewMode.GRID) {
-                                        VideoGridSkeleton(modifier = Modifier.padding(top = 8.dp))
-                                    } else {
-                                        VideoListSkeleton(modifier = Modifier.padding(top = 8.dp))
-                                    }
+                                    LoadingState()
                                 }
                             }
                         } else if (currentWatched.isEmpty()) {
@@ -1898,6 +1887,8 @@ private fun ContinueWatchingCard(
                 AsyncImage(
                     model = video.thumbnailUrl,
                     contentDescription = video.title,
+                    placeholder = ColorPainter(MediaNestColors.ThumbnailPlaceholder),
+                    error = ColorPainter(MediaNestColors.ThumbnailPlaceholder),
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
                 )
@@ -2352,11 +2343,7 @@ private fun FolderContent(
         ) {
             item { headerContent() }
             item {
-                if (viewMode == ViewMode.GRID) {
-                    FolderSkeletonGrid(modifier = Modifier.padding(top = 8.dp))
-                } else {
-                    VideoListSkeleton(modifier = Modifier.padding(top = 8.dp))
-                }
+                LoadingState()
             }
         }
     } else if (selectedFolder != null && folderVideos == null) {
@@ -2367,11 +2354,7 @@ private fun FolderContent(
         ) {
             item { headerContent() }
             item {
-                if (viewMode == ViewMode.GRID) {
-                    VideoGridSkeleton(modifier = Modifier.padding(top = 8.dp))
-                } else {
-                    VideoListSkeleton(modifier = Modifier.padding(top = 8.dp))
-                }
+                LoadingState()
             }
         }
     } else if (selectedFolder == null && searchQuery.isEmpty()) {
