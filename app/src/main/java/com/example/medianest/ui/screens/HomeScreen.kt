@@ -3,7 +3,6 @@ package com.example.medianest.ui.screens
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
-import android.content.Intent
 import android.text.format.Formatter
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.Image
@@ -114,16 +113,6 @@ import com.example.medianest.ui.utils.UiUtils
 import com.example.medianest.ui.viewmodel.HomeUiState
 import com.example.medianest.ui.viewmodel.HomeViewModel
 import kotlinx.coroutines.launch
-
-private fun shareVideoUrl(context: Context, url: String, title: String) {
-    val sendIntent = Intent().apply {
-        action = Intent.ACTION_SEND
-        putExtra(Intent.EXTRA_TEXT, "$title\n$url")
-        type = "text/plain"
-    }
-    val shareIntent = Intent.createChooser(sendIntent, "Share via")
-    context.startActivity(shareIntent)
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -1114,10 +1103,6 @@ fun HomeScreen(
                     coroutineScope.launch {
                         snackbarHostState.showSnackbar(if (nextFav) "Added to favorites" else "Removed from favorites")
                     }
-                },
-                onShare = {
-                    showActionSheet = false
-                    shareVideoUrl(context, "https://www.youtube.com/watch?v=${targetVideo.videoId}", targetVideo.title)
                 }
             )
         }
@@ -2736,8 +2721,7 @@ fun VideoActionBottomSheetContent(
     onDownload: () -> Unit,
     onMoveToFolder: () -> Unit,
     onMarkWatched: () -> Unit,
-    onToggleFavorite: () -> Unit,
-    onShare: () -> Unit
+    onToggleFavorite: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -2791,7 +2775,6 @@ fun VideoActionBottomSheetContent(
             iconTint = if (isFavorite) MediaNestColors.Accent else MediaNestColors.TextPrimary,
             onClick = onToggleFavorite
         )
-        ActionRowItem(iconRes = R.drawable.ic_mn_share, title = "Share Link", onClick = onShare)
     }
 }
 

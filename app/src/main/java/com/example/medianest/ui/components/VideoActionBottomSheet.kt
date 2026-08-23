@@ -260,7 +260,6 @@ private fun VideoActionBottomSheetPreview() {
                     VideoActionItem(id = "folder", label = "Add to / Move to Folder", iconRes = R.drawable.ic_mn_folder),
                     VideoActionItem(id = "download", label = "Download / Quality Options", iconRes = R.drawable.ic_mn_download),
                     VideoActionItem(id = "favorite", label = "Favorite", iconRes = R.drawable.ic_mn_heart_filled, active = true),
-                    VideoActionItem(id = "share", label = "Share URL / File", iconRes = R.drawable.ic_mn_share),
                     VideoActionItem(id = "delete", label = "Delete / Remove Video", iconRes = R.drawable.ic_mn_trash, destructive = true)
                 ),
                 onAction = {}

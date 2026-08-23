@@ -323,7 +323,6 @@ fun LibraryScreen(
                         onSelectAll = { viewModel.selectAll(currentVideosList.map { it.id }) },
                         onClearSelection = { viewModel.clearSelection() },
                         onMove = { showMoveToFolderDialog = true },
-                        onShare = { viewModel.shareSelectedVideos(context) },
                         onDelete = { showBatchDeleteDialog = true }
                     )
                 }
@@ -1627,7 +1626,6 @@ private fun BatchSelectionBar(
     onSelectAll: () -> Unit,
     onClearSelection: () -> Unit,
     onMove: () -> Unit,
-    onShare: () -> Unit,
     onDelete: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -1696,21 +1694,6 @@ private fun BatchSelectionBar(
                         )
                     }
                 )
-
-                // Share Button
-                MediaNestIconButton(
-                    onClick = onShare,
-                    size = MediaNestIconButtonSize.Small,
-                    enabled = selectedCount > 0,
-                    contentDescription = "Share selected"
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.ic_mn_share),
-                        contentDescription = "Share",
-                        tint = if (selectedCount > 0) MediaNestColors.TextPrimary else MediaNestColors.TextSecondary.copy(alpha = 0.4f),
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
 
                 // Delete Button
                 MediaNestIconButton(

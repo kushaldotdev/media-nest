@@ -1,7 +1,6 @@
 package com.example.medianest.ui.viewmodel
 
 import android.content.Context
-import android.content.Intent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.medianest.data.local.dao.FolderDao
@@ -749,31 +748,6 @@ class LibraryViewModel @Inject constructor(
                 } catch (e: Exception) {}
             }
             videoDao.deleteById(videoId)
-        }
-    }
-
-    fun shareSelectedVideos(context: Context) {
-        val videoIds = _uiState.value.selectedVideoIds.toList()
-        if (videoIds.isEmpty()) return
-        viewModelScope.launch {
-            val shareLines = videoIds.map { id ->
-                val video = videoDao.getVideoById(id)
-                if (video != null) {
-                    "${video.title}\nhttps://www.youtube.com/watch?v=$id"
-                } else {
-                    "https://www.youtube.com/watch?v=$id"
-                }
-            }
-            val shareText = shareLines.joinToString("\n\n")
-            val sendIntent = Intent(Intent.ACTION_SEND).apply {
-                putExtra(Intent.EXTRA_TEXT, shareText)
-                type = "text/plain"
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            val chooser = Intent.createChooser(sendIntent, "Share Videos").apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            context.startActivity(chooser)
         }
     }
 

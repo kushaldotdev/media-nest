@@ -1,7 +1,6 @@
 package com.example.medianest.ui.screens
 
 import android.content.Context
-import android.content.Intent
 import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -60,7 +59,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.core.content.FileProvider
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
@@ -178,53 +176,6 @@ private fun formatSpeed(rawSpeed: String?): String? {
         if (mbps >= 1f) "%.1f MB/s".format(mbps) else "%.0f KB/s".format(rawBytes / 1024f)
     } else {
         rawSpeed.trim().takeIf { it.isNotBlank() }
-    }
-}
-
-fun shareDownloadFile(context: Context, download: DownloadEntity) {
-    if (download.filePath.isBlank()) return
-    val file = File(download.filePath)
-    if (!file.exists()) return
-    try {
-        val uri = FileProvider.getUriForFile(
-            context,
-            "${context.packageName}.fileprovider",
-            file
-        )
-        val intent = Intent(Intent.ACTION_SEND).apply {
-            type = if (download.format.contains("audio")) "audio/*" else "video/*"
-            putExtra(Intent.EXTRA_STREAM, uri)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-        context.startActivity(Intent.createChooser(intent, "Share ${download.title}"))
-    } catch (e: Exception) {
-        android.util.Log.e("DownloadsScreen", "Failed to share download: ${download.id}", e)
-    }
-}
-
-fun shareDownloads(context: Context, downloads: List<DownloadEntity>) {
-    val validDownloads = downloads.filter { it.filePath.isNotBlank() && File(it.filePath).exists() }
-    if (validDownloads.isEmpty()) return
-    try {
-        if (validDownloads.size == 1) {
-            shareDownloadFile(context, validDownloads.first())
-        } else {
-            val uris = ArrayList(validDownloads.map {
-                FileProvider.getUriForFile(
-                    context,
-                    "${context.packageName}.fileprovider",
-                    File(it.filePath)
-                )
-            })
-            val intent = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
-                type = "*/*"
-                putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
-            context.startActivity(Intent.createChooser(intent, "Share ${validDownloads.size} downloads"))
-        }
-    } catch (e: Exception) {
-        android.util.Log.e("DownloadsScreen", "Failed to batch share downloads", e)
     }
 }
 
@@ -1068,24 +1019,6 @@ fun DownloadsScreen(
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                                     ) {
-                                        MediaNestButton(
-                                            text = "Share",
-                                            onClick = {
-                                                val targets = completedDownloads.filter { it.id in selectedBatchIds }
-                                                shareDownloads(context, targets)
-                                            },
-                                            variant = MediaNestButtonVariant.Secondary,
-                                            size = MediaNestButtonSize.ExtraSmall,
-                                            enabled = selectedBatchIds.isNotEmpty(),
-                                            leadingIcon = {
-                                                Icon(
-                                                    painter = painterResource(R.drawable.ic_mn_share),
-                                                    contentDescription = null,
-                                                    modifier = Modifier.size(12.dp)
-                                                )
-                                            }
-                                        )
-
                                         MediaNestButton(
                                             text = "Delete",
                                             onClick = { showBatchDeleteDialog = true },

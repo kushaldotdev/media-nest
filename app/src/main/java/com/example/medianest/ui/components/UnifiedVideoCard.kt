@@ -441,11 +441,6 @@ fun UnifiedVideoCard(
                     active = isFavorite
                 ),
                 VideoActionItem(
-                    id = "share",
-                    label = "Share URL / File",
-                    iconRes = R.drawable.ic_mn_share
-                ),
-                VideoActionItem(
                     id = "delete",
                     label = "Delete / Remove Video",
                     iconRes = R.drawable.ic_mn_trash,
@@ -467,7 +462,6 @@ fun UnifiedVideoCard(
                     "folder" -> onMoveToFolder()
                     "download" -> onDownloadClick()
                     "favorite" -> onFavoriteToggle()
-                    "share" -> { /* share = no-op */ }
                     "delete" -> onRemoveFromFolder()
                 }
             },
@@ -790,11 +784,6 @@ fun UnifiedVideoRow(
                     active = isFavorite
                 ),
                 VideoActionItem(
-                    id = "share",
-                    label = "Share URL / File",
-                    iconRes = R.drawable.ic_mn_share
-                ),
-                VideoActionItem(
                     id = "delete",
                     label = "Delete / Remove Video",
                     iconRes = R.drawable.ic_mn_trash,
@@ -816,7 +805,6 @@ fun UnifiedVideoRow(
                     "folder" -> onMoveToFolder()
                     "download" -> onDownloadClick()
                     "favorite" -> onFavoriteToggle()
-                    "share" -> { /* share = no-op */ }
                     "delete" -> onRemoveFromFolder()
                 }
             },
