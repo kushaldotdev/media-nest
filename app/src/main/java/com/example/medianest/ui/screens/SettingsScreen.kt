@@ -740,60 +740,6 @@ fun SettingsScreen(
                         )
                     }
 
-                    HorizontalDivider(color = MediaNestColors.Border, thickness = 1.dp)
-
-                    // Background Audio Playback switch
-                    val backgroundPlayback by playbackPreferences.backgroundPlayback.collectAsStateWithLifecycle(
-                        initialValue = PlaybackPreferences.DEFAULT_BACKGROUND_PLAYBACK
-                    )
-
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable {
-                                coroutineScope.launch {
-                                    playbackPreferences.setBackgroundPlayback(!backgroundPlayback)
-                                }
-                            },
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    painter = painterResource(R.drawable.ic_mn_music),
-                                    contentDescription = null,
-                                    tint = MediaNestColors.Accent,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(Modifier.width(8.dp))
-                                Text(
-                                    "Background Audio Playback",
-                                    style = MaterialTheme.typography.titleMedium.copy(
-                                        fontSize = 14.sp,
-                                        fontWeight = FontWeight.SemiBold
-                                    ),
-                                    color = MediaNestColors.TextPrimary
-                                )
-                            }
-                            Spacer(Modifier.height(2.dp))
-                            Text(
-                                "Continue playing audio smoothly in the background when navigating away or locking screen.",
-                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.5.sp),
-                                color = MediaNestColors.TextSecondary
-                            )
-                        }
-                        Spacer(Modifier.width(12.dp))
-                        Switch(
-                            checked = backgroundPlayback,
-                            onCheckedChange = { checked ->
-                                coroutineScope.launch {
-                                    playbackPreferences.setBackgroundPlayback(checked)
-                                }
-                            },
-                            colors = customSwitchColors()
-                        )
-                    }
                 }
             }
 

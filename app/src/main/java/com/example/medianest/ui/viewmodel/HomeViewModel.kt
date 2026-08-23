@@ -30,6 +30,7 @@ import com.example.medianest.data.local.entity.BulkDownloadJobStatus
 import com.example.medianest.data.repository.DownloadRepository
 import com.example.medianest.service.AudioExtractor
 import com.example.medianest.data.preferences.CollectionsPreferences
+import com.example.medianest.data.preferences.SubscriptionsPreferences
 import com.example.medianest.ui.viewmodel.ViewMode
 import com.example.medianest.data.preferences.DownloadPreferences
 import com.example.medianest.worker.WorkScheduler
@@ -82,6 +83,7 @@ class HomeViewModel @Inject constructor(
     private val historyDao: HistoryDao,
     private val downloadPreferences: DownloadPreferences,
     private val youTubeExtractor: YouTubeExtractor,
+    private val subscriptionsPreferences: SubscriptionsPreferences,
     private val collectionsPreferences: CollectionsPreferences
 ) : ViewModel() {
 
@@ -96,6 +98,14 @@ class HomeViewModel @Inject constructor(
 
     private val _showShorts = MutableStateFlow(false)
     val showShorts: StateFlow<Boolean> = _showShorts
+
+    init {
+        viewModelScope.launch {
+            subscriptionsPreferences.showShorts.collect { show ->
+                _showShorts.value = show
+            }
+        }
+    }
 
     val viewMode: StateFlow<ViewMode> = collectionsPreferences.viewMode
         .map { if (it == "LIST") ViewMode.LIST else ViewMode.GRID }
@@ -131,11 +141,13 @@ class HomeViewModel @Inject constructor(
 
     fun toggleShorts(show: Boolean) {
         _showShorts.value = show
+        viewModelScope.launch {
+            subscriptionsPreferences.setShowShorts(show)
+        }
     }
 
     fun onUrlSubmitted(inputUrl: String) {
         _linkHistoryLimit.value = 10
-        _showShorts.value = false
         val url = inputUrl.trim()
         if (url.isBlank()) {
             _uiState.value = HomeUiState.Error("Please enter a URL")

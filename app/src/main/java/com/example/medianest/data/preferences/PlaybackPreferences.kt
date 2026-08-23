@@ -16,11 +16,9 @@ class PlaybackPreferences(private val context: Context) {
     companion object {
         private val PLAYBACK_SPEED = floatPreferencesKey("playback_speed")
         private val AUTO_MARK_WATCHED = booleanPreferencesKey("auto_mark_watched")
-        private val BACKGROUND_PLAYBACK = booleanPreferencesKey("background_playback")
 
         const val DEFAULT_SPEED = 1.0f
         const val DEFAULT_AUTO_MARK_WATCHED = true
-        const val DEFAULT_BACKGROUND_PLAYBACK = false
     }
 
     val playbackSpeed: Flow<Float> = context.playbackStore.data.map { prefs ->
@@ -29,10 +27,6 @@ class PlaybackPreferences(private val context: Context) {
 
     val autoMarkWatched: Flow<Boolean> = context.playbackStore.data.map { prefs ->
         prefs[AUTO_MARK_WATCHED] ?: DEFAULT_AUTO_MARK_WATCHED
-    }
-
-    val backgroundPlayback: Flow<Boolean> = context.playbackStore.data.map { prefs ->
-        prefs[BACKGROUND_PLAYBACK] ?: DEFAULT_BACKGROUND_PLAYBACK
     }
 
     suspend fun setPlaybackSpeed(speed: Float) {
@@ -44,12 +38,6 @@ class PlaybackPreferences(private val context: Context) {
     suspend fun setAutoMarkWatched(enabled: Boolean) {
         context.playbackStore.edit { prefs ->
             prefs[AUTO_MARK_WATCHED] = enabled
-        }
-    }
-
-    suspend fun setBackgroundPlayback(enabled: Boolean) {
-        context.playbackStore.edit { prefs ->
-            prefs[BACKGROUND_PLAYBACK] = enabled
         }
     }
 }
