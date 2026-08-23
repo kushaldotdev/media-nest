@@ -1,5 +1,9 @@
 @echo off
 setlocal
+set NOPAUSE=0
+if /i "%~1"=="-nopause" (set NOPAUSE=1 && shift)
+if /i "%~1"=="-nopause" (set NOPAUSE=1 && shift)
+
 echo ============================================
 echo  Publishing Media Nest to GitHub
 echo  Version argument: "%~1"
@@ -12,5 +16,5 @@ if not "%EXIT_CODE%"=="0" (
 ) else (
     echo PUBLISH SUCCESSFUL.
 )
-pause
+if "%NOPAUSE%"=="0" pause
 exit /b %EXIT_CODE%

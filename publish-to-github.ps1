@@ -99,6 +99,7 @@ try {
     } else {
         Write-Host "Creating and pushing git tag $versionTag..."
         git tag $versionTag
+        if ($LASTEXITCODE -ne 0) { Write-Error "git tag $versionTag failed" }
         git push origin $versionTag
         if ($LASTEXITCODE -ne 0) { Write-Error "git push of tag $versionTag failed" }
     }
@@ -121,7 +122,7 @@ try {
 
     # Keep a copy in dist\publish for local reference (use absolute path for Start-Job)
     $publishDir = ".\dist\publish"
-    New-Item -ItemType Directory -Force -Path $publishDir | Out-Null
+    $null = New-Item -ItemType Directory -Force -Path $publishDir -ErrorAction Stop
     $apkDest = Join-Path (Resolve-Path $publishDir).Path "medianest-$versionTag.apk"
     Copy-Item $apkSource -Destination $apkDest
     Write-Host "Kept local copy at $apkDest"
