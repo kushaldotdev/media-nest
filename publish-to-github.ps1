@@ -47,9 +47,21 @@ try {
         $newName = $VersionArg -replace '^v', ''
     } else {
         if ($oldName -match '^(\d+)\.(\d+)\.(\d+)$') {
-            $major = $Matches[1]
-            $minor = $Matches[2]
-            $patch = [int]$Matches[3] + 1
+            $major = [int]$Matches[1]
+            $minor = [int]$Matches[2]
+            $patch = [int]$Matches[3]
+
+            if ($patch -lt 9) {
+                $patch++
+            } else {
+                $patch = 0
+                if ($minor -lt 1) {
+                    $minor++
+                } else {
+                    $minor = 0
+                    $major++
+                }
+            }
             $newName = "$major.$minor.$patch"
         } else {
             Write-Error "Invalid version format '$oldName' for auto-increment. Please provide a version argument (e.g., v1.0.3)."
