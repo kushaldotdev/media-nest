@@ -29,7 +29,7 @@ interface VideoDao {
     @Update
     suspend fun update(video: VideoEntity)
 
-    @Query("SELECT * FROM videos WHERE (title LIKE '%' || :query || '%' OR channelName LIKE '%' || :query || '%') AND lastPlayedAt IS NOT NULL ORDER BY lastPlayedAt DESC LIMIT 100")
+    @Query("SELECT * FROM videos WHERE (title LIKE '%' || :query || '%' OR channelName LIKE '%' || :query || '%') AND lastPlayedAt IS NOT NULL ORDER BY lastPlayedAt DESC")
     fun searchHistoryVideos(query: String): Flow<List<VideoEntity>>
 
     @Query("SELECT * FROM videos WHERE favorite = 1 ORDER BY max(addedAt, COALESCE(lastPlayedAt, 0), COALESCE(downloadedAt, 0)) DESC")
@@ -38,7 +38,7 @@ interface VideoDao {
     @Query("SELECT * FROM videos WHERE favorite = 1 ORDER BY max(addedAt, COALESCE(lastPlayedAt, 0), COALESCE(downloadedAt, 0)) DESC LIMIT :limit")
     fun getFavoriteVideosPaged(limit: Int): Flow<List<VideoEntity>>
 
-    @Query("SELECT * FROM videos WHERE lastPlayedAt IS NOT NULL ORDER BY lastPlayedAt DESC LIMIT 100")
+    @Query("SELECT * FROM videos WHERE lastPlayedAt IS NOT NULL ORDER BY lastPlayedAt DESC")
     fun getWatchHistoryVideos(): Flow<List<VideoEntity>>
 
     @Query("SELECT * FROM videos WHERE lastPlayedAt IS NOT NULL ORDER BY lastPlayedAt DESC LIMIT :limit")

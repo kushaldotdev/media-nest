@@ -52,7 +52,11 @@ object UiUtils {
 
     fun parseUploadDate(rawDate: String?): Date? {
         if (rawDate.isNullOrBlank()) return null
-        val trimmed = rawDate.trim()
+        var trimmed = rawDate.trim()
+
+        // Strip common YouTube stream/premiere prefixes
+        val prefixRegex = Regex("""^(?:streamed\s+live\s+on|streamed\s+on|streamed|premiered\s+on|premiered|published\s+on)\s+""", RegexOption.IGNORE_CASE)
+        trimmed = prefixRegex.replace(trimmed, "").trim()
 
         // 1. Numeric timestamp
         trimmed.toLongOrNull()?.let { num ->
@@ -93,6 +97,8 @@ object UiUtils {
         // 3. ISO 8601 formats
         if (trimmed.contains("T")) {
             val patterns = listOf(
+                "yyyy-MM-dd'T'HH:mm:ss.SSSXXX",
+                "yyyy-MM-dd'T'HH:mm:ssXXX",
                 "yyyy-MM-dd'T'HH:mm:ss.SSSX",
                 "yyyy-MM-dd'T'HH:mm:ssX",
                 "yyyy-MM-dd'T'HH:mm:ss"
@@ -149,8 +155,12 @@ object UiUtils {
         val diffHour = diffMin / 60
         val diffDay = diffHour / 24
 
-        val years = diffDay / 365
-        val months = (diffDay % 365) / 30
+        var years = diffDay / 365
+        var months = (diffDay % 365) / 30
+        if (months >= 12) {
+            years++
+            months = 0
+        }
         val weeks = ((diffDay % 365) % 30) / 7
         val days = ((diffDay % 365) % 30) % 7
         val hours = diffHour % 24

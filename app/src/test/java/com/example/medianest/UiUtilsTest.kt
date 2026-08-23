@@ -13,6 +13,21 @@ class UiUtilsTest {
     fun testParseUploadDate_isoFormat() {
         val date = UiUtils.parseUploadDate("2024-05-10T14:30:00Z")
         assertNotNull(date)
+
+        val dateOffset = UiUtils.parseUploadDate("2024-05-10T14:30:00+02:00")
+        assertNotNull(dateOffset)
+    }
+
+    @Test
+    fun testParseUploadDate_prefixes() {
+        val streamed = UiUtils.parseUploadDate("Streamed live on May 10, 2023")
+        assertNotNull(streamed)
+
+        val premiered = UiUtils.parseUploadDate("Premiered Jan 5, 2022")
+        assertNotNull(premiered)
+
+        val published = UiUtils.parseUploadDate("Published on Oct 14, 2021")
+        assertNotNull(published)
     }
 
     @Test

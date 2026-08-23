@@ -156,8 +156,8 @@ class LibraryViewModel @Inject constructor(
         }
 
         val comparator: Comparator<VideoEntity> = when (sortCat) {
-            SortCategory.DATE_PUBLISHED -> compareBy { UiUtils.parseUploadDate(it.uploadDate)?.time ?: 0L }
-            SortCategory.LAST_WATCHED -> compareBy { it.lastPlayedAt ?: 0L }
+            SortCategory.DATE_PUBLISHED -> compareBy(nullsLast()) { UiUtils.parseUploadDate(it.uploadDate)?.time }
+            SortCategory.LAST_WATCHED -> compareBy(nullsLast()) { it.lastPlayedAt }
             SortCategory.DATE_ADDED -> compareBy { it.addedAt }
             SortCategory.NAME -> compareBy(String.CASE_INSENSITIVE_ORDER) { it.title }
             SortCategory.DURATION -> compareBy { it.durationSeconds }
