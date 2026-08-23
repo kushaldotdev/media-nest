@@ -286,7 +286,7 @@ fun InlineSubscriptionScreen(
                     }
                     val sortedVideos = remember(filteredVideos, sortCategory, sortDirection) {
                         val sorted = when (sortCategory) {
-                            SortCategory.DATE -> filteredVideos.sortedBy { it.uploadDate }.let { if (sortDirection == SortDirection.ASC) it else it.reversed() }
+                            SortCategory.DATE -> filteredVideos.sortedBy { UiUtils.parseUploadDate(it.uploadDate)?.time ?: 0L }.let { if (sortDirection == SortDirection.ASC) it else it.reversed() }
                             SortCategory.NAME -> filteredVideos.sortedBy { it.title.lowercase() }.let { if (sortDirection == SortDirection.ASC) it else it.reversed() }
                             SortCategory.DURATION -> filteredVideos.sortedBy { it.durationSeconds }.let { if (sortDirection == SortDirection.ASC) it else it.reversed() }
                             else -> filteredVideos
@@ -448,7 +448,7 @@ fun InlineSubscriptionScreen(
                     }
                     val sortedVideos = remember(filteredVideos, sortCategory, sortDirection) {
                         val sorted = when (sortCategory) {
-                            SortCategory.DATE -> filteredVideos.sortedBy { it.uploadDate }.let { if (sortDirection == SortDirection.ASC) it else it.reversed() }
+                            SortCategory.DATE -> filteredVideos.sortedBy { UiUtils.parseUploadDate(it.uploadDate)?.time ?: 0L }.let { if (sortDirection == SortDirection.ASC) it else it.reversed() }
                             SortCategory.NAME -> filteredVideos.sortedBy { it.title.lowercase() }.let { if (sortDirection == SortDirection.ASC) it else it.reversed() }
                             SortCategory.DURATION -> filteredVideos.sortedBy { it.durationSeconds }.let { if (sortDirection == SortDirection.ASC) it else it.reversed() }
                             else -> filteredVideos

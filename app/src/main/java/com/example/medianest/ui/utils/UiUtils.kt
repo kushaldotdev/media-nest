@@ -52,21 +52,89 @@ object UiUtils {
 
     fun parseUploadDate(rawDate: String?): Date? {
         if (rawDate.isNullOrBlank()) return null
-        if (rawDate.contains("T")) {
+        val trimmed = rawDate.trim()
+
+        // 1. Numeric timestamp
+        trimmed.toLongOrNull()?.let { num ->
+            return if (num > 1_000_000_000_000L) {
+                Date(num)
+            } else if (num > 1_000_000_000L) {
+                Date(num * 1000L)
+            } else null
+        }
+
+        // 2. Relative time strings like "now", "just now", "yesterday", "9 months ago", "2w", etc.
+        if (trimmed.equals("just now", ignoreCase = true) || trimmed.equals("now", ignoreCase = true)) {
+            return Date()
+        }
+        if (trimmed.equals("yesterday", ignoreCase = true)) {
+            return Date(System.currentTimeMillis() - 24 * 60 * 60 * 1000L)
+        }
+        val agoRegex = Regex("""(\d+)\s*(year|yr|month|mo|week|wk|day|d|hour|hr|minute|min|second|sec)s?(?:\s*ago)?""", RegexOption.IGNORE_CASE)
+        val agoMatch = agoRegex.find(trimmed)
+        if (agoMatch != null && (trimmed.contains("ago", ignoreCase = true) || trimmed.matches(Regex("""^\d+\s*[a-zA-Z]+$""")))) {
+            val count = agoMatch.groupValues[1].toLongOrNull() ?: return null
+            val unit = agoMatch.groupValues[2].lowercase()
+            val millis = when {
+                unit.startsWith("y") -> count * 365L * 24 * 60 * 60 * 1000L
+                unit.startsWith("mo") -> count * 30L * 24 * 60 * 60 * 1000L
+                unit.startsWith("w") -> count * 7L * 24 * 60 * 60 * 1000L
+                unit.startsWith("d") -> count * 24L * 60 * 60 * 1000L
+                unit.startsWith("h") -> count * 60 * 60 * 1000L
+                unit.startsWith("m") -> count * 60 * 1000L
+                unit.startsWith("s") -> count * 1000L
+                else -> null
+            }
+            if (millis != null) {
+                return Date(System.currentTimeMillis() - millis)
+            }
+        }
+
+        // 3. ISO 8601 formats
+        if (trimmed.contains("T")) {
+            val patterns = listOf(
+                "yyyy-MM-dd'T'HH:mm:ss.SSSX",
+                "yyyy-MM-dd'T'HH:mm:ssX",
+                "yyyy-MM-dd'T'HH:mm:ss"
+            )
+            for (p in patterns) {
+                try {
+                    val sdf = SimpleDateFormat(p, Locale.US)
+                    val d = sdf.parse(trimmed)
+                    if (d != null) return d
+                } catch (e: Exception) {
+                    // try next
+                }
+            }
             try {
-                val dateTimeStr = if (rawDate.length >= 19) rawDate.substring(0, 19) else rawDate
+                val dateTimeStr = if (trimmed.length >= 19) trimmed.substring(0, 19) else trimmed
                 val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US)
-                return sdf.parse(dateTimeStr)
+                val d = sdf.parse(dateTimeStr)
+                if (d != null) return d
             } catch (e: Exception) {
                 // fallback
             }
         }
-        try {
-            val dateStr = if (rawDate.length >= 10) rawDate.substring(0, 10) else rawDate
-            val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-            return sdf.parse(dateStr)
-        } catch (e: Exception) {
-            // fallback
+
+        // 4. Standard Date formats
+        val formats = listOf(
+            "yyyy-MM-dd",
+            "yyyy/MM/dd",
+            "MMM dd, yyyy",
+            "MMMM dd, yyyy",
+            "dd MMM yyyy",
+            "dd MMMM yyyy",
+            "MMM d, yyyy",
+            "d MMM yyyy"
+        )
+        for (pattern in formats) {
+            try {
+                val sdf = SimpleDateFormat(pattern, Locale.US)
+                val parsed = sdf.parse(trimmed)
+                if (parsed != null) return parsed
+            } catch (e: Exception) {
+                // continue
+            }
         }
         return null
     }
@@ -137,28 +205,6 @@ object UiUtils {
     fun formatReleaseDate(rawDate: String?): String? {
         if (rawDate.isNullOrBlank()) return null
         val trimmed = rawDate.trim()
-        if (trimmed.contains("ago", ignoreCase = true)) {
-            val regex = Regex("""(\d+)\s*(year|yr|month|mo|week|wk|day|d|hour|hr|minute|min|second|sec)s?\s*ago""", RegexOption.IGNORE_CASE)
-            val match = regex.find(trimmed)
-            if (match != null) {
-                val count = match.groupValues[1]
-                val unit = match.groupValues[2].lowercase()
-                return when {
-                    unit.startsWith("y") -> "${count}y"
-                    unit.startsWith("mo") -> "${count}mo"
-                    unit.startsWith("w") -> "${count}w"
-                    unit.startsWith("d") -> "${count}d"
-                    unit.startsWith("h") -> "${count}h"
-                    unit.startsWith("m") -> "${count}m"
-                    unit.startsWith("s") -> "${count}s"
-                    else -> trimmed
-                }
-            }
-            return trimmed
-        }
-        if (trimmed.equals("just now", ignoreCase = true) || trimmed.equals("now", ignoreCase = true)) {
-            return "just now"
-        }
         val date = parseUploadDate(trimmed) ?: return trimmed
         return formatRelativeTime(date, abbreviated = true)
     }

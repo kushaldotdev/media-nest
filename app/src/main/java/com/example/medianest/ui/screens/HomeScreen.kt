@@ -2640,11 +2640,14 @@ fun HomeMediaRow(
                         )
                     }
                     if (!video.uploadDate.isNullOrBlank()) {
-                        Text(
-                            text = "· ${video.uploadDate}",
-                            style = TextStyle(fontSize = 11.sp, color = MediaNestColors.TextSecondary.copy(alpha = 0.7f)),
-                            maxLines = 1
-                        )
+                        val formattedDate = UiUtils.formatReleaseDate(video.uploadDate)
+                        if (!formattedDate.isNullOrBlank()) {
+                            Text(
+                                text = "· $formattedDate",
+                                style = TextStyle(fontSize = 11.sp, color = MediaNestColors.TextSecondary.copy(alpha = 0.7f)),
+                                maxLines = 1
+                            )
+                        }
                     }
                 }
             }
