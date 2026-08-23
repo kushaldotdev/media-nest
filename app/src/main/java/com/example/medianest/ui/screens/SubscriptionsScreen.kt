@@ -1,5 +1,6 @@
 package com.example.medianest.ui.screens
 
+import androidx.activity.ComponentActivity
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -76,7 +77,7 @@ fun SubscriptionsScreen(
     searchQuery: String = "",
     viewMode: ViewMode = ViewMode.LIST,
     onSubscriptionClick: (String, String) -> Unit,
-    viewModel: SubscriptionsViewModel = hiltViewModel(),
+    viewModel: SubscriptionsViewModel = hiltViewModel(LocalContext.current as ComponentActivity),
     subscriptionsPreferences: SubscriptionsPreferences? = null,
     fullTitles: Boolean? = null,
     showFullTitlesToggle: Boolean = true
@@ -85,6 +86,7 @@ fun SubscriptionsScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
+    val activity = context as ComponentActivity
     val prefs = remember(context, subscriptionsPreferences) {
         subscriptionsPreferences ?: SubscriptionsPreferences(context.applicationContext)
     }

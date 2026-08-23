@@ -2,6 +2,7 @@ package com.example.medianest.ui.screens
 
 import android.content.Context
 import android.net.Uri
+import androidx.activity.ComponentActivity
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -568,10 +569,11 @@ fun DownloadsScreen(
     onPlayDownload: (DownloadEntity) -> Unit,
     onVideoClick: (String) -> Unit,
     onNavigateToNotifications: () -> Unit = {},
-    viewModel: DownloadsViewModel = hiltViewModel(),
+    viewModel: DownloadsViewModel = hiltViewModel(LocalContext.current as ComponentActivity),
     downloadPreferences: DownloadPreferences? = null
 ) {
     val context = LocalContext.current
+    val activity = context as ComponentActivity
     val prefs = downloadPreferences ?: remember(context) { DownloadPreferences(context) }
     val coroutineScope = rememberCoroutineScope()
     val sortMode by prefs.sortMode.collectAsStateWithLifecycle(initialValue = DownloadPreferences.DEFAULT_SORT_MODE)
@@ -668,6 +670,7 @@ fun DownloadsScreen(
                 .fillMaxWidth()
                 .weight(1f)
         ) {
+            val currentDlList = downloads
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
@@ -784,7 +787,6 @@ fun DownloadsScreen(
                     }
                 }
 
-            val currentDlList = downloads
             if (currentDlList == null) {
                 item {
                     LoadingState()

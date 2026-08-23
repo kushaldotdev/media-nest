@@ -2,6 +2,7 @@ package com.example.medianest.ui.screens
 
 import android.text.format.Formatter
 import java.io.File
+import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -92,7 +93,7 @@ fun LibraryScreen(
     onNavigateToStatistics: () -> Unit = {},
     onNavigateToNotifications: () -> Unit = {},
     onPlayFromList: (List<ExtractedVideoInfo>, startIndex: Int) -> Unit = { _, _ -> },
-    viewModel: LibraryViewModel = hiltViewModel()
+    viewModel: LibraryViewModel = hiltViewModel(LocalContext.current as ComponentActivity)
 ) {
     var selectedSubscriptionType by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedSubscriptionId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -142,6 +143,7 @@ fun LibraryScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
+    val activity = context as ComponentActivity
     val collectionsPreferences = remember(context) { CollectionsPreferences(context.applicationContext) }
     val fullTitlesListKey = when (uiState.currentTab) {
         LibraryTab.HISTORY -> CollectionsPreferences.LIST_HISTORY

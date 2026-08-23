@@ -4,6 +4,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.text.format.Formatter
+import androidx.activity.ComponentActivity
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -120,7 +121,7 @@ import kotlinx.coroutines.launch
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
-    viewModel: HomeViewModel = hiltViewModel(),
+    viewModel: HomeViewModel = hiltViewModel(LocalContext.current as ComponentActivity),
     onVideoSelected: (String) -> Unit = {},
     onSubscribe: (sourceType: String, sourceId: String, name: String, thumbnailUrl: String?) -> Unit = { _, _, _, _ -> },
     onNavigateToNotifications: () -> Unit = {}
@@ -155,6 +156,7 @@ fun HomeScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
+    val activity = context as ComponentActivity
     val collectionsPreferences = remember(context) { CollectionsPreferences(context.applicationContext) }
     val globalFullTitles by collectionsPreferences.fullTitles.collectAsStateWithLifecycle(
         initialValue = CollectionsPreferences.DEFAULT_FULL_TITLES
@@ -211,6 +213,7 @@ fun HomeScreen(
         contentColor = MediaNestColors.TextPrimary,
         snackbarHost = { MediaNestSnackbarHost(hostState = snackbarHostState) }
     ) { paddingValues ->
+        val currentHistory = linkHistory
         LazyColumn(
             state = listState,
             modifier = Modifier
@@ -928,7 +931,6 @@ fun HomeScreen(
 
             // 6. Link History / Recent Activity Section
             if (uiState !is HomeUiState.Loading) {
-                val currentHistory = linkHistory
                 if (currentHistory == null) {
                     item {
                         LoadingState(modifier = Modifier.padding(horizontal = 16.dp))
