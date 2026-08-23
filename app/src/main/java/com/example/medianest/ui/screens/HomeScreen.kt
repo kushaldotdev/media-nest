@@ -930,7 +930,7 @@ fun HomeScreen(
             }
 
             // 6. Link History / Recent Activity Section
-            if (uiState !is HomeUiState.Loading) {
+            if (uiState is HomeUiState.Idle) {
                 if (currentHistory == null) {
                     item {
                         LoadingState(modifier = Modifier.padding(horizontal = 16.dp))
