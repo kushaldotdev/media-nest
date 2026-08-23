@@ -490,7 +490,7 @@ fun parseDownloadProgress(download: DownloadEntity): ParsedProgressInfo {
                 val speedText = formatSpeed(speedRaw)
                 val elapsedText = elapsedMs?.takeIf { it >= 0 }?.let { compactDuration(it) }
                 val etaText = remainingMs?.takeIf { it > 0 }?.let { "${compactDuration(it)} left" }
-                val statusText = if (pctPart != null) "Merging Video & Audio ($pctPart%)" else "Merging Video & Audio..."
+                val statusText = if (pctPart != null) "Merging Video & Audio" else "Merging Video & Audio..."
 
                 return ParsedProgressInfo(
                     stage = DownloadProgressStage.MERGING,
