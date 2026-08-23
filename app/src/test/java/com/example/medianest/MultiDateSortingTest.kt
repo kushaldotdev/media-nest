@@ -116,6 +116,62 @@ class MultiDateSortingTest {
     }
 
     @Test
+    fun testNullsLastComparatorBothAscAndDesc() {
+        val videoWithNulls = VideoEntity(
+            id = "null_dates",
+            title = "A Video",
+            channelName = "Channel A",
+            durationSeconds = 50L,
+            uploadDate = null,
+            addedAt = 500L,
+            lastPlayedAt = null
+        )
+        val videoOld = VideoEntity(
+            id = "old_date",
+            title = "Old Video",
+            channelName = "Channel B",
+            durationSeconds = 100L,
+            uploadDate = "2022-01-01",
+            addedAt = 1000L,
+            lastPlayedAt = 1000L
+        )
+        val videoNew = VideoEntity(
+            id = "new_date",
+            title = "New Video",
+            channelName = "Channel C",
+            durationSeconds = 200L,
+            uploadDate = "2024-05-01",
+            addedAt = 2000L,
+            lastPlayedAt = 2000L
+        )
+        val list = listOf(videoWithNulls, videoOld, videoNew)
+
+        // Published Date ASC: Old -> New -> Null
+        val publishedAsc = list.sortedWith(UiUtils.nullsLastComparator(ascending = true) { UiUtils.parseUploadDate(it.uploadDate)?.time })
+        assertEquals("old_date", publishedAsc[0].id)
+        assertEquals("new_date", publishedAsc[1].id)
+        assertEquals("null_dates", publishedAsc[2].id)
+
+        // Published Date DESC: New -> Old -> Null (Null must ALWAYS be at the bottom)
+        val publishedDesc = list.sortedWith(UiUtils.nullsLastComparator(ascending = false) { UiUtils.parseUploadDate(it.uploadDate)?.time })
+        assertEquals("new_date", publishedDesc[0].id)
+        assertEquals("old_date", publishedDesc[1].id)
+        assertEquals("null_dates", publishedDesc[2].id)
+
+        // Last Watched ASC: Old -> New -> Null
+        val watchedAsc = list.sortedWith(UiUtils.nullsLastComparator(ascending = true) { it.lastPlayedAt })
+        assertEquals("old_date", watchedAsc[0].id)
+        assertEquals("new_date", watchedAsc[1].id)
+        assertEquals("null_dates", watchedAsc[2].id)
+
+        // Last Watched DESC: New -> Old -> Null (Null must ALWAYS be at the bottom)
+        val watchedDesc = list.sortedWith(UiUtils.nullsLastComparator(ascending = false) { it.lastPlayedAt })
+        assertEquals("new_date", watchedDesc[0].id)
+        assertEquals("old_date", watchedDesc[1].id)
+        assertEquals("null_dates", watchedDesc[2].id)
+    }
+
+    @Test
     fun testLegacyDateStringResolution() {
         fun mapSortCategory(sortBy: String): SortCategory = when (sortBy.uppercase()) {
             "DATE_PUBLISHED" -> SortCategory.DATE_PUBLISHED

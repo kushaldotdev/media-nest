@@ -212,6 +212,21 @@ object UiUtils {
         }
     }
 
+    fun <T, R : Comparable<R>> nullsLastComparator(
+        ascending: Boolean = true,
+        selector: (T) -> R?
+    ): Comparator<T> {
+        return Comparator { a, b ->
+            val vA = selector(a)
+            val vB = selector(b)
+            if (vA == null && vB == null) 0
+            else if (vA == null) 1
+            else if (vB == null) -1
+            else if (ascending) vA.compareTo(vB)
+            else vB.compareTo(vA)
+        }
+    }
+
     fun formatReleaseDate(rawDate: String?): String? {
         if (rawDate.isNullOrBlank()) return null
         val trimmed = rawDate.trim()

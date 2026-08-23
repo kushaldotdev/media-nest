@@ -285,17 +285,18 @@ fun InlineSubscriptionScreen(
                         playlistVideos.filter { !it.isShort }
                     }
                     val sortedVideos = remember(filteredVideos, sortCategory, sortDirection, playbackHistory) {
+                        val isAsc = sortDirection == SortDirection.ASC
                         val comparator: Comparator<ExtractedVideoInfo> = when (sortCategory) {
-                            SortCategory.DATE_PUBLISHED -> compareBy(nullsLast()) { UiUtils.parseUploadDate(it.uploadDate)?.time }
-                            SortCategory.LAST_WATCHED -> compareBy(nullsLast()) { v -> playbackHistory.find { it.videoId == v.videoId }?.playedAt }
-                            SortCategory.NAME -> compareBy(String.CASE_INSENSITIVE_ORDER) { it.title }
-                            SortCategory.DURATION -> compareBy { it.durationSeconds }
+                            SortCategory.DATE_PUBLISHED -> UiUtils.nullsLastComparator(isAsc) { UiUtils.parseUploadDate(it.uploadDate)?.time }
+                            SortCategory.LAST_WATCHED -> UiUtils.nullsLastComparator(isAsc) { v -> playbackHistory.find { it.videoId == v.videoId }?.playedAt }
+                            SortCategory.NAME -> if (isAsc) compareBy(String.CASE_INSENSITIVE_ORDER) { it.title } else compareByDescending(String.CASE_INSENSITIVE_ORDER) { it.title }
+                            SortCategory.DURATION -> if (isAsc) compareBy { it.durationSeconds } else compareByDescending { it.durationSeconds }
                             else -> Comparator { _, _ -> 0 }
                         }
                         if (sortCategory == SortCategory.DATE_ADDED) {
-                            if (sortDirection == SortDirection.ASC) filteredVideos else filteredVideos.reversed()
+                            if (isAsc) filteredVideos else filteredVideos.reversed()
                         } else {
-                            if (sortDirection == SortDirection.ASC) filteredVideos.sortedWith(comparator) else filteredVideos.sortedWith(comparator.reversed())
+                            filteredVideos.sortedWith(comparator)
                         }
                     }
 
@@ -457,17 +458,18 @@ fun InlineSubscriptionScreen(
                         channelUploads.filter { !it.isShort }
                     }
                     val sortedVideos = remember(filteredVideos, sortCategory, sortDirection, playbackHistory) {
+                        val isAsc = sortDirection == SortDirection.ASC
                         val comparator: Comparator<ExtractedVideoInfo> = when (sortCategory) {
-                            SortCategory.DATE_PUBLISHED -> compareBy(nullsLast()) { UiUtils.parseUploadDate(it.uploadDate)?.time }
-                            SortCategory.LAST_WATCHED -> compareBy(nullsLast()) { v -> playbackHistory.find { it.videoId == v.videoId }?.playedAt }
-                            SortCategory.NAME -> compareBy(String.CASE_INSENSITIVE_ORDER) { it.title }
-                            SortCategory.DURATION -> compareBy { it.durationSeconds }
+                            SortCategory.DATE_PUBLISHED -> UiUtils.nullsLastComparator(isAsc) { UiUtils.parseUploadDate(it.uploadDate)?.time }
+                            SortCategory.LAST_WATCHED -> UiUtils.nullsLastComparator(isAsc) { v -> playbackHistory.find { it.videoId == v.videoId }?.playedAt }
+                            SortCategory.NAME -> if (isAsc) compareBy(String.CASE_INSENSITIVE_ORDER) { it.title } else compareByDescending(String.CASE_INSENSITIVE_ORDER) { it.title }
+                            SortCategory.DURATION -> if (isAsc) compareBy { it.durationSeconds } else compareByDescending { it.durationSeconds }
                             else -> Comparator { _, _ -> 0 }
                         }
                         if (sortCategory == SortCategory.DATE_ADDED) {
-                            if (sortDirection == SortDirection.ASC) filteredVideos else filteredVideos.reversed()
+                            if (isAsc) filteredVideos else filteredVideos.reversed()
                         } else {
-                            if (sortDirection == SortDirection.ASC) filteredVideos.sortedWith(comparator) else filteredVideos.sortedWith(comparator.reversed())
+                            filteredVideos.sortedWith(comparator)
                         }
                     }
 

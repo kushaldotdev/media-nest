@@ -155,31 +155,31 @@ class LibraryViewModel @Inject constructor(
             filtered = filtered.filter { it.mediaType.equals("AUDIO", ignoreCase = true) }
         }
 
+        val isAsc = sortDir == SortDirection.ASC
         val comparator: Comparator<VideoEntity> = when (sortCat) {
-            SortCategory.DATE_PUBLISHED -> compareBy(nullsLast()) { UiUtils.parseUploadDate(it.uploadDate)?.time }
-            SortCategory.LAST_WATCHED -> compareBy(nullsLast()) { it.lastPlayedAt }
-            SortCategory.DATE_ADDED -> compareBy { it.addedAt }
-            SortCategory.NAME -> compareBy(String.CASE_INSENSITIVE_ORDER) { it.title }
-            SortCategory.DURATION -> compareBy { it.durationSeconds }
-            SortCategory.SIZE -> compareBy { video ->
-                if (video.localFilePath.isNotEmpty()) {
-                    try {
-                        val f = File(video.localFilePath)
-                        if (f.exists()) f.length() else (video.durationSeconds * 2500000L) / 8L
-                    } catch (e: Exception) {
+            SortCategory.DATE_PUBLISHED -> UiUtils.nullsLastComparator(isAsc) { UiUtils.parseUploadDate(it.uploadDate)?.time }
+            SortCategory.LAST_WATCHED -> UiUtils.nullsLastComparator(isAsc) { it.lastPlayedAt }
+            SortCategory.DATE_ADDED -> if (isAsc) compareBy { it.addedAt } else compareByDescending { it.addedAt }
+            SortCategory.NAME -> if (isAsc) compareBy(String.CASE_INSENSITIVE_ORDER) { it.title } else compareByDescending(String.CASE_INSENSITIVE_ORDER) { it.title }
+            SortCategory.DURATION -> if (isAsc) compareBy { it.durationSeconds } else compareByDescending { it.durationSeconds }
+            SortCategory.SIZE -> {
+                val sizeSelector: (VideoEntity) -> Long = { video ->
+                    if (video.localFilePath.isNotEmpty()) {
+                        try {
+                            val f = File(video.localFilePath)
+                            if (f.exists()) f.length() else (video.durationSeconds * 2500000L) / 8L
+                        } catch (e: Exception) {
+                            (video.durationSeconds * 2500000L) / 8L
+                        }
+                    } else {
                         (video.durationSeconds * 2500000L) / 8L
                     }
-                } else {
-                    (video.durationSeconds * 2500000L) / 8L
                 }
+                if (isAsc) compareBy(sizeSelector) else compareByDescending(sizeSelector)
             }
         }
 
-        return if (sortDir == SortDirection.ASC) {
-            filtered.sortedWith(comparator)
-        } else {
-            filtered.sortedWith(comparator.reversed())
-        }
+        return filtered.sortedWith(comparator)
     }
 
     val playbackHistory: StateFlow<List<HistoryEntity>> = historyDao.getAllHistory()
