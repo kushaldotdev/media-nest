@@ -742,6 +742,8 @@ fun LibraryScreen(
                                 sourceType = "playlist",
                                 searchQuery = uiState.searchQuery,
                                 viewMode = uiState.viewMode,
+                                sortCategory = uiState.sortCategory,
+                                sortDirection = uiState.sortDirection,
                                 fullTitles = fullTitles,
                                 showFullTitlesToggle = false,
                                 onSubscriptionClick = { type, id ->
@@ -764,6 +766,8 @@ fun LibraryScreen(
                                 sourceType = "channel",
                                 searchQuery = uiState.searchQuery,
                                 viewMode = uiState.viewMode,
+                                sortCategory = uiState.sortCategory,
+                                sortDirection = uiState.sortDirection,
                                 fullTitles = fullTitles,
                                 showFullTitlesToggle = false,
                                 onSubscriptionClick = { type, id ->
@@ -1257,26 +1261,42 @@ fun LibraryScreen(
 
             // Sort Bottom Sheet
             if (showSortBottomSheet) {
+                val sortOptions = when (uiState.currentTab) {
+                    LibraryTab.HISTORY -> MediaNestSortOption.HistoryMediaOptions
+                    LibraryTab.PLAYLISTS, LibraryTab.SUBSCRIPTIONS -> MediaNestSortOption.SubscriptionMediaOptions
+                    else -> MediaNestSortOption.CollectionsMediaOptions
+                }
+                val rawSelectedSortBy = when (uiState.sortCategory) {
+                    SortCategory.DATE_PUBLISHED -> "DATE_PUBLISHED"
+                    SortCategory.LAST_WATCHED -> "LAST_WATCHED"
+                    SortCategory.DATE_ADDED -> "DATE_ADDED"
+                    SortCategory.NAME -> "TITLE"
+                    SortCategory.DURATION -> "DURATION"
+                    SortCategory.SIZE -> "SIZE"
+                }
+                val resolvedSortBy = if (sortOptions.any { it.id.equals(rawSelectedSortBy, ignoreCase = true) }) {
+                    rawSelectedSortBy
+                } else {
+                    sortOptions.firstOrNull()?.id ?: "DATE_PUBLISHED"
+                }
                 MediaNestSortBottomSheet(
                     onDismissRequest = { showSortBottomSheet = false },
-                    selectedSortBy = when (uiState.sortCategory) {
-                        SortCategory.DATE -> "DATE"
-                        SortCategory.NAME -> "TITLE"
-                        SortCategory.DURATION -> "DURATION"
-                        SortCategory.SIZE -> "SIZE"
-                    },
+                    selectedSortBy = resolvedSortBy,
                     isAscending = uiState.sortDirection == SortDirection.ASC,
                     onSortSelected = { sortBy, isAscending ->
                         val cat = when (sortBy.uppercase()) {
+                            "DATE_PUBLISHED" -> SortCategory.DATE_PUBLISHED
+                            "LAST_WATCHED" -> SortCategory.LAST_WATCHED
+                            "DATE_ADDED", "DATE" -> SortCategory.DATE_ADDED
                             "TITLE", "NAME" -> SortCategory.NAME
                             "DURATION" -> SortCategory.DURATION
                             "SIZE" -> SortCategory.SIZE
-                            else -> SortCategory.DATE
+                            else -> SortCategory.DATE_PUBLISHED
                         }
                         val dir = if (isAscending) SortDirection.ASC else SortDirection.DESC
                         viewModel.setSort(cat, dir)
                     },
-                    options = MediaNestSortOption.DefaultMediaOptions
+                    options = sortOptions
                 )
             }
         }
@@ -1400,14 +1420,12 @@ private fun LibraryHeaderBlock(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState())
                     .padding(horizontal = 4.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                if (currentTab !in listOf(LibraryTab.PLAYLISTS, LibraryTab.SUBSCRIPTIONS)) {
                     listOf(
                         MediaTypeFilter.ALL,
                         MediaTypeFilter.VIDEO,
@@ -1442,12 +1460,7 @@ private fun LibraryHeaderBlock(
                     }
                 }
 
-                val sortLabel = when (sortCategory) {
-                    SortCategory.DATE -> "Date"
-                    SortCategory.NAME -> "Name"
-                    SortCategory.DURATION -> "Duration"
-                    SortCategory.SIZE -> "Size"
-                }
+                val sortLabel = sortCategory.label
                 val sortDirectionSymbol = if (sortDirection == SortDirection.ASC) "↑" else "↓"
 
                 MediaNestChip(

@@ -152,7 +152,7 @@ fun InlineSubscriptionScreen(
     var watchCountTargetTitle by remember { mutableStateOf("") }
     var watchCountTargetInitialCount by remember { mutableStateOf(0) }
 
-    var sortCategory by remember { mutableStateOf(SortCategory.DATE) }
+    var sortCategory by remember { mutableStateOf(SortCategory.DATE_PUBLISHED) }
     var sortDirection by remember { mutableStateOf(SortDirection.DESC) }
     var showSortSheet by remember { mutableStateOf(false) }
 
@@ -284,9 +284,11 @@ fun InlineSubscriptionScreen(
                     } else {
                         playlistVideos.filter { !it.isShort }
                     }
-                    val sortedVideos = remember(filteredVideos, sortCategory, sortDirection) {
+                    val sortedVideos = remember(filteredVideos, sortCategory, sortDirection, playbackHistory) {
                         val sorted = when (sortCategory) {
-                            SortCategory.DATE -> filteredVideos.sortedBy { UiUtils.parseUploadDate(it.uploadDate)?.time ?: 0L }.let { if (sortDirection == SortDirection.ASC) it else it.reversed() }
+                            SortCategory.DATE_PUBLISHED -> filteredVideos.sortedBy { UiUtils.parseUploadDate(it.uploadDate)?.time ?: 0L }.let { if (sortDirection == SortDirection.ASC) it else it.reversed() }
+                            SortCategory.DATE_ADDED -> if (sortDirection == SortDirection.ASC) filteredVideos else filteredVideos.reversed()
+                            SortCategory.LAST_WATCHED -> filteredVideos.sortedBy { v -> playbackHistory.find { it.videoId == v.videoId }?.playedAt ?: 0L }.let { if (sortDirection == SortDirection.ASC) it else it.reversed() }
                             SortCategory.NAME -> filteredVideos.sortedBy { it.title.lowercase() }.let { if (sortDirection == SortDirection.ASC) it else it.reversed() }
                             SortCategory.DURATION -> filteredVideos.sortedBy { it.durationSeconds }.let { if (sortDirection == SortDirection.ASC) it else it.reversed() }
                             else -> filteredVideos
@@ -336,7 +338,7 @@ fun InlineSubscriptionScreen(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    val sortLabel = when (sortCategory) { SortCategory.DATE -> "Date"; SortCategory.NAME -> "Name"; SortCategory.DURATION -> "Duration"; else -> "Date" }
+                                    val sortLabel = sortCategory.label
                                     val sortDirectionSymbol = if (sortDirection == SortDirection.ASC) "↑" else "↓"
                                     MediaNestChip(
                                         label = "$sortLabel $sortDirectionSymbol",
@@ -406,24 +408,29 @@ fun InlineSubscriptionScreen(
                         MediaNestSortBottomSheet(
                             onDismissRequest = { showSortSheet = false },
                             selectedSortBy = when (sortCategory) {
-                                SortCategory.DATE -> "DATE"
+                                SortCategory.DATE_PUBLISHED -> "DATE_PUBLISHED"
+                                SortCategory.DATE_ADDED -> "DATE_ADDED"
+                                SortCategory.LAST_WATCHED -> "LAST_WATCHED"
                                 SortCategory.NAME -> "TITLE"
                                 SortCategory.DURATION -> "DURATION"
-                                else -> "DATE"
+                                else -> "DATE_PUBLISHED"
                             },
                             isAscending = sortDirection == SortDirection.ASC,
                             fullTitles = fullTitles,
                             onFullTitlesChange = { checked -> fullTitles = checked },
                             onSortSelected = { sortBy, isAscending ->
                                 sortCategory = when (sortBy.uppercase()) {
+                                    "DATE_PUBLISHED" -> SortCategory.DATE_PUBLISHED
+                                    "DATE_ADDED", "DATE" -> SortCategory.DATE_ADDED
+                                    "LAST_WATCHED" -> SortCategory.LAST_WATCHED
                                     "TITLE", "NAME" -> SortCategory.NAME
                                     "DURATION" -> SortCategory.DURATION
-                                    else -> SortCategory.DATE
+                                    else -> SortCategory.DATE_PUBLISHED
                                 }
                                 sortDirection = if (isAscending) SortDirection.ASC else SortDirection.DESC
                                 showSortSheet = false
                             },
-                            options = MediaNestSortOption.DefaultMediaOptions
+                            options = MediaNestSortOption.SubscriptionMediaOptions
                         )
                     }
                 }
@@ -446,9 +453,11 @@ fun InlineSubscriptionScreen(
                     } else {
                         channelUploads.filter { !it.isShort }
                     }
-                    val sortedVideos = remember(filteredVideos, sortCategory, sortDirection) {
+                    val sortedVideos = remember(filteredVideos, sortCategory, sortDirection, playbackHistory) {
                         val sorted = when (sortCategory) {
-                            SortCategory.DATE -> filteredVideos.sortedBy { UiUtils.parseUploadDate(it.uploadDate)?.time ?: 0L }.let { if (sortDirection == SortDirection.ASC) it else it.reversed() }
+                            SortCategory.DATE_PUBLISHED -> filteredVideos.sortedBy { UiUtils.parseUploadDate(it.uploadDate)?.time ?: 0L }.let { if (sortDirection == SortDirection.ASC) it else it.reversed() }
+                            SortCategory.DATE_ADDED -> if (sortDirection == SortDirection.ASC) filteredVideos else filteredVideos.reversed()
+                            SortCategory.LAST_WATCHED -> filteredVideos.sortedBy { v -> playbackHistory.find { it.videoId == v.videoId }?.playedAt ?: 0L }.let { if (sortDirection == SortDirection.ASC) it else it.reversed() }
                             SortCategory.NAME -> filteredVideos.sortedBy { it.title.lowercase() }.let { if (sortDirection == SortDirection.ASC) it else it.reversed() }
                             SortCategory.DURATION -> filteredVideos.sortedBy { it.durationSeconds }.let { if (sortDirection == SortDirection.ASC) it else it.reversed() }
                             else -> filteredVideos
@@ -510,7 +519,7 @@ fun InlineSubscriptionScreen(
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    val sortLabel = when (sortCategory) { SortCategory.DATE -> "Date"; SortCategory.NAME -> "Name"; SortCategory.DURATION -> "Duration"; else -> "Date" }
+                                    val sortLabel = sortCategory.label
                                     val sortDirectionSymbol = if (sortDirection == SortDirection.ASC) "↑" else "↓"
                                     MediaNestChip(
                                         label = "$sortLabel $sortDirectionSymbol",
@@ -580,24 +589,29 @@ fun InlineSubscriptionScreen(
                         MediaNestSortBottomSheet(
                             onDismissRequest = { showSortSheet = false },
                             selectedSortBy = when (sortCategory) {
-                                SortCategory.DATE -> "DATE"
+                                SortCategory.DATE_PUBLISHED -> "DATE_PUBLISHED"
+                                SortCategory.DATE_ADDED -> "DATE_ADDED"
+                                SortCategory.LAST_WATCHED -> "LAST_WATCHED"
                                 SortCategory.NAME -> "TITLE"
                                 SortCategory.DURATION -> "DURATION"
-                                else -> "DATE"
+                                else -> "DATE_PUBLISHED"
                             },
                             isAscending = sortDirection == SortDirection.ASC,
                             fullTitles = fullTitles,
                             onFullTitlesChange = { checked -> fullTitles = checked },
                             onSortSelected = { sortBy, isAscending ->
                                 sortCategory = when (sortBy.uppercase()) {
+                                    "DATE_PUBLISHED" -> SortCategory.DATE_PUBLISHED
+                                    "DATE_ADDED", "DATE" -> SortCategory.DATE_ADDED
+                                    "LAST_WATCHED" -> SortCategory.LAST_WATCHED
                                     "TITLE", "NAME" -> SortCategory.NAME
                                     "DURATION" -> SortCategory.DURATION
-                                    else -> SortCategory.DATE
+                                    else -> SortCategory.DATE_PUBLISHED
                                 }
                                 sortDirection = if (isAscending) SortDirection.ASC else SortDirection.DESC
                                 showSortSheet = false
                             },
-                            options = MediaNestSortOption.DefaultMediaOptions
+                            options = MediaNestSortOption.SubscriptionMediaOptions
                         )
                     }
                 }

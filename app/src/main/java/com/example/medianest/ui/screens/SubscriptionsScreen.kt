@@ -66,6 +66,8 @@ import com.example.medianest.ui.components.FullTitlesToggle
 import com.example.medianest.ui.components.LoadingState
 import com.example.medianest.ui.components.LocalFullTitles
 import com.example.medianest.ui.components.MediaNestSnackbarHost
+import com.example.medianest.ui.viewmodel.SortCategory
+import com.example.medianest.ui.viewmodel.SortDirection
 import com.example.medianest.ui.viewmodel.SubscriptionsViewModel
 import com.example.medianest.ui.viewmodel.ViewMode
 import kotlinx.coroutines.launch
@@ -76,6 +78,8 @@ fun SubscriptionsScreen(
     sourceType: String,
     searchQuery: String = "",
     viewMode: ViewMode = ViewMode.LIST,
+    sortCategory: SortCategory = SortCategory.DATE_ADDED,
+    sortDirection: SortDirection = SortDirection.DESC,
     onSubscriptionClick: (String, String) -> Unit,
     viewModel: SubscriptionsViewModel = hiltViewModel(LocalContext.current as ComponentActivity),
     subscriptionsPreferences: SubscriptionsPreferences? = null,
@@ -109,6 +113,20 @@ fun SubscriptionsScreen(
         it.sourceType == sourceType && 
         (searchQuery.isBlank() || it.name.contains(searchQuery, ignoreCase = true))
     } ?: emptyList()
+
+    val sortedFiltered = remember(filtered, sortCategory, sortDirection) {
+        val comparator: Comparator<SubscriptionEntity> = when (sortCategory) {
+            SortCategory.NAME -> compareBy(String.CASE_INSENSITIVE_ORDER) { it.name }
+            SortCategory.LAST_WATCHED -> compareBy { it.lastCheckedAt }
+            SortCategory.DATE_ADDED, SortCategory.DATE_PUBLISHED -> compareBy { it.createdAt }
+            else -> compareBy { it.createdAt }
+        }
+        if (sortDirection == SortDirection.ASC) {
+            filtered.sortedWith(comparator)
+        } else {
+            filtered.sortedWith(comparator.reversed())
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -159,7 +177,7 @@ fun SubscriptionsScreen(
                 ) {
                     LoadingState()
                 }
-            } else if (filtered.isEmpty()) {
+            } else if (sortedFiltered.isEmpty()) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -182,7 +200,7 @@ fun SubscriptionsScreen(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        items(filtered, key = { it.id }) { sub ->
+                        items(sortedFiltered, key = { it.id }) { sub ->
                             SubscriptionCard(
                                 subscription = sub,
                                 onAutoDownloadChange = { autoDownload, audioOnly ->
@@ -227,7 +245,7 @@ fun SubscriptionsScreen(
                             .padding(horizontal = 8.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        items(filtered, key = { it.id }) { sub ->
+                        items(sortedFiltered, key = { it.id }) { sub ->
                             SubscriptionCard(
                                 subscription = sub,
                                 onAutoDownloadChange = { autoDownload, audioOnly ->

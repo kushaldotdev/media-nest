@@ -22,5 +22,6 @@ build.log
 build-debug.log
 build-release.log
 build-publish.log
+test.log
 new-design-media-nest/*
 dist/*

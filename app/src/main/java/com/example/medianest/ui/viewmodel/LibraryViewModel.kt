@@ -22,6 +22,7 @@ import com.example.medianest.data.preferences.DownloadPreferences
 import com.example.medianest.data.repository.DownloadRepository
 import com.example.medianest.data.repository.VideoRepository
 import com.example.medianest.service.AudioExtractor
+import com.example.medianest.ui.utils.UiUtils
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -50,7 +51,9 @@ enum class LibraryTab(val label: String) {
 }
 
 enum class SortCategory(val label: String) {
-    DATE("Date"),
+    DATE_PUBLISHED("Published Date"),
+    LAST_WATCHED("Last Watched"),
+    DATE_ADDED("Date Added"),
     NAME("Name"),
     DURATION("Duration"),
     SIZE("Size")
@@ -72,7 +75,7 @@ data class LibraryUiState(
     val searchQuery: String = "",
     val currentTab: LibraryTab = LibraryTab.HISTORY,
     val mediaTypeFilter: MediaTypeFilter = MediaTypeFilter.ALL,
-    val sortCategory: SortCategory = SortCategory.DATE,
+    val sortCategory: SortCategory = SortCategory.DATE_PUBLISHED,
     val sortDirection: SortDirection = SortDirection.DESC,
     val selectedFolder: FolderEntity? = null,
     val folderStack: List<FolderEntity> = emptyList(),
@@ -153,6 +156,9 @@ class LibraryViewModel @Inject constructor(
         }
 
         val comparator: Comparator<VideoEntity> = when (sortCat) {
+            SortCategory.DATE_PUBLISHED -> compareBy { UiUtils.parseUploadDate(it.uploadDate)?.time ?: 0L }
+            SortCategory.LAST_WATCHED -> compareBy { it.lastPlayedAt ?: 0L }
+            SortCategory.DATE_ADDED -> compareBy { it.addedAt }
             SortCategory.NAME -> compareBy(String.CASE_INSENSITIVE_ORDER) { it.title }
             SortCategory.DURATION -> compareBy { it.durationSeconds }
             SortCategory.SIZE -> compareBy { video ->
@@ -167,7 +173,6 @@ class LibraryViewModel @Inject constructor(
                     (video.durationSeconds * 2500000L) / 8L
                 }
             }
-            SortCategory.DATE -> compareBy { maxOf(it.addedAt, it.lastPlayedAt ?: 0L, it.downloadedAt ?: 0L) }
         }
 
         return if (sortDir == SortDirection.ASC) {
@@ -253,7 +258,7 @@ class LibraryViewModel @Inject constructor(
         }
         val comparator: Comparator<FolderEntity> = when (sortCat) {
             SortCategory.NAME -> compareBy(String.CASE_INSENSITIVE_ORDER) { it.name }
-            SortCategory.DATE -> compareBy { it.createdAt }
+            SortCategory.DATE_ADDED, SortCategory.DATE_PUBLISHED, SortCategory.LAST_WATCHED -> compareBy { it.createdAt }
             else -> compareBy(String.CASE_INSENSITIVE_ORDER) { it.name }
         }
         if (sortDir == SortDirection.ASC) list.sortedWith(comparator) else list.sortedWith(comparator.reversed())
@@ -277,7 +282,7 @@ class LibraryViewModel @Inject constructor(
                 }
                 val comparator: Comparator<FolderEntity> = when (sortCat) {
                     SortCategory.NAME -> compareBy(String.CASE_INSENSITIVE_ORDER) { it.name }
-                    SortCategory.DATE -> compareBy { it.createdAt }
+                    SortCategory.DATE_ADDED, SortCategory.DATE_PUBLISHED, SortCategory.LAST_WATCHED -> compareBy { it.createdAt }
                     else -> compareBy(String.CASE_INSENSITIVE_ORDER) { it.name }
                 }
                 if (sortDir == SortDirection.ASC) list.sortedWith(comparator) else list.sortedWith(comparator.reversed())
@@ -511,8 +516,14 @@ class LibraryViewModel @Inject constructor(
         _favoritesLimit.value = 10
         _folderVideosLimit.value = 10
         _watchedLimit.value = 10
+        val newSortCat = when (tab) {
+            LibraryTab.HISTORY -> if (_uiState.value.sortCategory == SortCategory.SIZE) SortCategory.LAST_WATCHED else _uiState.value.sortCategory
+            LibraryTab.PLAYLISTS, LibraryTab.SUBSCRIPTIONS -> if (_uiState.value.sortCategory == SortCategory.SIZE) SortCategory.DATE_ADDED else _uiState.value.sortCategory
+            else -> _uiState.value.sortCategory
+        }
         _uiState.value = _uiState.value.copy(
             currentTab = tab,
+            sortCategory = newSortCat,
             selectedFolder = null,
             folderStack = emptyList(),
             isSelectionMode = false,

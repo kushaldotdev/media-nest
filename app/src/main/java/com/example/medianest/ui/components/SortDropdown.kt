@@ -38,12 +38,25 @@ data class MediaNestSortOption(
     val description: String? = null
 ) {
     companion object {
-        val DATE = MediaNestSortOption(
-            id = "DATE",
-            label = "Date Added",
+        val DATE_PUBLISHED = MediaNestSortOption(
+            id = "DATE_PUBLISHED",
+            label = "Published Date",
             iconRes = R.drawable.ic_mn_history,
-            description = "Recently added or uploaded"
+            description = "YouTube release or upload date"
         )
+        val LAST_WATCHED = MediaNestSortOption(
+            id = "LAST_WATCHED",
+            label = "Last Watched",
+            iconRes = R.drawable.ic_mn_watched,
+            description = "Recently played or streamed"
+        )
+        val DATE_ADDED = MediaNestSortOption(
+            id = "DATE_ADDED",
+            label = "Date Added",
+            iconRes = R.drawable.ic_mn_folder,
+            description = "Added to library or folder"
+        )
+        val DATE = DATE_ADDED
         val TITLE = MediaNestSortOption(
             id = "TITLE",
             label = "Title",
@@ -75,14 +88,20 @@ data class MediaNestSortOption(
             description = "Active, queued, paused, completed"
         )
 
+        /** Curated options for general media collections. */
+        val CollectionsMediaOptions = listOf(DATE_ADDED, DATE_PUBLISHED, LAST_WATCHED, TITLE, DURATION, SIZE)
+
+        /** Curated options for subscription channels/playlists. */
+        val SubscriptionMediaOptions = listOf(DATE_PUBLISHED, DATE_ADDED, LAST_WATCHED, TITLE, DURATION)
+
+        /** Curated options for watch history. */
+        val HistoryMediaOptions = listOf(LAST_WATCHED, DATE_ADDED, DATE_PUBLISHED, TITLE, DURATION)
+
         /** Default sort options for general media collections. */
-        val DefaultMediaOptions = listOf(DATE, TITLE, DURATION, SIZE)
+        val DefaultMediaOptions = CollectionsMediaOptions
 
         /** Default sort options for download queue screens. */
         val DefaultDownloadOptions = listOf(DATE, PROGRESS, SIZE, STATUS)
-
-        /** Default sort options for collection tabs. */
-        val DefaultCollectionsOptions = listOf(DATE, TITLE, DURATION)
     }
 }
 
