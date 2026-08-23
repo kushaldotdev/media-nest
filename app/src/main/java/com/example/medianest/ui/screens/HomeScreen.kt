@@ -2634,7 +2634,7 @@ fun HomeMediaRow(
                         Text(
                             text = video.channelName,
                             style = TextStyle(fontSize = 12.sp, color = MediaNestColors.TextSecondary),
-                            maxLines = 1,
+                            maxLines = if (isTitleExpanded) Int.MAX_VALUE else 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f, fill = false)
                         )
@@ -2645,7 +2645,7 @@ fun HomeMediaRow(
                             Text(
                                 text = "· $formattedDate",
                                 style = TextStyle(fontSize = 11.sp, color = MediaNestColors.TextSecondary.copy(alpha = 0.7f)),
-                                maxLines = 1
+                                maxLines = if (isTitleExpanded) Int.MAX_VALUE else 1
                             )
                         }
                     }

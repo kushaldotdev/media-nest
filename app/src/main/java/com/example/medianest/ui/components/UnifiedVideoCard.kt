@@ -334,23 +334,27 @@ fun UnifiedVideoCard(
 
                         Spacer(modifier = Modifier.height(4.dp))
 
-                        // Metadata
-                        val formattedDate = UiUtils.formatReleaseDate(uploadDate)
-                        val metadataText = buildString {
-                            if (channelName.isNotEmpty()) {
-                                append(channelName)
-                            }
-                            if (!formattedDate.isNullOrEmpty()) {
-                                if (isNotEmpty()) append(" • ")
-                                append(formattedDate)
-                            }
-                        }
-                        if (metadataText.isNotEmpty()) {
+                        // Channel & Date in separate rows for grid view
+                        if (channelName.isNotEmpty()) {
                             Text(
-                                text = metadataText,
+                                text = channelName,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
+                                maxLines = if (isTitleExpanded) Int.MAX_VALUE else 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+
+                        val formattedDate = UiUtils.formatReleaseDate(uploadDate)
+                        if (!formattedDate.isNullOrEmpty()) {
+                            if (channelName.isNotEmpty()) {
+                                Spacer(modifier = Modifier.height(2.dp))
+                            }
+                            Text(
+                                text = formattedDate,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = if (isTitleExpanded) Int.MAX_VALUE else 1,
                                 overflow = TextOverflow.Ellipsis
                             )
                         }
@@ -696,7 +700,7 @@ fun UnifiedVideoRow(
                                 text = metadataText,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
+                                maxLines = if (isTitleExpanded) Int.MAX_VALUE else 1,
                                 overflow = TextOverflow.Ellipsis
                             )
                         }
