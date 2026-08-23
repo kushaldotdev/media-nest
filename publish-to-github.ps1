@@ -55,7 +55,7 @@ try {
                 $patch++
             } else {
                 $patch = 0
-                if ($minor -lt 1) {
+                if ($minor -lt 9) {
                     $minor++
                 } else {
                     $minor = 0
@@ -119,10 +119,10 @@ try {
     }
     Write-Host "APK: $((Resolve-Path $apkSource).Path) ($([math]::Round((Get-Item $apkSource).Length / 1MB, 1)) MB)"
 
-    # Keep a copy in dist\publish for local reference
+    # Keep a copy in dist\publish for local reference (use absolute path for Start-Job)
     $publishDir = ".\dist\publish"
     New-Item -ItemType Directory -Force -Path $publishDir | Out-Null
-    $apkDest = Join-Path $publishDir "medianest-$versionTag.apk"
+    $apkDest = Join-Path (Resolve-Path $publishDir).Path "medianest-$versionTag.apk"
     Copy-Item $apkSource -Destination $apkDest
     Write-Host "Kept local copy at $apkDest"
 
@@ -139,11 +139,17 @@ try {
     Write-Host ""
     Write-Host ("  Uploading {0} ({1} MB) to GitHub..." -f (Split-Path $apkDest -Leaf), $apkSizeMB)
 
+    $repoRoot = (Get-Location).Path
     $uploadJob = Start-Job -ScriptBlock {
-        param($tag, $asset, $title, $notes)
-        & gh release create $tag $asset --title $title --notes $notes 2>&1
-        exit $LASTEXITCODE
-    } -ArgumentList $versionTag, $apkDest, "Release $versionTag", "Update to $versionTag"
+        param($repoDir, $tag, $asset, $title, $notes)
+        Set-Location $repoDir
+        [System.IO.Directory]::SetCurrentDirectory($repoDir)
+        $output = & gh release create $tag $asset --title $title --notes $notes 2>&1
+        [PSCustomObject]@{
+            ExitCode = $LASTEXITCODE
+            Output   = $output
+        }
+    } -ArgumentList $repoRoot, $versionTag, $apkDest, "Release $versionTag", "Update to $versionTag"
 
     $spinner = @('|', '/', '-', '\\')
     $spinIndex = 0
@@ -161,11 +167,14 @@ try {
     # Clear the spinner line
     if ($lastLine) { Write-Host ("`r" + (' ' * $lastLine.Length) + "`r") -NoNewline }
 
-    Receive-Job $uploadJob -Wait | ForEach-Object { Write-Host $_ }
-    $releaseExit = $uploadJob.ExitCode
+    $jobResult = Receive-Job $uploadJob -Wait
     Remove-Job $uploadJob -Force
 
-    if ($releaseExit -eq 0) {
+    if ($jobResult -and $jobResult.Output) {
+        $jobResult.Output | ForEach-Object { Write-Host $_ }
+    }
+
+    if ($jobResult -and $jobResult.ExitCode -eq 0) {
         Write-Host ("  ✓ Release {0} published (took {1})" -f $versionTag, (Format-Duration $uploadSw.Elapsed)) -ForegroundColor Green
     } else {
         Write-Error "Failed to publish $versionTag to GitHub releases"
