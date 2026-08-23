@@ -270,7 +270,12 @@ fun HomeScreen(
                     isLoading = uiState is HomeUiState.Loading,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     fullTitles = fullTitlesHome,
-                    onFullTitlesChange = { fullTitlesHome = it }
+                    onFullTitlesChange = { fullTitlesHome = it },
+                    showClear = urlInput.isNotEmpty() || uiState !is HomeUiState.Idle,
+                    onClearAll = {
+                        urlInput = ""
+                        viewModel.resetState()
+                    }
                 )
             }
 
@@ -1748,7 +1753,9 @@ fun HeroExtractionPanel(
     isLoading: Boolean,
     modifier: Modifier = Modifier,
     fullTitles: Boolean = false,
-    onFullTitlesChange: ((Boolean) -> Unit)? = null
+    onFullTitlesChange: ((Boolean) -> Unit)? = null,
+    onClearAll: (() -> Unit)? = null,
+    showClear: Boolean = false
 ) {
     Surface(
         shape = RoundedCornerShape(24.dp),
@@ -1824,6 +1831,35 @@ fun HeroExtractionPanel(
                     onExtractClick = onExtractClick,
                     isLoading = isLoading
                 )
+
+                if (showClear && onClearAll != null) {
+                    Spacer(Modifier.height(8.dp))
+                    Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+                        Row(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .clickable { onClearAll() }
+                                .padding(horizontal = 6.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_mn_close),
+                                contentDescription = null,
+                                tint = MediaNestColors.Accent,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Text(
+                                "Clear",
+                                style = TextStyle(
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MediaNestColors.Accent
+                                )
+                            )
+                        }
+                    }
+                }
             }
         }
     }

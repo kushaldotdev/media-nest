@@ -95,6 +95,7 @@ class HomeViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow<HomeUiState>(HomeUiState.Idle)
     val uiState: StateFlow<HomeUiState> = _uiState
+    private var extractionJob: Job? = null
 
     private val _showShorts = MutableStateFlow(false)
     val showShorts: StateFlow<Boolean> = _showShorts
@@ -191,7 +192,8 @@ class HomeViewModel @Inject constructor(
             }
         } else null
 
-        viewModelScope.launch {
+        extractionJob?.cancel()
+        extractionJob = viewModelScope.launch {
             val localVideo = videoId?.let { videoDao.getVideoById(it) }
             if (localVideo != null) {
                 val allDownloads = downloadRepository.getDownloadsForVideoFlow(localVideo.id).first()
@@ -607,6 +609,8 @@ class HomeViewModel @Inject constructor(
     }
 
     fun resetState() {
+        extractionJob?.cancel()
+        extractionJob = null
         _uiState.value = HomeUiState.Idle
     }
 
