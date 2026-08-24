@@ -1,7 +1,6 @@
 # Design-2 → Android Parity — Implementation Handoff Prompt
 
 > Paste the code block below into a **fresh session** as the first message.
-> The orchestrator (root) agent must follow `.agents/ORCHESTRATION.md` strictly.
 > **Maximum subagents that may be spawned at once: 10** (but see build caveat).
 
 ---
@@ -16,12 +15,11 @@ master plan. You write NO feature code yourself — you plan phases, create isol
 git worktrees, spawn subagents, review their diffs, merge/commit, and run final builds.
 
 # MANDATORY READS (in this order, before spawning anything)
-1. `.agents/ORCHESTRATION.md` — the workflow playbook. Follow it exactly.
-2. `.agents/plan/DESIGN_2_ANDROID_PARITY_MASTER_PLAN.md` — the master spec (source of truth).
-3. `design-2/README.md` AND `design-2/HANDOVER.md` — feature matrix + handover rules.
-4. `MEDIANEST_BRAND_GUIDELINES.md` — brand palette/typography.
-5. `design-2/css/tokens.css` + `design-2/css/components.css` — exact colors/radius/spacing.
-6. `design-2/js/screens-*.js` — read the specific screen JS before migrating that screen.
+1. `.agents/plan/DESIGN_2_ANDROID_PARITY_MASTER_PLAN.md` — the master spec (source of truth).
+2. `design-2/README.md` AND `design-2/HANDOVER.md` — feature matrix + handover rules.
+3. `MEDIANEST_BRAND_GUIDELINES.md` — brand palette/typography.
+4. `design-2/css/tokens.css` + `design-2/css/components.css` — exact colors/radius/spacing.
+5. `design-2/js/screens-*.js` — read the specific screen JS before migrating that screen.
 
 # NON-NEGOTIABLE CORRECTNESS RULES (these are the traps; every worker prompt must carry them)
 - **Dark theme only.** `#120B0E` canvas, `#2A1A1F` cards, `#382027` raised, `#8F1D2C` deep red,
@@ -47,7 +45,7 @@ git worktrees, spawn subagents, review their diffs, merge/commit, and run final 
 - **Room migration:** AppDatabase is version 17; the notifications subsystem (plan §6) requires a
   17→18 bump + a real `Migration`, never a destructive fallback.
 
-# WORKFLOW (follow .agents/ORCHESTRATION.md §2–§7 exactly)
+# WORKFLOW
 - Create manual worktrees under `/mnt/d/dev/media-nest-worktrees/` (NOT WSL `/tmp`):
   `git worktree add /mnt/d/dev/media-nest-worktrees/<name> HEAD -b <branch>` then
   `cp local.properties /mnt/d/dev/media-nest-worktrees/<name>/`.
@@ -62,7 +60,7 @@ git worktrees, spawn subagents, review their diffs, merge/commit, and run final 
 - **Build concurrency limit:** any wave where workers must BUILD is capped at ~5 concurrent
   (7.8 GB RAM). Pure edit-only waves (e.g. creating XML drawables) may fan out up to 10.
 - Monitor waves with a 5-min heartbeat (`subagent_wait({all:true, timeoutMs:300000})` then
-  `subagent({action:"status", id})`); steer/relaunch off-path children per ORCHESTRATION.md §6a.
+  `subagent({action:"status", id})`); steer/relaunch off-path children as needed.
 - Merge discipline: worker leaves edits uncommitted → you inspect `git diff` → commit in worktree →
   `git merge --no-ff <branch> -m "wip: ..."` on main → serial full build → spawn a read-only
   `reviewer` on the merged diff → squash WIP into one high-level commit per phase.

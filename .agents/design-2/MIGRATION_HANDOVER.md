@@ -91,9 +91,3 @@ Logs: `build-debug.log`, `build-release.log` (git-ignored).
   was scoped to `link_history` as the closest concrete equivalent.
 - `worktreeBaseDir` in pi-subagents config is effectively unused for this workflow (manual
   `/mnt/d/dev/media-nest-worktrees/<name>` worktrees + explicit `cwd`).
-
-## Orchestration
-
-Reusable multi-agent playbook at `.agents/ORCHESTRATION.md` (roles, worktree isolation,
-build recipes, spawn patterns, budgets, commit/review/squash discipline). `AGENTS.md` points
-to it for any future multi-agent work.
