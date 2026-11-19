@@ -23,6 +23,88 @@ ALWAYS prefer MCP graph tools over grep/glob/file-search for code discovery.
 - Who calls it: `trace_path(function_name="OrderHandler", direction="inbound")`
 - Read source: `get_code_snippet(qualified_name="pkg/orders.OrderHandler")`
 
+## Testing the app (read before claiming it works)
+
+If asked to **test, verify, check, or run the app**, follow
+[`.agents/TESTING_PROTOCOL.md`](.agents/TESTING_PROTOCOL.md) — full procedure in
+[`docs/TESTING.md`](docs/TESTING.md). Repo skill: `.agents/skills/medianest-app-testing/SKILL.md`.
+
+**The bar.** "Tested" means the app **launched on an emulator, a control was driven, the screen
+changed, the screenshot was looked at, and logcat had no `FATAL`**. Not a pass:
+
+- `./gradlew assembleDebug` succeeding — that is compiled, not tested
+- green unit tests — logic only, no UI
+- `adb shell input tap` exiting `0` — meaningless, it returns `0` against a crashed process too
+
+**The loop.**
+
+```bash
+scripts/dev/host-emulator.sh up   # WSL only: emulator on the Windows host + TCP adb (see below)
+scripts/nest.sh test              # build (if changed) + emulator (if needed) + install (if changed) + drive
+```
+
+`scripts/nest.sh test` is idempotent: the second run reuses the APK, the running emulator and
+the installed package, so it costs ~75 s instead of minutes. `--force` rebuilds.
+
+For an auditable run with a written report use `scripts/verify.sh` (build → unit tests →
+emulator → install → flow → `artifacts/verify-<UTC>/RESULT.md`). Its exit code is the verdict.
+Add flows as `scripts/flows/<name>.sh` exporting `flow_<name>()`, then
+`scripts/nest.sh test <name>`.
+
+**Do not run the emulator inside WSL.** Its framebuffer cannot be read back
+(`Assertion failed: !rcEnc->featureInfo()->hasReadColorBufferDma`), so `screencap`,
+`screenrecord` **and** `uiautomator` all return nothing — the app can be installed there but
+never driven or verified. `-gpu swiftshader`/`swiftshader_indirect`/`off` and
+`-feature -ReadColorBufferDma` were all tried and all fail. Run the emulator on the host OS
+(`scripts/dev/host-emulator.sh up`); `scripts/lib/common.sh` detects WSL, finds the host adb
+server on the default gateway and exports `ADB_SERVER_SOCKET`, so every other script works
+unchanged.
+
+**A real device** works the same way — `scripts/phone.sh` (Wi-Fi pairing, USB routes,
+`install`, `test`). Wi-Fi reaches the LAN from WSL2 directly; USB either lets Windows own the
+phone while WSL borrows its adb server, or needs `usbipd-win`.
+
+**Driving primitives** — `. scripts/lib/drive.sh`, then:
+
+| Helper | Does |
+| --- | --- |
+| `launch` | force-stop + start, asserts the app reached the foreground |
+| `tap_label "Downloads"` | dumps the Compose semantics tree, taps the node's centre, retries through animations |
+| `assert_text "Library"` | fails unless that string is in the live tree |
+| `snap "02-home"` | screenshot into `$ART/screens/`, detects blank frames |
+| `dump_ui` | raw `uiautomator` XML into `$ART/ui/` |
+| `ck_logcat` | fails on `FATAL EXCEPTION` / `ANR in <pkg>` |
+| `start_recording` / `stop_recording` | `screenrecord` → `$ART/run.mp4` |
+
+**Evidence.** `artifacts/verify-<UTC>/` — `RESULT.md`, `screens/*.png`, `ui/*.xml`, `run.mp4`,
+`logcat.txt`, `logcat-crashes.txt`. Attach the screenshots and recording; never summarise from
+memory. Live view while driving: `scripts/watch.sh` (scrcpy via WSLg). Taps come from
+`adb shell input`, so **no cursor is drawn** — the UI reacts, the pointer does not move.
+
+**Environment facts that waste hours if rediscovered:**
+
+- The debug package id is **`com.example.medianest.debug`** (`applicationIdSuffix`). Using
+  `com.example.medianest` gives `Activity not found`, which reads like a crash but is a typo.
+- Build inside WSL on **ext4** (`~/projects/media-nest`), not `/mnt/d`. 9p mounts are several
+  times slower for Gradle's file churn and break file watching.
+- `/dev/kvm` must be **openable**, not merely present — it shows as `660 root:kvm` either way.
+  Probe: `python3 -c "import os; os.open('/dev/kvm', os.O_RDWR)"`. Fix:
+  `sudo usermod -aG kvm $USER` then re-login (from Windows without a password prompt:
+  `wsl -d Ubuntu-24.04 -u root -- usermod -aG kvm $USER`).
+- `-gpu swiftshader_indirect` is required on a host with no GPU passthrough. Without it the
+  guest renders nothing and screenshots are black **while adb reports the app healthy**. Do not
+  *also* set `hw.gpu.enabled=no` in `config.ini` — the two conflict and kill the display stack,
+  which makes `screencap` emit a 72-byte file and `monkey` fail with a null `DisplayManager`.
+- `uiautomator dump` returns "could not get idle state" while an animation runs. Wait, retry;
+  it is not a broken app.
+- Compose `IconButton`s often carry no `text`; match `content-desc` first.
+- A large APK (~196 MB here, 103 MB of `.so`) fails `adb install` with
+  `Failure calling service package: Broken pipe`. Use `adb push` then
+  `adb shell pm install -r -t /data/local/tmp/app.apk`.
+- Test with the `debug` build; `signingConfigs.release` reads `$user.home/.android/debug.keystore`.
+- An emulator launched with a bare `nohup ... &` is killed when the WSL session exits. Use
+  `setsid nohup ... < /dev/null &` so it survives.
+
 ## Build & Run Commands
 
 Windows environment does not have standard `JAVA_HOME` in path. Use bundled build scripts:

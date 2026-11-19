@@ -25,3 +25,5 @@ build-publish.log
 test.log
 new-design-media-nest/*
 dist/*
+# Verify-run evidence (screenshots, screen recordings, ui dumps, RESULT.md)
+artifacts/

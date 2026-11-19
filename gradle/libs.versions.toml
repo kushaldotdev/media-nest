@@ -18,7 +18,10 @@ workManager = "2.10.0"
 datastorePreferences = "1.1.4"
 kotlinxSerializationJson = "1.8.1"
 media3 = "1.6.1"
-newpipeExtractor = "4de221bf67ec0bf8dbdf573fbc9d4412a8561cb0"
+# NOTE: JitPack purged the previous pinned commit (4de221bf...) — it returns 404 and
+# the build fails at dependency resolution. v0.27.1 is published, and the old commit is
+# an ancestor of it (109 commits behind), so this is a forward move, not a rollback.
+newpipeExtractor = "v0.27.1"
 ffmpegKit = "6.1.4"
 okhttp = "4.12.0"
 composeBom = "2026.02.01"
