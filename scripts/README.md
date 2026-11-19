@@ -143,3 +143,17 @@ exports `ADB_SERVER_SOCKET`, so every other script works untouched. Confirmed wo
 launch, all four bottom-nav destinations tapped, screenshots captured, logcat clean.
 
 This is also how a **physical phone** is driven from WSL — see `scripts/phone.sh`.
+
+## Where this repo lives
+
+One working tree, in WSL ext4 — `~/projects/media-nest`. Open it from Windows at
+`\\wsl.localhost\Ubuntu-24.04\home\kushal\projects\media-nest` (VS Code Remote-WSL, Explorer).
+Backup: bare repo `D:\dev\media-nest-backup.git`, remote `backup`.
+
+Don't build from `/mnt/d`: same 224 files measure 126× slower to read and 73× slower to create
+there, and a second copy causes phantom mode-only diffs and stale-mtime builds.
+
+```bash
+git push backup main      # snapshot to D:
+git push origin main      # publish to GitHub
+```

@@ -1,3 +1,31 @@
+# MediaNest — agent instructions
+
+## Where the code lives (one copy only)
+
+The working tree is **only** in WSL ext4:
+
+```
+WSL:     ~/projects/media-nest
+Windows: \\wsl.localhost\Ubuntu-24.04\home\kushal\projects\media-nest
+```
+
+Open that UNC path in VS Code / Cursor / Explorer (Remote-WSL). Backup is a bare repo at
+`D:\dev\media-nest-backup.git` (remote name `backup`), synced with `git push backup` — never
+with `cp`/`rsync`.
+
+**Do not copy the tree to `D:\` and build there.** Measured on this machine, from WSL, over
+the same 224 source files:
+
+| Operation | `/mnt/d` (9p) | ext4 | Factor |
+| --- | --- | --- | --- |
+| read every file | 2021 ms | 16 ms | 126x |
+| create 300 small files | 2346 ms | 32 ms | 73x |
+| stat every file | 391 ms | 7 ms | 56x |
+
+A second Windows copy also silently caused real bugs: `rsync -a` reported hundreds of phantom
+"changed" files (mode-only), and `cp` bumping a mtime defeated the build fast path. If a
+Windows-side copy is ever needed, make it a **git peer**, not a file copy.
+
 # Codebase Knowledge Graph (codebase-memory-mcp)
 
 This project uses codebase-memory-mcp to maintain a knowledge graph of the codebase.
