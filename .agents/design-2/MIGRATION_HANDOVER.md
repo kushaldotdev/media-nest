@@ -90,4 +90,4 @@ Logs: `build-debug.log`, `build-release.log` (git-ignored).
   no `NotificationEntity`/notifications table exists in the current schema; the 365-day prune
   was scoped to `link_history` as the closest concrete equivalent.
 - `worktreeBaseDir` in pi-subagents config is effectively unused for this workflow (manual
-  `/mnt/d/dev/media-nest-worktrees/<name>` worktrees + explicit `cwd`).
+  `~/projects/media-nest-worktrees/<name>` worktrees + explicit `cwd`).

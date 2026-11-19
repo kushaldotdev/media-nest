@@ -76,9 +76,17 @@ case "$ACTION" in
     say "  serial : $(nest_device_serial || echo none)"
     say "  booted : $(sh_ getprop sys.boot_completed 2>/dev/null || echo -)"
     say "  sdk    : $(sh_ getprop ro.build.version.sdk 2>/dev/null || echo -)"
-    say "  avd    : $NEST_AVD"
+    # The device may be the host-OS emulator (ADB_SERVER_SOCKET set), not a
+    # local AVD — reporting $NEST_AVD here would be a lie.
+    say "  avd    : $(sh_ getprop ro.boot.qemu.avd_name 2>/dev/null || echo unknown)"
+    say "  model  : $(sh_ getprop ro.product.model)"
+    if [ -n "${ADB_SERVER_SOCKET:-}" ]; then
+      say "  adb    : $ADB_SERVER_SOCKET (host-OS emulator)"
+    else
+      say "  adb    : local ($(nest_device_serial))"
+    fi
     say "  apk    : $([ -f "$NEST_APK" ] && ls -lh "$NEST_APK" | awk '{print $5" "$6" "$7" "$8}' || echo 'not built')"
-    say "  log    : /tmp/emulator-$NEST_AVD.log"
+    if [ -z "${ADB_SERVER_SOCKET:-}" ]; then say "  log    : /tmp/emulator-$NEST_AVD.log"; fi
     ;;
   recreate)
     hdr "recreating $NEST_AVD"

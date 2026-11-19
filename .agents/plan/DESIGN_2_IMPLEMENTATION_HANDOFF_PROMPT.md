@@ -46,17 +46,18 @@ git worktrees, spawn subagents, review their diffs, merge/commit, and run final 
   17→18 bump + a real `Migration`, never a destructive fallback.
 
 # WORKFLOW
-- Create manual worktrees under `/mnt/d/dev/media-nest-worktrees/` (NOT WSL `/tmp`):
-  `git worktree add /mnt/d/dev/media-nest-worktrees/<name> HEAD -b <branch>` then
-  `cp local.properties /mnt/d/dev/media-nest-worktrees/<name>/`.
+- Create worktrees under `~/projects/media-nest-worktrees/` — WSL ext4, **not** `/mnt/d`
+  (9p is ~126x slower for Gradle I/O) and not `/tmp` (gets wiped):
+  `git worktree add ~/projects/media-nest-worktrees/<name> HEAD -b <branch>` then
+  `cp local.properties ~/projects/media-nest-worktrees/<name>/`.
 - Namespace branches per phase/task: `p1a`, `p2b`, `p3c`, …
 - Every worker prompt MUST include: absolute worktree path, exact build command,
   "Do NOT run git add/commit/push", the mandatory reads, and
   "report files changed + diff summary + BUILD SUCCESSFUL".
 - Build commands (worktree-relative):
-  - Full build: `cd /mnt/d/dev/media-nest-worktrees/<name> && /mnt/c/Windows/System32/cmd.exe /c build-debug.bat -nopause`
-  - Compile-only gate: `cd /mnt/d/dev/media-nest-worktrees/<name> && /mnt/c/Windows/System32/cmd.exe /c "set JAVA_HOME=C:\Program Files\Android\Android Studio\jbr&& gradlew.bat --no-daemon :app:compileDebugKotlin --console=plain"`
-  - On failure read `tail -n 120 build.log` + `grep -n "error:\|e: \|FAILED" build.log`.
+  - Full build: `cd ~/projects/media-nest-worktrees/<name> && ./scripts/dev/build.sh`
+  - Compile-only gate: `cd ~/projects/media-nest-worktrees/<name> && /mnt/c/Windows/System32/cmd.exe /c "set JAVA_HOME=C:\Program Files\Android\Android Studio\jbr&& gradlew.bat --no-daemon :app:compileDebugKotlin --console=plain"`
+  - On failure read `tail -n 120 ~/.cache/medianest/build.log` + .
 - **Build concurrency limit:** any wave where workers must BUILD is capped at ~5 concurrent
   (7.8 GB RAM). Pure edit-only waves (e.g. creating XML drawables) may fan out up to 10.
 - Monitor waves with a 5-min heartbeat (`subagent_wait({all:true, timeoutMs:300000})` then

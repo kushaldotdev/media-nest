@@ -145,20 +145,21 @@ Do not run `./gradlew` or `gradlew` directly unless `JAVA_HOME` is manually conf
 
 ### Running the build from WSL
 
-From a WSL bash shell, invoke the Windows `.bat` script through `cmd.exe` (backslashes must be doubled inside double quotes):
+Build **natively in WSL**. Do not shell out to `cmd.exe`/`gradlew.bat`, and do not build from
+`/mnt/d` — it is ~126x slower for Gradle's file I/O.
 
 ```bash
-cd /mnt/d/dev/media-nest && /mnt/c/Windows/System32/cmd.exe /c "D:\\dev\\media-nest\\build-debug.bat"
+scripts/dev/build.sh            # incremental, skips Gradle when sources are unchanged
+scripts/dev/build.sh --force    # always run Gradle
+scripts/dev/build.sh clean      # clean build
 ```
 
-or with single quotes (no escaping needed):
+Requires `JAVA_HOME` = JDK 21 (installed at `/usr/lib/jvm/java-21-openjdk-amd64`) and
+`local.properties` pointing at `sdk.dir=/home/kushal/Android/Sdk`; `build.sh` sets both.
 
-```bash
-cmd.exe /c 'D:\dev\media-nest\build-debug.bat'
-```
-
-Pass `clean` as the first argument for a clean build: `cmd.exe /c 'D:\dev\media-nest\build-debug.bat clean'`.
-`powershell.exe` is usually not on the WSL PATH; `cmd.exe` is at `/mnt/c/Windows/System32/cmd.exe` (add that dir to PATH or use the full path).
+The `build-debug.bat` / `build-release.bat` / `publish-to-github.ps1` scripts are the **legacy
+Windows path** (they expect Android Studio's JBR). They still exist but are not the workflow
+here — do not use them unless explicitly asked.
 
 ### Build logs
 

@@ -10,7 +10,7 @@
 
 Build a **complete visual/interaction prototype** of a fully redesigned
 **MediaNest** Android app as plain HTML/CSS/JS (zero dependencies) inside
-`/mnt/d/dev/media-nest/design-2/`. The prototype must follow the dark-red brand
+`~/projects/media-nest/design-2/`. The prototype must follow the dark-red brand
 guidelines, preserve every existing feature, and demonstrate all interaction
 states (downloads, playback, autoplay, sorting, history reload, notifications).
 
@@ -169,7 +169,7 @@ Real entity files: `app/src/main/java/com/example/medianest/data/local/entity/*.
 
 ```text
 # syntax-check every JS file
-cd /mnt/d/dev/media-nest
+cd ~/projects/media-nest
 for f in design-2/js/*.js; do node -c "$f" || echo "FAIL: $f"; done
 
 # serve the prototype
@@ -184,7 +184,7 @@ Copy everything below this line into the new session's first message:
 
 ---
 
-> Resume the **MediaNest design-2 prototype** work in `/mnt/d/dev/media-nest/design-2/`.
+> Resume the **MediaNest design-2 prototype** work in `~/projects/media-nest/design-2/`.
 >
 > **Context:** This is a plain HTML/CSS/JS visual & interaction prototype (zero
 > dependencies) for a redesigned MediaNest Android app, following the dark-red
@@ -193,9 +193,9 @@ Copy everything below this line into the new session's first message:
 >
 > **First, read these files in order:**
 >
-> 1. `/mnt/d/dev/media-nest/design-2/HANDOVER.md`
-> 2. `/mnt/d/dev/media-nest/design-2/README.md`
-> 3. [`/mnt/d/dev/media-nest/MEDIANEST_BRAND_GUIDELINES.md`](../MEDIANEST_BRAND_GUIDELINES.md)
+> 1. `~/projects/media-nest/design-2/HANDOVER.md`
+> 2. `~/projects/media-nest/design-2/README.md`
+> 3. [`~/projects/media-nest/MEDIANEST_BRAND_GUIDELINES.md`](../MEDIANEST_BRAND_GUIDELINES.md)
 >
 > **Hard rules:**
 >
