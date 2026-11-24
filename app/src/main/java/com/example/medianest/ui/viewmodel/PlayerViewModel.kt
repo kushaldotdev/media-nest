@@ -66,6 +66,67 @@ data class PlayerUiState(
     val videoHeight: Int = 0
 )
 
+/** What playback can start from right now. Only [NeedsNetwork] may await the network. */
+sealed interface PlaybackSource {
+    data class Local(val download: DownloadEntity) : PlaybackSource
+    data class Stream(val streamSource: StreamSource?) : PlaybackSource
+    data object NeedsNetwork : PlaybackSource
+}
+
+/**
+ * Decides the playback source from data already on disk. A downloaded file that matches the
+ * request always wins, so the network is never awaited while something local is playable.
+ */
+internal fun resolvePlaybackSource(
+    localDownloads: List<DownloadEntity>,
+    candidateStreamSource: StreamSource?,
+    hasInfo: Boolean,
+    downloadId: Long?,
+): PlaybackSource {
+    val local = findPlayableLocal(localDownloads, candidateStreamSource, downloadId)
+    if (local != null) return PlaybackSource.Local(local)
+    if (candidateStreamSource == null && !hasInfo) return PlaybackSource.NeedsNetwork
+    return PlaybackSource.Stream(candidateStreamSource)
+}
+
+private fun isPlayable(download: DownloadEntity): Boolean =
+    download.filePath.isNotEmpty() && java.io.File(download.filePath).exists()
+
+private fun findPlayableLocal(
+    localDownloads: List<DownloadEntity>,
+    candidateStreamSource: StreamSource?,
+    downloadId: Long?,
+): DownloadEntity? = when {
+    downloadId != null -> localDownloads.firstOrNull { it.id == downloadId && isPlayable(it) }
+    candidateStreamSource != null -> {
+        val streamQuality = if (candidateStreamSource.format == "audio") {
+            candidateStreamSource.quality
+        } else if (!candidateStreamSource.codec.isNullOrEmpty()) {
+            "${candidateStreamSource.quality} (${candidateStreamSource.codec})"
+        } else {
+            candidateStreamSource.quality
+        }
+        val streamRes = candidateStreamSource.quality.takeWhile { it.isDigit() }
+        localDownloads.firstOrNull {
+            it.format == candidateStreamSource.format &&
+                isPlayable(it) &&
+                (it.quality == streamQuality || it.quality.takeWhile { c -> c.isDigit() } == streamRes)
+        }
+    }
+    else -> localDownloads
+        .sortedWith(
+            compareBy<DownloadEntity> { it.format == "audio" || it.format == "audio_extracted" }
+                .thenByDescending { getQualityValue(it) }
+                .thenBy { it.id }
+        )
+        .firstOrNull { isPlayable(it) }
+}
+
+private fun getQualityValue(download: DownloadEntity): Int {
+    val digits = download.quality.takeWhile { it.isDigit() }
+    return digits.toIntOrNull() ?: 0
+}
+
 @HiltViewModel
 class PlayerViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
@@ -108,6 +169,7 @@ class PlayerViewModel @Inject constructor(
     private var pendingInit: (() -> Unit)? = null
     private var maxSavedPositionMs: Long = 0L
     private var loadMediaJob: Job? = null
+    private var enrichmentJob: Job? = null
 
     private val playerListener = object : Player.Listener {
         override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -191,6 +253,8 @@ class PlayerViewModel @Inject constructor(
         currentVideoId = videoId
         currentStreamIndex = streamIndex
         currentDownloadId = downloadId
+        enrichmentJob?.cancel()
+        enrichmentJob = null
 
         // Immediately update UI so the clicked queue item highlights and a spinner shows
         _uiState.value = _uiState.value.copy(videoId = videoId, error = null, isBuffering = true)
@@ -218,6 +282,21 @@ class PlayerViewModel @Inject constructor(
         return null
     }
 
+    private fun resolveStreamIndex(
+        info: ExtractedVideoInfo?,
+        streamIndex: Int,
+        downloadId: Long?,
+    ): Pair<Int, StreamSource?> {
+        if (info == null || info.streamSources.isEmpty()) return streamIndex to null
+        return if (streamIndex == 0 && downloadId == null) {
+            selectBestDefaultStream(info.streamSources) ?: (0 to info.streamSources[0])
+        } else if (streamIndex < info.streamSources.size) {
+            streamIndex to info.streamSources[streamIndex]
+        } else {
+            0 to info.streamSources[0]
+        }
+    }
+
     private suspend fun ensureInfo(videoId: String): ExtractedVideoInfo? {
         var info = lastResultCache.get(videoId) ?: if (videoInfo?.videoId == videoId) videoInfo else null
         if (info == null) {
@@ -235,9 +314,6 @@ class PlayerViewModel @Inject constructor(
                     if (attempt < 2) kotlinx.coroutines.delay(400) else e.printStackTrace()
                 }
             }
-            if (info == null) {
-                _uiState.value = _uiState.value.copy(isBuffering = false)
-            }
         } else {
             videoInfo = info
         }
@@ -246,57 +322,36 @@ class PlayerViewModel @Inject constructor(
 
     private suspend fun loadMedia(videoId: String, streamIndex: Int, downloadId: Long?) {
         val controller = _player.value ?: return
-        val info = ensureInfo(videoId)
+
+        // Room and the file system first: a downloaded file must start without the network.
+        val localVideo = videoDao.getVideoById(videoId)
+        val localDownloads = downloadRepository.getLocalDownloadsForVideo(videoId)
         if (currentVideoId != videoId) return
+
+        var info: ExtractedVideoInfo? = lastResultCache.get(videoId) ?: videoInfo?.takeIf { it.videoId == videoId }
+        if (info != null) videoInfo = info
+        var resolved = resolveStreamIndex(info, streamIndex, downloadId)
+        var source = resolvePlaybackSource(localDownloads, resolved.second, info != null, downloadId)
+
+        if (source == PlaybackSource.NeedsNetwork) {
+            // Nothing on disk to play, so this is the one place allowed to wait for the network.
+            info = ensureInfo(videoId)
+            if (currentVideoId != videoId) return
+            resolved = resolveStreamIndex(info, streamIndex, downloadId)
+            source = resolvePlaybackSource(localDownloads, resolved.second, info != null, downloadId)
+        }
+        if (currentVideoId != videoId) return
+
+        val resolvedIndex = resolved.first
+        val candidateStreamSource = resolved.second
+        val localFile = (source as? PlaybackSource.Local)?.download
+        val streamSource = (source as? PlaybackSource.Stream)?.streamSource
+        currentStreamIndex = resolvedIndex
 
         val speed = playbackPreferences.playbackSpeed.first()
         controller.setPlaybackSpeed(speed)
         _uiState.value = _uiState.value.copy(currentSpeed = speed)
 
-        val localVideo = videoDao.getVideoById(videoId)
-        val localDownloads = downloadRepository.getLocalDownloadsForVideo(videoId)
-
-        val (resolvedIndex, candidateStreamSource) = if (info != null && info.streamSources.isNotEmpty()) {
-            if (streamIndex == 0 && downloadId == null) {
-                selectBestDefaultStream(info.streamSources) ?: (0 to info.streamSources[0])
-            } else if (streamIndex < info.streamSources.size) {
-                streamIndex to info.streamSources[streamIndex]
-            } else {
-                0 to info.streamSources[0]
-            }
-        } else {
-            streamIndex to null
-        }
-        currentStreamIndex = resolvedIndex
-
-        val localFile = if (downloadId != null) {
-            localDownloads.firstOrNull { it.id == downloadId && it.filePath.isNotEmpty() && java.io.File(it.filePath).exists() }
-        } else if (candidateStreamSource != null) {
-            val streamQuality = if (candidateStreamSource.format == "audio") {
-                candidateStreamSource.quality
-            } else if (!candidateStreamSource.codec.isNullOrEmpty()) {
-                "${candidateStreamSource.quality} (${candidateStreamSource.codec})"
-            } else {
-                candidateStreamSource.quality
-            }
-            val streamRes = candidateStreamSource.quality.takeWhile { it.isDigit() }
-            localDownloads.firstOrNull { 
-                it.format == candidateStreamSource.format && 
-                it.filePath.isNotEmpty() && 
-                java.io.File(it.filePath).exists() &&
-                (it.quality == streamQuality || it.quality.takeWhile { c -> c.isDigit() } == streamRes)
-            }
-        } else {
-            localDownloads
-                .sortedWith(
-                    compareBy<DownloadEntity> { it.format == "audio" || it.format == "audio_extracted" }
-                        .thenByDescending { getQualityValue(it) }
-                        .thenBy { it.id }
-                )
-                .firstOrNull { it.filePath.isNotEmpty() && java.io.File(it.filePath).exists() }
-        }
-
-        val streamSource = if (localFile == null) candidateStreamSource else null
         val uri = if (localFile != null) {
             android.net.Uri.fromFile(java.io.File(localFile.filePath)).toString()
         } else if (streamSource != null) {
@@ -418,6 +473,30 @@ class PlayerViewModel @Inject constructor(
         controller.seekTo(startPosition)
         controller.prepare()
         controller.play()
+
+        if (localFile != null && info == null) {
+            enrichInBackground(videoId)
+        }
+    }
+
+    /**
+     * Fills in title/thumbnail/stream list for a download that is already playing. The playing
+     * media item, position and buffering state are never touched: the file on disk stays the
+     * source even if this request finishes, hangs, or never completes.
+     */
+    private fun enrichInBackground(videoId: String) {
+        enrichmentJob?.cancel()
+        enrichmentJob = viewModelScope.launch {
+            val info = ensureInfo(videoId) ?: return@launch
+            if (currentVideoId != videoId || _uiState.value.videoId != videoId) return@launch
+            val state = _uiState.value
+            _uiState.value = state.copy(
+                title = info.title.ifEmpty { state.title },
+                channelName = info.channelName.ifEmpty { state.channelName },
+                thumbnailUrl = info.thumbnailUrl ?: state.thumbnailUrl,
+                availableStreams = info.streamSources.ifEmpty { state.availableStreams },
+            )
+        }
     }
 
     fun togglePlayPause() {
@@ -607,6 +686,8 @@ class PlayerViewModel @Inject constructor(
     fun stopPlayback() {
         loadMediaJob?.cancel()
         loadMediaJob = null
+        enrichmentJob?.cancel()
+        enrichmentJob = null
         val controller = _player.value
         if (controller != null) {
             controller.stop()
@@ -761,15 +842,12 @@ class PlayerViewModel @Inject constructor(
         super.onCleared()
         positionTrackingJob?.cancel()
         positionTrackingJob = null
+        enrichmentJob?.cancel()
+        enrichmentJob = null
         _player.value?.removeListener(playerListener)
         controllerFuture?.let {
             MediaController.releaseFuture(it)
         }
         _player.value = null
-    }
-
-    private fun getQualityValue(download: DownloadEntity): Int {
-        val digits = download.quality.takeWhile { it.isDigit() }
-        return digits.toIntOrNull() ?: 0
     }
 }

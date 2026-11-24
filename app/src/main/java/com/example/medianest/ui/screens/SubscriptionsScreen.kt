@@ -82,7 +82,8 @@ fun SubscriptionsScreen(
     viewModel: SubscriptionsViewModel = hiltViewModel(LocalContext.current as ComponentActivity),
     subscriptionsPreferences: SubscriptionsPreferences? = null,
     fullTitles: Boolean? = null,
-    showFullTitlesToggle: Boolean = true
+    showFullTitlesToggle: Boolean = true,
+    headerContent: @Composable () -> Unit = {}
 ) {
     val subscriptions by viewModel.subscriptions.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -127,12 +128,12 @@ fun SubscriptionsScreen(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        Column(modifier = Modifier.fillMaxSize()) {
+        val controlsRow: @Composable () -> Unit = {
             // Header filter / full titles toggle row
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 4.dp),
+                    .padding(vertical = 4.dp),
                 horizontalArrangement = if (showFullTitlesToggle) Arrangement.SpaceBetween else Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -164,121 +165,135 @@ fun SubscriptionsScreen(
                     )
                 }
             }
+        }
 
-            if (currentSubs == null) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    contentAlignment = Alignment.Center
-                ) {
-                    LoadingState()
-                }
-            } else if (sortedFiltered.isEmpty()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    contentAlignment = Alignment.Center
-                ) {
+        if (currentSubs == null) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                item { headerContent() }
+                item { controlsRow() }
+                item { LoadingState() }
+            }
+        } else if (sortedFiltered.isEmpty()) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                item { headerContent() }
+                item { controlsRow() }
+                item {
                     Text(
                         text = if (searchQuery.isNotEmpty()) "No results found" else "No subscriptions yet",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 32.dp)
                     )
                 }
-            } else {
-                if (viewMode == ViewMode.GRID) {
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(2),
+            }
+        } else if (viewMode == ViewMode.GRID) {
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(2),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    headerContent()
+                }
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    controlsRow()
+                }
+                items(sortedFiltered, key = { it.id }) { sub ->
+                    SubscriptionCard(
+                        subscription = sub,
+                        onAutoDownloadChange = { autoDownload, audioOnly ->
+                            viewModel.updateAutoDownload(sub.id, autoDownload, audioOnly)
+                            coroutineScope.launch {
+                                val msg = when {
+                                    autoDownload != sub.autoDownload && autoDownload -> "Auto-download enabled for ${sub.name}"
+                                    autoDownload != sub.autoDownload && !autoDownload -> "Auto-download disabled for ${sub.name}"
+                                    audioOnly != sub.audioOnly && audioOnly -> "Audio-only auto-download enabled for ${sub.name}"
+                                    else -> "Audio-only auto-download disabled for ${sub.name}"
+                                }
+                                snackbarHostState.showSnackbar(msg)
+                            }
+                        },
+                        onUnsubscribe = { pendingUnsubscribe = sub },
+                        onClick = { onSubscriptionClick(sub.sourceType, sub.sourceId) },
+                        fullTitles = effectiveFullTitles
+                    )
+                }
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    Text(
+                        text = "*Automatically downloads new uploads*",
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontStyle = FontStyle.Italic
+                        ),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .weight(1f)
-                            .padding(horizontal = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        items(sortedFiltered, key = { it.id }) { sub ->
-                            SubscriptionCard(
-                                subscription = sub,
-                                onAutoDownloadChange = { autoDownload, audioOnly ->
-                                    viewModel.updateAutoDownload(sub.id, autoDownload, audioOnly)
-                                    coroutineScope.launch {
-                                        val msg = when {
-                                            autoDownload != sub.autoDownload && autoDownload -> "Auto-download enabled for ${sub.name}"
-                                            autoDownload != sub.autoDownload && !autoDownload -> "Auto-download disabled for ${sub.name}"
-                                            audioOnly != sub.audioOnly && audioOnly -> "Audio-only auto-download enabled for ${sub.name}"
-                                            else -> "Audio-only auto-download disabled for ${sub.name}"
-                                        }
-                                        snackbarHostState.showSnackbar(msg)
-                                    }
-                                },
-                                onUnsubscribe = { pendingUnsubscribe = sub },
-                                onClick = { onSubscriptionClick(sub.sourceType, sub.sourceId) },
-                                fullTitles = effectiveFullTitles
-                            )
-                        }
-                        item(span = { GridItemSpan(maxLineSpan) }) {
-                            Text(
-                                text = "*Automatically downloads new uploads*",
-                                style = MaterialTheme.typography.bodySmall.copy(
-                                    fontStyle = FontStyle.Italic
-                                ),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 8.dp),
-                                textAlign = TextAlign.Center
-                            )
-                        }
-                        item(span = { GridItemSpan(maxLineSpan) }) {
-                            EndOfListIndicator()
-                        }
-                    }
-                } else {
-                    LazyColumn(
+                            .padding(vertical = 8.dp),
+                        textAlign = TextAlign.Center
+                    )
+                }
+                item(span = { GridItemSpan(maxLineSpan) }) {
+                    EndOfListIndicator()
+                }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                item { headerContent() }
+                item { controlsRow() }
+                items(sortedFiltered, key = { it.id }) { sub ->
+                    SubscriptionCard(
+                        subscription = sub,
+                        onAutoDownloadChange = { autoDownload, audioOnly ->
+                            viewModel.updateAutoDownload(sub.id, autoDownload, audioOnly)
+                            coroutineScope.launch {
+                                val msg = when {
+                                    autoDownload != sub.autoDownload && autoDownload -> "Auto-download enabled for ${sub.name}"
+                                    autoDownload != sub.autoDownload && !autoDownload -> "Auto-download disabled for ${sub.name}"
+                                    audioOnly != sub.audioOnly && audioOnly -> "Audio-only auto-download enabled for ${sub.name}"
+                                    else -> "Audio-only auto-download disabled for ${sub.name}"
+                                }
+                                snackbarHostState.showSnackbar(msg)
+                            }
+                        },
+                        onUnsubscribe = { pendingUnsubscribe = sub },
+                        onClick = { onSubscriptionClick(sub.sourceType, sub.sourceId) },
+                        fullTitles = effectiveFullTitles
+                    )
+                }
+                item {
+                    Text(
+                        text = "*Automatically downloads new uploads*",
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            fontStyle = FontStyle.Italic
+                        ),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .weight(1f)
-                            .padding(horizontal = 8.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        items(sortedFiltered, key = { it.id }) { sub ->
-                            SubscriptionCard(
-                                subscription = sub,
-                                onAutoDownloadChange = { autoDownload, audioOnly ->
-                                    viewModel.updateAutoDownload(sub.id, autoDownload, audioOnly)
-                                    coroutineScope.launch {
-                                        val msg = when {
-                                            autoDownload != sub.autoDownload && autoDownload -> "Auto-download enabled for ${sub.name}"
-                                            autoDownload != sub.autoDownload && !autoDownload -> "Auto-download disabled for ${sub.name}"
-                                            audioOnly != sub.audioOnly && audioOnly -> "Audio-only auto-download enabled for ${sub.name}"
-                                            else -> "Audio-only auto-download disabled for ${sub.name}"
-                                        }
-                                        snackbarHostState.showSnackbar(msg)
-                                    }
-                                },
-                                onUnsubscribe = { pendingUnsubscribe = sub },
-                                onClick = { onSubscriptionClick(sub.sourceType, sub.sourceId) },
-                                fullTitles = effectiveFullTitles
-                            )
-                        }
-                        item {
-                            Text(
-                                text = "*Automatically downloads new uploads*",
-                                style = MaterialTheme.typography.bodySmall.copy(
-                                    fontStyle = FontStyle.Italic
-                                ),
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 8.dp),
-                                textAlign = TextAlign.Center
-                            )
-                        }
-                        item {
-                            EndOfListIndicator()
-                        }
-                    }
+                            .padding(vertical = 8.dp),
+                        textAlign = TextAlign.Center
+                    )
+                }
+                item {
+                    EndOfListIndicator()
                 }
             }
         }

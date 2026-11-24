@@ -733,51 +733,39 @@ fun LibraryScreen(
                     }
 
                     LibraryTab.PLAYLISTS -> {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(horizontal = 12.dp)
-                        ) {
-                            headerContent()
-                            SubscriptionsScreen(
-                                sourceType = "playlist",
-                                searchQuery = uiState.searchQuery,
-                                viewMode = uiState.viewMode,
-                                sortCategory = uiState.sortCategory,
-                                sortDirection = uiState.sortDirection,
-                                fullTitles = fullTitles,
-                                showFullTitlesToggle = false,
-                                onSubscriptionClick = { type, id ->
-                                    selectedSubscriptionType = type
-                                    selectedSubscriptionId = id
-                                    onSubscriptionClick(type, id)
-                                }
-                            )
-                        }
+                        SubscriptionsScreen(
+                            sourceType = "playlist",
+                            searchQuery = uiState.searchQuery,
+                            viewMode = uiState.viewMode,
+                            sortCategory = uiState.sortCategory,
+                            sortDirection = uiState.sortDirection,
+                            fullTitles = fullTitles,
+                            showFullTitlesToggle = false,
+                            onSubscriptionClick = { type, id ->
+                                selectedSubscriptionType = type
+                                selectedSubscriptionId = id
+                                onSubscriptionClick(type, id)
+                            },
+                            headerContent = headerContent
+                        )
                     }
 
                     LibraryTab.SUBSCRIPTIONS -> {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(horizontal = 12.dp)
-                        ) {
-                            headerContent()
-                            SubscriptionsScreen(
-                                sourceType = "channel",
-                                searchQuery = uiState.searchQuery,
-                                viewMode = uiState.viewMode,
-                                sortCategory = uiState.sortCategory,
-                                sortDirection = uiState.sortDirection,
-                                fullTitles = fullTitles,
-                                showFullTitlesToggle = false,
-                                onSubscriptionClick = { type, id ->
-                                    selectedSubscriptionType = type
-                                    selectedSubscriptionId = id
-                                    onSubscriptionClick(type, id)
-                                }
-                            )
-                        }
+                        SubscriptionsScreen(
+                            sourceType = "channel",
+                            searchQuery = uiState.searchQuery,
+                            viewMode = uiState.viewMode,
+                            sortCategory = uiState.sortCategory,
+                            sortDirection = uiState.sortDirection,
+                            fullTitles = fullTitles,
+                            showFullTitlesToggle = false,
+                            onSubscriptionClick = { type, id ->
+                                selectedSubscriptionType = type
+                                selectedSubscriptionId = id
+                                onSubscriptionClick(type, id)
+                            },
+                            headerContent = headerContent
+                        )
                     }
                 }
             }
