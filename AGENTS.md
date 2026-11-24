@@ -136,6 +136,56 @@ memory. Live view while driving: `scripts/watch.sh` (scrcpy via WSLg). Taps come
 - An emulator launched with a bare `nohup ... &` is killed when the WSL session exits. Use
   `setsid nohup ... < /dev/null &` so it survives.
 
+## Parallel work: worktrees in, worktrees out
+
+Every parallel or delegated change runs in its own `git worktree`, never in this checkout.
+The lane is not finished when the code compiles — it is finished when the change is on `main`,
+the worktree is gone, and the branch is deleted.
+
+**Get the change onto `main` — staging is not landing.**
+
+`git apply --index`, `git add`, and a subagent "apply patch" step only write to the index.
+`main` does not move until you commit. A dirty index with `HEAD` still on the old commit is the
+usual reason a fix "does not show up". Run this before claiming anything landed:
+
+```bash
+git log --oneline -1            # must be the fix commit, not the previous one
+git status --porcelain           # must be empty
+git merge-base --is-ancestor <lane-branch> main && echo "lane work is on main"
+```
+
+Use `--is-ancestor`, **not** `git diff <lane-branch> main`. A subagent branch whose patch you
+applied by hand still points at its original base, so `git diff` reports your own commit as
+"missing from the lane" and looks like the lane has unsaved work. Ancestry answers the real
+question: does `main` contain everything the lane had?
+
+**Then clean up — untracked worktrees leak Gradle caches and disk.**
+
+```bash
+wtd <branch|dir>                        # normal path: removes worktree + drops app_wt_<slug>
+git worktree remove --force --force <dir>   # when wtd refuses: branch checked out / staged changes
+```
+
+`wtd` cannot remove a worktree whose branch is checked out there and which holds staged
+changes — it exits without doing anything and leaves the directory in place. In that situation
+the two commands above are the working pair. Then:
+
+```bash
+git worktree prune
+git branch -D <lane-branch>       # -D, not -d: lanes are never squash-merged
+rmdir <parent> 2>/dev/null        # leave ~/projects/worktrees/media-nest/ empty, not littered
+```
+
+Verify afterwards: `git worktree list` shows only this checkout, and
+`ls ~/projects/worktrees/media-nest/` is empty. Do not leave orphan `app_wt_*` databases either
+— if the worktree had an `.env`, `wtd` drops its database; if you removed the directory by
+hand, drop the database yourself.
+
+Worktrees created by pi-subagents (`isolation: worktree`) live at
+`~/projects/worktrees/media-nest/pi-worktree-<runid>-s0-0` on branch
+`pi-subagents/<key>-<runid>-s0-t0`. They are **not** registered with `wt`, so `wtd` will not
+find them by branch — pass the directory, or use `git worktree remove` directly.
+
 ## Build & Run Commands
 
 Windows environment does not have standard `JAVA_HOME` in path. Use bundled build scripts:
