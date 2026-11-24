@@ -16,10 +16,12 @@ copy of the history (`origin` → `github.com/kushaldotdev/media-nest`). No bare
 `backup` remote, no second Windows tree — never sync with `cp`/`rsync`, and never re-add a
 filesystem remote.
 
-**Never push. Commit locally and stop.** The operator pushes to GitHub manually, always. Do not
-run `git push`, `git push --force`, or anything that advances `origin/main`, including from a
-subagent brief — a child that is told to "land the fix" must commit and stop. Landed means
-committed on local `main` with a clean tree, not published.
+**Do not push on your own initiative.** The operator normally publishes to GitHub manually.
+Pushing is allowed only when the request explicitly says to push ("push everything", "push now");
+silence is not permission, and neither is a subagent brief that says to "land the fix" — a child
+must commit and stop. Default behaviour: commit locally, leave the tree clean, report the commit.
+When a push IS requested and it has to rewrite published history (rebasing out a commit), use
+`git push --force-with-lease`, never `--force`.
 
 **Do not copy the tree to `D:\` and build there.** Measured on this machine, from WSL, over
 the same 224 source files:
@@ -144,8 +146,9 @@ memory. Live view while driving: `scripts/watch.sh` (scrcpy via WSLg). Taps come
 ## Parallel work: worktrees in, worktrees out
 
 Every parallel or delegated change runs in its own `git worktree`, never in this checkout.
-The lane is not finished when the code compiles — it is finished when the change is on `main`,
-the worktree is gone, and the branch is deleted.
+The lane is not finished when the code compiles — it is finished when the change is committed on
+local `main`, the worktree is gone, and the branch is deleted. Publication is the operator's
+separate step unless the request asks for it.
 
 **Get the change onto `main` — staging is not landing.**
 
