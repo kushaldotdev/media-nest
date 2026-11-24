@@ -51,7 +51,7 @@ import com.example.medianest.ui.components.MediaNestIconButton
 import com.example.medianest.ui.components.MediaNestIconButtonSize
 import com.example.medianest.ui.components.MediaNestSnackbarHost
 import com.example.medianest.ui.components.MediaNestTopAppBar
-import com.example.medianest.ui.components.mediaNestSwitchColors
+import com.example.medianest.ui.components.MediaNestSwitch
 import com.example.medianest.ui.components.NotificationBellAction
 import com.example.medianest.ui.components.MnNoteBox
 import com.example.medianest.ui.components.NoteBoxVariant
@@ -551,14 +551,15 @@ fun SettingsScreen(
                             )
                         }
                         Spacer(Modifier.width(12.dp))
-                        Switch(
+                        MediaNestSwitch(
                             checked = showShorts,
                             onCheckedChange = { checked ->
                                 coroutineScope.launch {
                                     subscriptionsPreferences.setShowShorts(checked)
                                 }
                             },
-                            colors = customSwitchColors()
+                            modifier = Modifier,
+                            label = "Show YouTube Shorts"
                         )
                     }
 
@@ -674,14 +675,15 @@ fun SettingsScreen(
 
                         Spacer(Modifier.width(12.dp))
 
-                        Switch(
+                        MediaNestSwitch(
                             checked = fullTitles,
                             onCheckedChange = { checked ->
                                 coroutineScope.launch {
                                     collectionsPreferences.setFullTitles(checked)
                                 }
                             },
-                            colors = customSwitchColors()
+                            modifier = Modifier,
+                            label = "Always Show Full Titles"
                         )
                     }
 
@@ -729,14 +731,15 @@ fun SettingsScreen(
                             )
                         }
                         Spacer(Modifier.width(12.dp))
-                        Switch(
+                        MediaNestSwitch(
                             checked = autoMarkWatched,
                             onCheckedChange = { checked ->
                                 coroutineScope.launch {
                                     playbackPreferences.setAutoMarkWatched(checked)
                                 }
                             },
-                            colors = customSwitchColors()
+                            modifier = Modifier,
+                            label = "Auto-mark as Watched"
                         )
                     }
 
@@ -2959,9 +2962,6 @@ private fun customTextFieldColors() = OutlinedTextFieldDefaults.colors(
     disabledLabelColor = MediaNestColors.TextSecondary.copy(alpha = 0.6f),
     disabledContainerColor = MediaNestColors.Raised.copy(alpha = 0.1f)
 )
-
-@Composable
-private fun customSwitchColors() = mediaNestSwitchColors()
 
 private fun getPathFromUri(context: Context, uri: Uri): String? {
     try {

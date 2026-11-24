@@ -45,9 +45,7 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Switch
-import androidx.compose.ui.draw.scale
-import com.example.medianest.ui.components.mediaNestSwitchColors
+import com.example.medianest.ui.components.MediaNestSwitch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -1302,11 +1300,10 @@ fun PlaylistHeader(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Switch(
+                MediaNestSwitch(
                     checked = showShorts,
                     onCheckedChange = onToggleShorts,
-                    colors = mediaNestSwitchColors(),
-                    modifier = Modifier.scale(0.8f)
+                    label = "Show Shorts"
                 )
             }
         }
@@ -1443,11 +1440,10 @@ fun ChannelHeader(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Switch(
+                MediaNestSwitch(
                     checked = showShorts,
                     onCheckedChange = onToggleShorts,
-                    colors = mediaNestSwitchColors(),
-                    modifier = Modifier.scale(0.8f)
+                    label = "Show Shorts"
                 )
             }
         }

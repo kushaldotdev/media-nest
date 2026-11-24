@@ -42,6 +42,13 @@ fi
 ARGS=(:app:assembleDebug --console=plain)
 [ "$DO_CLEAN" -eq 1 ] && ARGS=(clean "${ARGS[@]}")
 
+# `core.fileMode=false` is set in this repo (Windows-era config), so a freshly created
+# `git worktree` checks out gradlew as 664 and `./gradlew` fails with "Permission denied"
+# before Gradle ever runs — which reads like a build error. Fix the bit, don't work around it.
+[ -x ./gradlew ] || chmod +x ./gradlew 2>/dev/null || true
+
+# A worktree also has no local.properties (gitignored); build.sh writes sdk.dir above.
+
 hdr "gradle ${ARGS[*]}"
 start=$(date +%s)
 if ./gradlew "${ARGS[@]}" 2>&1 | tee "$NEST_CACHE/build.log" \

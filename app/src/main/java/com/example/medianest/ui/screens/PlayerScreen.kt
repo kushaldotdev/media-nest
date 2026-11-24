@@ -111,9 +111,7 @@ import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.material3.Switch
-import androidx.compose.ui.draw.scale
-import com.example.medianest.ui.components.mediaNestSwitchColors
+import com.example.medianest.ui.components.MediaNestSwitch
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -1616,14 +1614,13 @@ fun PlayerScreen(
                         color = MediaNestColors.TextSecondary
                     )
                     Spacer(Modifier.width(6.dp))
-                    Switch(
+                    MediaNestSwitch(
                         checked = isAutoplayEnabled,
                         onCheckedChange = {
                             isAutoplayEnabled = it
                             onAutoplayToggle?.invoke(it)
                         },
-                        colors = mediaNestSwitchColors(),
-                        modifier = Modifier.scale(0.8f)
+                        label = "Autoplay"
                     )
                 }
                 Spacer(Modifier.height(12.dp))

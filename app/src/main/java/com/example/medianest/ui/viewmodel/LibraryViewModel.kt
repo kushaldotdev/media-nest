@@ -10,6 +10,7 @@ import com.example.medianest.data.local.dao.VideoDao
 import com.example.medianest.data.local.dao.VideoFolderDao
 import com.example.medianest.data.local.entity.DownloadEntity
 import com.example.medianest.data.local.entity.FolderEntity
+import com.example.medianest.data.local.entity.findFolderNameConflict
 import com.example.medianest.data.local.entity.HistoryEntity
 import com.example.medianest.data.local.entity.SubscriptionEntity
 import com.example.medianest.data.local.entity.VideoEntity
@@ -70,6 +71,9 @@ enum class MediaTypeFilter(val label: String) {
 }
 
 enum class ViewMode { GRID, LIST }
+
+/** Outcome of creating or renaming a folder, so the UI can report a duplicate sibling name. */
+enum class FolderEditResult { SAVED, DUPLICATE_NAME }
 
 data class LibraryUiState(
     val searchQuery: String = "",
@@ -600,10 +604,13 @@ class LibraryViewModel @Inject constructor(
         }
     }
 
-    fun createFolder(name: String, parentId: Long? = null) {
-        viewModelScope.launch {
-            folderDao.insert(FolderEntity(name = name.trim(), parentId = parentId))
+    suspend fun createFolder(name: String, parentId: Long? = null): FolderEditResult {
+        val trimmed = name.trim()
+        if (findFolderNameConflict(folderDao.getAllFoldersOnce(), trimmed, parentId) != null) {
+            return FolderEditResult.DUPLICATE_NAME
         }
+        folderDao.insert(FolderEntity(name = trimmed, parentId = parentId))
+        return FolderEditResult.SAVED
     }
 
     private suspend fun getVideosInFolderRecursive(folderId: Long): List<VideoEntity> {
@@ -651,14 +658,24 @@ class LibraryViewModel @Inject constructor(
         }
     }
 
-    fun renameFolder(id: Long, name: String) {
-        viewModelScope.launch {
-            folderDao.rename(id, name.trim())
-            // Update in stack if present
-            val updatedStack = _uiState.value.folderStack.map { if (it.id == id) it.copy(name = name.trim()) else it }
-            val updatedSelected = if (_uiState.value.selectedFolder?.id == id) _uiState.value.selectedFolder?.copy(name = name.trim()) else _uiState.value.selectedFolder
-            _uiState.value = _uiState.value.copy(selectedFolder = updatedSelected, folderStack = updatedStack)
+    suspend fun renameFolder(id: Long, name: String): FolderEditResult {
+        val trimmed = name.trim()
+        val folder = folderDao.getFolderById(id) ?: return FolderEditResult.SAVED
+        if (findFolderNameConflict(
+                folderDao.getAllFoldersOnce(),
+                trimmed,
+                folder.parentId,
+                excludingId = id
+            ) != null
+        ) {
+            return FolderEditResult.DUPLICATE_NAME
         }
+        folderDao.rename(id, trimmed)
+        // Update in stack if present
+        val updatedStack = _uiState.value.folderStack.map { if (it.id == id) it.copy(name = trimmed) else it }
+        val updatedSelected = if (_uiState.value.selectedFolder?.id == id) _uiState.value.selectedFolder?.copy(name = trimmed) else _uiState.value.selectedFolder
+        _uiState.value = _uiState.value.copy(selectedFolder = updatedSelected, folderStack = updatedStack)
+        return FolderEditResult.SAVED
     }
 
     fun addVideoToFolder(videoId: String, folderId: Long) {

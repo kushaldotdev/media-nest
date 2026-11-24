@@ -55,6 +55,8 @@ report() {
 
 if [ "$FAST" -eq 0 ]; then
   hdr "build + unit tests"
+  # Same worktree trap as build.sh: gradlew arrives as 664 when core.fileMode=false.
+  [ -x ./gradlew ] || chmod +x ./gradlew 2>/dev/null || true
   if "$HERE/dev/build.sh" --force > "$ART/build.log" 2>&1; then ok "assembleDebug"
   else bad "build failed"; tail -20 "$ART/build.log"; report; exit 1; fi
   if ./gradlew :app:testDebugUnitTest --console=plain > "$ART/unit-tests.log" 2>&1; then ok "unit tests"

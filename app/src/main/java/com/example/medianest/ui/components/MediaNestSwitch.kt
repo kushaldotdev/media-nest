@@ -15,6 +15,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.example.medianest.ui.theme.MediaNestColors
 
@@ -39,18 +41,25 @@ fun mediaNestSwitchColors(): SwitchColors = SwitchDefaults.colors(
 
 /**
  * Universal MediaNest Switch component.
+ *
+ * [label] is the accessible name announced for the switch ("Always Show Full Titles", not
+ * "checkbox, unchecked"). Pass the same string the user sees next to the switch.
  */
 @Composable
 fun MediaNestSwitch(
     checked: Boolean,
     onCheckedChange: ((Boolean) -> Unit)?,
     modifier: Modifier = Modifier.scale(0.8f),
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    label: String? = null
 ) {
+    // The name must sit on the switch node itself: the visible Text next to it is a sibling,
+    // so screen readers otherwise announce only "checkbox, unchecked".
+    val namedModifier = if (label == null) modifier else modifier.semantics { contentDescription = label }
     Switch(
         checked = checked,
         onCheckedChange = onCheckedChange,
-        modifier = modifier,
+        modifier = namedModifier,
         enabled = enabled,
         colors = mediaNestSwitchColors()
     )
@@ -72,7 +81,8 @@ fun FullTitlesToggle(
         Spacer(Modifier.width(4.dp))
         MediaNestSwitch(
             checked = checked,
-            onCheckedChange = onCheckedChange
+            onCheckedChange = onCheckedChange,
+            label = label
         )
     }
 }

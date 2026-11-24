@@ -340,6 +340,8 @@ class SyncManager @Inject constructor(
             "folders" -> {
                 val id = obj["id"]?.let { it.jsonPrimitive.longOrNull } ?: return
                 val parentId = obj["parentId"]?.let { it.jsonPrimitive.longOrNull }
+                // No sibling-name check here on purpose: rows carry a server-assigned id and
+                // insert() is REPLACE, so a folder arriving twice must upsert, not fail.
                 folderDao.insert(FolderEntity(
                     id = id, name = jsonString(obj["name"]),
                     parentId = if (parentId == -1L) null else parentId,

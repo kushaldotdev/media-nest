@@ -32,8 +32,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Switch
-import com.example.medianest.ui.components.mediaNestSwitchColors
+import com.example.medianest.ui.components.MediaNestSwitch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -45,7 +44,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.graphics.painter.ColorPainter
@@ -155,15 +153,14 @@ fun SubscriptionsScreen(
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Switch(
+                    MediaNestSwitch(
                         checked = showShorts,
                         onCheckedChange = { checked ->
                             coroutineScope.launch {
                                 prefs.setShowShorts(checked)
                             }
                         },
-                        colors = mediaNestSwitchColors(),
-                        modifier = Modifier.scale(0.8f)
+                        label = "Show Shorts"
                     )
                 }
             }
@@ -403,11 +400,10 @@ private fun SubscriptionCard(
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        Switch(
+                        MediaNestSwitch(
                             checked = subscription.autoDownload,
                             onCheckedChange = { onAutoDownloadChange(it, subscription.audioOnly) },
-                            colors = mediaNestSwitchColors(),
-                            modifier = Modifier.scale(0.8f)
+                            label = "Auto-download"
                         )
                     }
                     Row(
@@ -419,11 +415,10 @@ private fun SubscriptionCard(
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        Switch(
+                        MediaNestSwitch(
                             checked = subscription.audioOnly,
                             onCheckedChange = { onAutoDownloadChange(subscription.autoDownload, it) },
-                            colors = mediaNestSwitchColors(),
-                            modifier = Modifier.scale(0.8f)
+                            label = "Audio only"
                         )
                     }
                 }

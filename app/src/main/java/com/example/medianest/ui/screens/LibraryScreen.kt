@@ -64,6 +64,7 @@ import com.example.medianest.ui.components.NotificationBellAction
 import com.example.medianest.ui.theme.MediaNestColors
 import com.example.medianest.ui.theme.MediaNestShapes
 import com.example.medianest.ui.utils.UiUtils
+import com.example.medianest.ui.viewmodel.FolderEditResult
 import com.example.medianest.ui.viewmodel.FolderStats
 import com.example.medianest.ui.viewmodel.LibraryTab
 import com.example.medianest.ui.viewmodel.LibraryViewModel
@@ -1071,9 +1072,17 @@ fun LibraryScreen(
                             text = "Rename",
                             onClick = {
                                 if (renameFolderName.isNotBlank()) {
-                                    viewModel.renameFolder(folder.id, renameFolderName.trim())
-                                    folderToRename = null
-                                    coroutineScope.launch { snackbarHostState.showSnackbar("Folder renamed") }
+                                    val newName = renameFolderName.trim()
+                                    coroutineScope.launch {
+                                        when (viewModel.renameFolder(folder.id, newName)) {
+                                            FolderEditResult.SAVED -> {
+                                                folderToRename = null
+                                                snackbarHostState.showSnackbar("Folder renamed")
+                                            }
+                                            FolderEditResult.DUPLICATE_NAME ->
+                                                snackbarHostState.showSnackbar("A folder with that name already exists here")
+                                        }
+                                    }
                                 }
                             },
                             variant = MediaNestButtonVariant.Primary,
@@ -1147,10 +1156,19 @@ fun LibraryScreen(
                             text = "Create",
                             onClick = {
                                 if (newFolderName.isNotBlank()) {
-                                    viewModel.createFolder(newFolderName.trim(), uiState.selectedFolder?.id)
-                                    showCreateFolderDialog = false
-                                    newFolderName = ""
-                                    coroutineScope.launch { snackbarHostState.showSnackbar("Folder created") }
+                                    val name = newFolderName.trim()
+                                    val parentId = uiState.selectedFolder?.id
+                                    coroutineScope.launch {
+                                        when (viewModel.createFolder(name, parentId)) {
+                                            FolderEditResult.SAVED -> {
+                                                showCreateFolderDialog = false
+                                                newFolderName = ""
+                                                snackbarHostState.showSnackbar("Folder created")
+                                            }
+                                            FolderEditResult.DUPLICATE_NAME ->
+                                                snackbarHostState.showSnackbar("A folder with that name already exists here")
+                                        }
+                                    }
                                 }
                             },
                             variant = MediaNestButtonVariant.Primary,
