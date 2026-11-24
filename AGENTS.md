@@ -14,7 +14,12 @@ Open that UNC path in VS Code / Cursor / Explorer (Remote-WSL).
 **GitHub is the only remote and the only backup.** There is one working tree (WSL ext4) and one
 copy of the history (`origin` → `github.com/kushaldotdev/media-nest`). No bare repo on `D:`, no
 `backup` remote, no second Windows tree — never sync with `cp`/`rsync`, and never re-add a
-filesystem remote. To snapshot history, push `origin`.
+filesystem remote.
+
+**Never push. Commit locally and stop.** The operator pushes to GitHub manually, always. Do not
+run `git push`, `git push --force`, or anything that advances `origin/main`, including from a
+subagent brief — a child that is told to "land the fix" must commit and stop. Landed means
+committed on local `main` with a clean tree, not published.
 
 **Do not copy the tree to `D:\` and build there.** Measured on this machine, from WSL, over
 the same 224 source files:
