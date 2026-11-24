@@ -56,8 +56,11 @@ nest_bridge_host_adb() {
   timeout 3 bash -c "cat < /dev/null > /dev/tcp/$host/$port" 2>/dev/null || return 1
   export ADB_SERVER_SOCKET="tcp:$cand"
 }
+nest_is_wsl() {
+  case "$(uname -r)" in *microsoft*|*WSL*) return 0 ;; *) return 1 ;; esac
+}
 # Only meaningful under WSL; harmless elsewhere (no gateway match, no port).
-case "$(uname -r)" in *microsoft*|*WSL*) nest_bridge_host_adb || true ;; esac
+if nest_is_wsl; then nest_bridge_host_adb || true; fi
 
 # ── project facts (kept in one place so a rename is a one-line change) ──────
 NEST_PKG="${NEST_PKG:-com.example.medianest.debug}"      # debug applicationIdSuffix
@@ -138,6 +141,40 @@ nest_screenshot() {
     printf '%s\n' "$out"; return 0
   fi
   rm -f "$out"; return 1
+}
+
+# ── state assertions (text alone cannot prove a feature worked) ────────────
+# Poll until a node appears (or disappears). A fixed sleep is how flows become
+# flaky: fast enough on the dev box, too slow on a cold emulator.
+nest_wait_node() {
+  local want="$1" limit="${2:-10}" mode="${3:-present}" i=0
+  while [ "$i" -lt "$limit" ]; do
+    if nest_ui_dump "$NEST_UI/wait.xml" >/dev/null 2>&1; then
+      if grep -qiF -- "$want" "$NEST_UI/wait.xml"; then
+        [ "$mode" = present ] && return 0
+      else
+        [ "$mode" = absent ] && return 0
+      fi
+    fi
+    sleep 1; i=$((i+1))
+  done
+  return 1
+}
+
+# Assert a persisted value the UI cannot show: a row in the app database, a file
+# on disk, a preference. Anything that survives a restart is checkable here, and
+# that is what makes "the download actually happened" provable.
+#   nest_assert_shell "download file exists" "ls /sdcard/Download"
+#   nest_assert_shell "db has a songs row" "sqlite3 /data/data/$NEST_PKG/databases/x.db 'select 1'"
+nest_assert_shell() {
+  local what="$1" cmd="$2" out
+  out="$(sh_ "$cmd" 2>/dev/null)"
+  if [ -n "$out" ]; then
+    printf '  \033[32m✓\033[0m %s: %s\n' "$what" "$(printf '%s' "$out" | head -1)"
+    return 0
+  fi
+  printf '  \033[31m✗\033[0m %s (command produced nothing)\n' "$what"
+  return 1
 }
 
 # ── uiautomator dump (retries through animations) ──────────────────────────

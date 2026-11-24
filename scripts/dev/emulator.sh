@@ -12,7 +12,8 @@
 #  - Snapshot boot skips a full Android cold start; `-no-snapshot-load` forces cold.
 #  - A failed display probe is reported once, not per screenshot.
 set -uo pipefail
-. "$(dirname "$0")/../lib/common.sh"
+HERE="$(cd "$(dirname "$0")" && pwd)"
+. "$HERE/../lib/common.sh"
 
 ACTION="${1:-up}"
 EMU_OPTS=(-avd "$NEST_AVD" -no-window -no-audio -no-boot-anim
@@ -49,6 +50,21 @@ case "$ACTION" in
       hdr "device present but not booted; waiting"
       wait_boot 180 && exit 0
     fi
+    # Inside WSL2 the guest cannot read its own framebuffer
+    #   Assertion failed: !rcEnc->featureInfo()->hasReadColorBufferDma
+    # so screencap, screenrecord AND uiautomator all return nothing: the app can be
+    # installed here but never driven or verified. Boot on the host OS instead and
+    # reach it over its TCP adb server. Same scripts, real pixels.
+    if nest_is_wsl; then
+      hdr "WSL: booting $NEST_AVD on the host OS (guest readback is broken)"
+      "$HERE/host-emulator.sh" up || die "host emulator failed — see scripts/dev/host-emulator.sh"
+      nest_bridge_host_adb || die "no host adb server at ${NEST_ADB_SERVER:-<gateway>:5037}"
+      nest_is_booted || die "host emulator booted but not answering adb ($ADB_SERVER_SOCKET)"
+      nest_probe_display && ok "framebuffer readable — screenshots will work" \
+        || warn "framebuffer NOT readable even on the host — check -gpu in host-emulator.sh"
+      ok "booted $(nest_device_serial)"
+      exit 0
+    fi
     hdr "booting $NEST_AVD"
     # KVM gate: present != openable
     python3 -c "import os; os.open('/dev/kvm', os.O_RDWR)" 2>/dev/null \
@@ -61,6 +77,11 @@ case "$ACTION" in
     ;;
   down)
     hdr "stopping emulator"
+    # A WSL 'up' starts the host-OS emulator, so 'down' must stop that too.
+    if nest_is_wsl && [ -n "${ADB_SERVER_SOCKET:-}" ]; then
+      "$HERE/host-emulator.sh" down
+      exit $?
+    fi
     adb emu kill 2>/dev/null || true
     sleep 3
     pkill -f "qemu-system-x86_64.*$NEST_AVD" 2>/dev/null || true

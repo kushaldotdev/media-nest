@@ -20,13 +20,31 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 AVD="${NEST_WIN_AVD:-nest_hw}"
 PORT="${NEST_ADB_PORT:-5037}"
 
-# Windows-side paths. Adjust NEST_WIN_SDK if the SDK lives elsewhere.
-WIN_SDK="${NEST_WIN_SDK:-$(wslpath -u "$(cmd.exe /c 'echo %LOCALAPPDATA%' 2>/dev/null | tr -d '\r')" 2>/dev/null)/Android/Sdk}"
-WIN_SDK="${WIN_SDK:-/c/Users/$USER/AppData/Local/Android/Sdk}"
+# Windows-side paths. This WSL has `appendWindowsPath=false`, so cmd.exe/
+# powershell.exe are NOT on PATH and `<name>.exe` fails to exec — call them by
+# absolute path. Interop also refuses a UNC working directory, so every Windows
+# call runs from /mnt/c (see winpath/win).
+WINROOT=/mnt/c/Windows/System32
+CMDW="$WINROOT/cmd.exe"
+PSW="$WINROOT/WindowsPowerShell/v1.0/powershell.exe"
+
+win_ok() { [ -x "$CMDW" ] && [ -x "$PSW" ]; }
+
+# Only usable from a drvfs path; from a UNC cwd Windows refuses to start.
+win() { ( cd /mnt/c && "$PSW" -NoProfile -Command "$1" ) 2>/dev/null; }
+winpath() { ( cd /mnt/c && wslpath -w "$1" ); }
+
+if win_ok; then
+  :
+else
+  warn "Windows interop not reachable at $WINROOT — cannot boot a host emulator"
+fi
+
+WIN_SDK="${NEST_WIN_SDK:-$(win 'echo $env:LOCALAPPDATA')}"
+[ -n "$WIN_SDK" ] && WIN_SDK="$(wslpath -u "$(printf '%s' "$WIN_SDK" | tr -d '\r')" 2>/dev/null)/Android/Sdk"
+WIN_SDK="${WIN_SDK:-/mnt/c/Users/$USER/AppData/Local/Android/Sdk}"
 EMU="$WIN_SDK/emulator/emulator.exe"
 ADBW="$WIN_SDK/platform-tools/adb.exe"
-
-win() { powershell -NoProfile -Command "$1" 2>/dev/null; }
 
 host_ip() { ip route show default | awk '{print $3; exit}'; }
 
@@ -36,7 +54,7 @@ case "${1:-up}" in
     [ -x "$ADBW" ] || die "no host adb at $ADBW — install platform-tools into the SDK root"
     hdr "host adb server (TCP, all interfaces)"
     "$ADBW" kill-server >/dev/null 2>&1 || true
-    win "Start-Process -FilePath '$(wslpath -w "$ADBW")' -ArgumentList '-a','-P','$PORT','nodaemon','server' -WindowStyle Hidden"
+    win "Start-Process -FilePath '$(winpath "$ADBW")' -ArgumentList '-a','-P','$PORT','nodaemon','server' -WindowStyle Hidden"
     sleep 3
     ok "adb server on 0.0.0.0:$PORT"
 
@@ -44,7 +62,7 @@ case "${1:-up}" in
     if "$ADBW" devices 2>/dev/null | grep -q "emulator-.*device"; then
       ok "already running"
     else
-      win "Start-Process -FilePath '$(wslpath -w "$EMU")' -ArgumentList '-avd','$AVD','-gpu','host','-no-snapshot-save','-no-audio' -WorkingDirectory '$(wslpath -w "$WIN_SDK/emulator")'"
+      win "Start-Process -FilePath '$(winpath "$EMU")' -ArgumentList '-avd','$AVD','-gpu','host','-no-snapshot-save','-no-audio' -WorkingDirectory '$(winpath "$WIN_SDK/emulator")'"
       say "  booting (first boot after creation is slowest)..."
       for i in $(seq 1 40); do
         [ "$("$ADBW" -s emulator-5554 shell getprop sys.boot_completed 2>/dev/null | tr -d '\r\n')" = "1" ] && { ok "booted in ~$((i*5))s"; break; }

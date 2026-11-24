@@ -20,8 +20,8 @@ looked at, and logcat had no `FATAL`.** Nothing less is a pass:
 scripts/android-env-check.sh          # read-only readiness probe
 ./gradlew :app:assembleDebug
 ./gradlew --stop                      # free 6GB Gradle + 3GB Kotlin daemons before booting
-scripts/emulator-up.sh                # headless AVD + wait for sys.boot_completed
-scripts/verify.sh --quick             # install, drive flow, record, write RESULT.md
+scripts/emulator-up.sh                # boot AVD (WSL: on the host, over TCP adb) + wait for boot
+scripts/verify.sh --fast              # install, drive flow, record, write RESULT.md (--quick still works)
 ```
 
 `scripts/verify.sh` (no flags) does the full loop: build → unit tests → emulator → install →
@@ -44,6 +44,15 @@ ck_logcat                    # fails on FATAL EXCEPTION / ANR
 ```
 
 Add flows as `scripts/flows/<name>.sh` defining `flow_<name>()`, run with `--flow <name>`.
+
+Start a new one from `scripts/flows/_template.sh` (comments state the bar and where each
+helper goes). Beyond text assertions:
+
+    wait_for "Downloading" 30      # poll, don't sleep
+    wait_gone "Downloading" 30     # prove the job finished
+    assert_state "file" "ls /sdcard/Download/nest"   # check state, not pixels
+
+A flow that only taps and returns 0 verifies nothing.
 
 ## Rules that cost time when ignored
 

@@ -37,7 +37,8 @@ case "$CMD" in
     hdr "MediaNest test: $FLOW"
     t0=$(date +%s)
     bootstrap || exit 1
-    [ -f "$HERE/flows/$FLOW.sh" ] || die "no flow: scripts/flows/$FLOW.sh"
+    case "$FLOW" in _*) die "\"$FLOW\" is a template, not a flow — copy it: cp scripts/flows/_template.sh scripts/flows/myfeature.sh" ;; esac
+    [ -f "$HERE/flows/$FLOW.sh" ] || die "no flow: scripts/flows/$FLOW.sh (see scripts/flows/_template.sh)"
     . "$HERE/lib/drive.sh"
     . "$HERE/flows/$FLOW.sh"
     "flow_$FLOW"

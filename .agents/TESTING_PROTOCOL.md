@@ -28,8 +28,8 @@ version plus the rules that are easy to get wrong.
 scripts/android-env-check.sh     # read-only: is KVM/JDK/SDK/AVD ready?
 ./gradlew :app:assembleDebug
 ./gradlew --stop                 # free the 6GB Gradle + 3GB Kotlin daemons before boot
-scripts/emulator-up.sh           # headless boot, waits for sys.boot_completed
-scripts/verify.sh --quick        # install + drive the smoke flow, leave artifacts
+scripts/emulator-up.sh           # boot, wait for sys.boot_completed (alias: dev/emulator.sh up)
+scripts/verify.sh --quick        # install + drive a flow, leave artifacts (alias: --fast)
 ```
 
 Optional live view while it drives: `scripts/watch.sh` (scrcpy via WSLg). Taps originate
@@ -51,6 +51,28 @@ from `adb shell input`, so **no mouse cursor is drawn** — the UI reacts, nothi
 
 Write flows as `scripts/flows/<name>.sh` exporting `flow_<name>()`, then
 `scripts/verify.sh --flow <name>`.
+
+### Testing a feature nobody wrote a flow for yet
+
+Start from the template — it encodes the bar, so a new flow cannot be a no-op:
+
+```bash
+cp scripts/flows/_template.sh scripts/flows/downloads.sh   # edit flow_downloads()
+scripts/nest.sh test downloads        # fast: build+emulator+install+drive (~75s warm)
+scripts/verify.sh --flow downloads    # auditable: artifacts/verify-<UTC>/RESULT.md
+```
+
+Assertions beyond "is this text on screen":
+
+| Helper | Use it to |
+| --- | --- |
+| `wait_for "Downloading" 30` | poll for slow work instead of a fixed `sleep` |
+| `wait_gone "Downloading" 30` | prove a job actually **finished** |
+| `assert_state "what" "cmd"` | check something the screen cannot show — a downloaded file, a DB row, a preference |
+| `assert_any "A" "B"` | pass if any one marker is present — sections scroll off, empty states differ |
+
+A flow that only taps and `return 0`s verifies nothing. Every claim in the report needs
+either an `assert_text`/`wait_for` or an `assert_state` behind it.
 
 ## Environment facts you will otherwise rediscover
 

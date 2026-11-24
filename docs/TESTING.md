@@ -20,8 +20,14 @@ against a crashed app. Only the screenshot and logcat settle it.
 ```bash
 scripts/verify.sh            # build + unit tests + boot emulator + install + smoke flow
 scripts/verify.sh --keep     # leave the emulator running afterwards (for interactive poking)
-scripts/verify.sh --quick    # reuse a running emulator, skip the rebuild
+scripts/verify.sh --fast     # reuse a running emulator, skip the rebuild (old name --quick still works)
 ```
+
+**Which emulator.** Under WSL, `scripts/dev/emulator.sh up` boots the AVD **on the Windows
+host** and drives it over TCP adb (`ADB_SERVER_SOCKET`), because the guest cannot read its own
+framebuffer — `screencap`, `screenrecord` and `uiautomator` all return nothing there. On a
+Linux host or a physical device the same command boots locally. `scripts/nest.sh status`
+prints which one you got.
 
 Artifacts land in `artifacts/verify-<UTC timestamp>/`:
 
@@ -98,7 +104,7 @@ scripts/android-env-check.sh    # prints KVM, JDK, SDK, AVD, disk, network reach
 ```bash
 ./gradlew :app:assembleDebug
 ./gradlew --stop
-scripts/emulator-up.sh          # boots nest_api36 headless, waits for sys.boot_completed
+scripts/emulator-up.sh          # boots nest_api36, waits for sys.boot_completed (alias: dev/emulator.sh up)
 ```
 
 If you need them concurrent, raise `memory=` in `C:\Users\<you>\.wslconfig` (14 GB is
@@ -142,7 +148,8 @@ Rules that save time:
 - The bottom nav in this app uses `NavigationBarItem` with `contentDescription` from
   `ui/navigation/BottomNavItem.kt`. Read that file before inventing selectors.
 - After every tap: screenshot + logcat check. In `scripts/lib/drive.sh` these are wrapped as
-  `tap_label`, `tap_desc`, `assert_text`, `snap`, `expect_clean_logcat`.
+  `tap_label`, `assert_text`, `wait_for`, `wait_gone`, `assert_state`, `snap`,
+  `ck_logcat`.
 
 ### Prefer the intent over the tap where an intent exists
 
@@ -197,6 +204,19 @@ multiple segments for longer flows.
 ---
 
 ## 5. Encode what you drove
+
+Every feature needs its own flow — the smoke flow only proves the app starts and the
+bottom nav renders:
+
+```bash
+cp scripts/flows/_template.sh scripts/flows/downloads.sh   # edit flow_downloads()
+scripts/nest.sh test downloads                              # fast loop
+scripts/verify.sh --flow downloads                          # audit trail
+```
+
+The template's comments list the helpers (`wait_for`, `wait_gone`, `assert_state`,
+`assert_text`, `snap`, `ck_logcat`) and where each belongs. A flow that taps and returns 0
+verifies nothing; each claim in your report needs an assertion behind it.
 
 Once a flow works by hand, put it in `app/src/androidTest/` as Compose UI (`createAndroidComposeRule`
 + `onNodeWithText(...).performClick()`), and add it to `scripts/verify.sh`. The dependencies

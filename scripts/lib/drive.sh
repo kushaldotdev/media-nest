@@ -7,7 +7,8 @@
 # `ck_logcat` fails the run on a crash.
 
 set -uo pipefail
-: "${ART:=$NEST_CACHE/session-$(date +%H%M%S)}"
+# Seconds only collided when two runs started in the same second; keep the date too.
+: "${ART:=$NEST_CACHE/session-$(date +%Y%m%dT%H%M%S)}"
 mkdir -p "$ART/screens" "$ART/ui"
 STEP="${STEP:-0}"
 FAILED="${FAILED:-0}"
@@ -96,6 +97,58 @@ tap_label() {
   adb shell input tap $xy
   sleep 1
   ok "tapped \"$want\" @ $xy"
+}
+
+# Wait for a node to appear, instead of a fixed sleep. Returns non-zero on timeout.
+#   wait_for "Downloading" 30   # slow network, generous budget
+wait_for() {
+  local want="$1" limit="${2:-10}"
+  step
+  if nest_wait_node "$want" "$limit" present; then ok "appeared: \"$want\" (<=${limit}s)"; return 0; fi
+  bad "never appeared: \"$want\" (waited ${limit}s)"
+  nest_ui_dump "$ART/ui/$(snap_name "TIMEOUT-${want// /_}").xml" >/dev/null 2>&1 || true
+  return 1
+}
+
+# Wait for a node to go away — the way to prove a spinner/job actually finished.
+wait_gone() {
+  local want="$1" limit="${2:-10}"
+  step
+  if nest_wait_node "$want" "$limit" absent; then ok "cleared: \"$want\" (<=${limit}s)"; return 0; fi
+  bad "still present after ${limit}s: \"$want\""
+  return 1
+}
+
+# Assert something outside the screen: a DB row, a file, a preference.
+#   assert_state "downloaded file" "ls /sdcard/Download | head -1"
+assert_state() { step; nest_assert_shell "$1" "$2"; }
+
+# Assert that ONE of several markers is present, polling while the screen settles.
+# Two problems this solves at once:
+#  1. Screens legitimately differ by scroll position and empty state, so demanding one
+#     exact string turns a correct run red ("App preferences" scrolled off).
+#  2. A tap returns before the new screen composes. A single dump right after a tap
+#     captures the PREVIOUS screen and grep finds nothing — the bug that made this
+#     flaky until it polled (14-assert-any.xml in the 180858Z run held the Collections
+#     tree while Settings was still rendering).
+#   assert_any "Offline downloads" "No downloads yet" "Active Queue"
+#   assert_any 15 "A" "B"      # optional leading integer = seconds to poll
+assert_any() {
+  local limit=10
+  case "$1" in ''|*[!0-9]*) ;; *) limit="$1"; shift ;; esac
+  local i=0 xml hit=""
+  step
+  xml="$ART/ui/$(snap_name assert-any).xml"
+  while [ "$i" -lt "${limit}" ]; do
+    if nest_ui_dump "$xml" >/dev/null 2>&1; then
+      for want in "$@"; do
+        if grep -qiF -- "$want" "$xml"; then hit="$want"; break; fi
+      done
+      [ -n "$hit" ] && { ok "visible: \"$hit\" (<=${limit}s)"; return 0; }
+    fi
+    sleep 1; i=$((i+1))
+  done
+  bad "none visible after ${limit}s of: $*"; return 1
 }
 
 assert_text() {

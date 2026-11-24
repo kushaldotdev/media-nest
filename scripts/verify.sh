@@ -4,6 +4,7 @@
 #   scripts/verify.sh                 build + unit tests + emulator + install + smoke flow
 #   scripts/verify.sh --flow <name>   use scripts/flows/<name>.sh
 #   scripts/verify.sh --fast          reuse a booted emulator and an up-to-date APK
+#   scripts/verify.sh --quick         alias for --fast (older docs use this name)
 #   scripts/verify.sh --keep          leave the emulator running
 #
 # This is the slow, auditable path: it writes artifacts/verify-<UTC>/RESULT.md with
@@ -17,7 +18,7 @@ FLOW=smoke; FAST=0; KEEP=0
 while [ $# -gt 0 ]; do
   case "$1" in
     --flow) FLOW="${2:?--flow needs a name}"; shift ;;
-    --fast) FAST=1 ;;
+    --fast|--quick) FAST=1 ;;
     --keep) KEEP=1 ;;
     -h|--help) sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) die "unknown arg: $1" ;;
@@ -66,7 +67,7 @@ hdr "device + install"
 "$HERE/dev/install.sh" || { bad "install"; report; exit 1; }
 adb logcat -c >/dev/null 2>&1 || true
 
-[ -f "$HERE/flows/$FLOW.sh" ] || die "no flow: scripts/flows/$FLOW.sh"
+[ -f "$HERE/flows/$FLOW.sh" ] || die "no flow: scripts/flows/$FLOW.sh (available: $(ls "$HERE/flows"/*.sh 2>/dev/null | xargs -r -n1 basename | sed 's/.sh$//' | grep -v '^_' | tr '\n' ' '))"
 . "$HERE/lib/drive.sh"
 . "$HERE/flows/$FLOW.sh"
 
