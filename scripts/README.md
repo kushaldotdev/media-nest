@@ -148,12 +148,11 @@ This is also how a **physical phone** is driven from WSL — see `scripts/phone.
 
 One working tree, in WSL ext4 — `~/projects/media-nest`. Open it from Windows at
 `\\wsl.localhost\Ubuntu-24.04\home\kushal\projects\media-nest` (VS Code Remote-WSL, Explorer).
-Backup: bare repo `D:\dev\media-nest-backup.git`, remote `backup`.
+GitHub (`origin`) is the only remote and the only backup.
 
 Don't build from `/mnt/d`: same 224 files measure 126× slower to read and 73× slower to create
 there, and a second copy causes phantom mode-only diffs and stale-mtime builds.
 
 ```bash
-git push backup main      # snapshot to D:
-git push origin main      # publish to GitHub
+git push origin main      # publish + back up
 ```

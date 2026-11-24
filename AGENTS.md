@@ -9,9 +9,12 @@ WSL:     ~/projects/media-nest
 Windows: \\wsl.localhost\Ubuntu-24.04\home\kushal\projects\media-nest
 ```
 
-Open that UNC path in VS Code / Cursor / Explorer (Remote-WSL). Backup is a bare repo at
-`D:\dev\media-nest-backup.git` (remote name `backup`), synced with `git push backup` — never
-with `cp`/`rsync`.
+Open that UNC path in VS Code / Cursor / Explorer (Remote-WSL).
+
+**GitHub is the only remote and the only backup.** There is one working tree (WSL ext4) and one
+copy of the history (`origin` → `github.com/kushaldotdev/media-nest`). No bare repo on `D:`, no
+`backup` remote, no second Windows tree — never sync with `cp`/`rsync`, and never re-add a
+filesystem remote. To snapshot history, push `origin`.
 
 **Do not copy the tree to `D:\` and build there.** Measured on this machine, from WSL, over
 the same 224 source files:
