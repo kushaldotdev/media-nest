@@ -27,3 +27,8 @@ new-design-media-nest/*
 dist/*
 # Verify-run evidence (screenshots, screen recordings, ui dumps, RESULT.md)
 artifacts/
+
+# Scratch: audit reports, probe scripts, WIP notes.
+# These are working documents for bugs that are not fixed yet. They must NOT be
+# committed — a report lands in the repo only once the fix it describes has landed.
+tmp/
