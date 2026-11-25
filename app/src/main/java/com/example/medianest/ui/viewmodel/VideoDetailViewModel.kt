@@ -142,6 +142,11 @@ class VideoDetailViewModel @Inject constructor(
             return
         }
         
+        val loadMode = videoDetailLoadMode(
+            isNetworkAvailable = isNetworkAvailable(),
+            forceRefresh = forceRefresh
+        )
+
         viewModelScope.launch {
             if (cached != null) {
                 _videoInfo.value = cached
@@ -181,12 +186,20 @@ class VideoDetailViewModel @Inject constructor(
                         streamSources = mockSources,
                         isOfflineFallback = true
                     )
-                    HomeViewModel.lastResultCache.put(videoId, fallbackInfo)
+                    // A refresh removed this entry so the extraction could replace it; putting
+                    // the stale local row back would undo that if the extraction then fails.
+                    if (loadMode != VideoDetailLoadMode.OnlineRefresh) {
+                        HomeViewModel.lastResultCache.put(videoId, fallbackInfo)
+                    }
                     if (_videoInfo.value == null) {
                         _videoInfo.value = fallbackInfo
                     }
                 }
             }
+
+            // Offline the row and its downloads are already the best data this screen can
+            // show, so awaiting the extraction would only be dead time.
+            if (loadMode == VideoDetailLoadMode.LocalOnly) return@launch
 
             _isFetchingOnline.value = true
             try {
@@ -411,4 +424,29 @@ class VideoDetailViewModel @Inject constructor(
             _localVideo.value = video
         }
     }
+}
+
+/** How [VideoDetailViewModel.loadVideoInfo] loads a video. */
+internal enum class VideoDetailLoadMode {
+    /** Offline: only what is on disk is shown; the extraction is never awaited. */
+    LocalOnly,
+
+    /** Online: the local row is shown first, then replaced by the extracted result. */
+    Online,
+
+    /** Online pull-to-refresh: fresh data was asked for, so stale local data must not be cached. */
+    OnlineRefresh
+}
+
+/**
+ * Decides how [VideoDetailViewModel.loadVideoInfo] loads a video. Only a reachable network may
+ * start the extraction; a pull-to-refresh cannot conjure one, so it never bypasses that gate.
+ */
+internal fun videoDetailLoadMode(
+    isNetworkAvailable: Boolean,
+    forceRefresh: Boolean
+): VideoDetailLoadMode = when {
+    !isNetworkAvailable -> VideoDetailLoadMode.LocalOnly
+    forceRefresh -> VideoDetailLoadMode.OnlineRefresh
+    else -> VideoDetailLoadMode.Online
 }
