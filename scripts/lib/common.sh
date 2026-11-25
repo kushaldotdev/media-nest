@@ -152,8 +152,12 @@ nest_invalidate_dump() {
 }
 # Populated by this session, for the current generation?
 nest_dump_cache_hit() {
-  local sess gen
-  read -r sess gen < "$NEST_CACHE/.ui-cache.meta" 2>/dev/null || return 1
+  local sess gen meta="$NEST_CACHE/.ui-cache.meta"
+  # Guard on existence: a missing meta is the normal first-call state, and an
+  # unguarded `read < missing` leaks "No such file or directory" to stderr on
+  # every run (redirect ordering does not suppress it reliably inside functions).
+  [ -f "$meta" ] || return 1
+  read -r sess gen < "$meta" 2>/dev/null || return 1
   [ "$sess" = "$NEST_SESSION" ] && [ "$gen" = "$(nest_cache_generation)" ] \
     && [ -s "$NEST_CACHE/.ui-cache.xml" ]
 }
