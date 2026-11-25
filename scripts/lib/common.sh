@@ -62,6 +62,44 @@ nest_is_wsl() {
 # Only meaningful under WSL; harmless elsewhere (no gateway match, no port).
 if nest_is_wsl; then nest_bridge_host_adb || true; fi
 
+# ── where the emulator lives, and the Gradle daemon policy that follows ────
+# The daemon (6GB) + Kotlin daemon (3GB) + emulator (4GB) oversubscribe 16GB, so
+# a daemon must be stopped before booting an emulator *inside this VM*. It must
+# NOT be stopped when the emulator runs somewhere else (host-OS emulator, a
+# phone bridged over TCP): nothing competes, and a cold daemon costs ~21s of JVM
+# start plus configuration-cache deserialisation on every later build.
+#
+# The guard this replaces tested `ADB_SERVER_SOCKET`, which scripts/nest.sh
+# cannot have set at that point — it builds BEFORE it boots the emulator — so the
+# daemon was killed on every normal run. Answer the actual question instead: is
+# there a qemu emulator in this VM, or will nest.sh boot one here?
+nest_emulator_in_vm() {
+  # Match the qemu process by exact comm, never `pgrep -f`: a full-command-line
+  # match also hits the shell that is running this function.
+  local n
+  for n in qemu-system-x86_64 qemu-system-x86_64-headless qemu-system-aarch64; do
+    pgrep -x "$n" >/dev/null 2>&1 && return 0
+  done
+  return 1
+}
+# host = emulator on the host OS / a bridged device; vm = an AVD boots here.
+nest_emulator_location() {
+  [ -n "${NEST_EMULATOR_LOCATION:-}" ] && { printf '%s\n' "$NEST_EMULATOR_LOCATION"; return; }
+  # emulator.sh boots on the host whenever this is WSL (guest readback is broken).
+  if nest_is_wsl; then printf 'host\n'; return; fi
+  if nest_emulator_in_vm; then printf 'vm\n'; return; fi
+  if [ -n "${ADB_SERVER_SOCKET:-}" ]; then printf 'host\n'; return; fi
+  printf 'vm\n'
+}
+# True when the daemon should be stopped. Explicit overrides win, so a caller can
+# state the answer before the emulator step has run: NEST_KEEP_DAEMON=1 /
+# NEST_KILL_DAEMON=1.
+nest_daemon_must_stop() {
+  case "${NEST_KILL_DAEMON:-}" in 1|true|yes) return 0 ;; esac
+  case "${NEST_KEEP_DAEMON:-}" in 1|true|yes) return 1 ;; esac
+  [ "$(nest_emulator_location)" = vm ]
+}
+
 # ── project facts (kept in one place so a rename is a one-line change) ──────
 NEST_PKG="${NEST_PKG:-com.example.medianest.debug}"      # debug applicationIdSuffix
 NEST_ACT="${NEST_ACT:-com.example.medianest.MainActivity}"
@@ -85,6 +123,45 @@ die()  { bad "$*"; exit 1; }
 # ── adb shims (strip CR; never hang forever) ────────────────────────────────
 sh_() { adb shell "$@" 2>/dev/null | tr -d '\r'; }
 adbt() { timeout "${NEST_ADB_TIMEOUT:-45}" adb "$@"; }
+
+# ── screen-dump cache: one uiautomator capture per unchanged screen ─────────
+# A uiautomator dump costs 3.3-7.7s and a repeat flow takes 4+ of them of the
+# same settled screen. Cache the last captured XML and reuse it until something
+# could have changed the screen.
+#
+# Two-part key, and both parts matter:
+#  - the SESSION id (`$$`, stable for the whole process tree, including the
+#    subshells `$(...)` creates) means a cache left by an earlier run is never
+#    reused. A screen that a *previous* script saw proves nothing about now, and
+#    no caller should have to remember to clear it.
+#  - the GENERATION bumps on every input event: `adb shell input`, `am start`,
+#    `am force-stop`, `keyevent`. Flows that change the screen with no input
+#    event (an app-driven transition) call invalidate_dump explicitly.
+# A stale tree would make every later assertion a lie, so invalidation lives in
+# one place — nest_input/nest_am — rather than in each flow's memory.
+NEST_SESSION="$$"
+nest_cache_generation() {
+  local g
+  g="$(awk '{print $2}' "$NEST_CACHE/.ui-cache.meta" 2>/dev/null)" || g=0
+  case "$g" in ''|*[!0-9]*) g=0 ;; esac
+  printf '%s\n' "$g"
+}
+nest_invalidate_dump() {
+  printf '%s %s\n' "$NEST_SESSION" "$(( $(nest_cache_generation) + 1 ))" > "$NEST_CACHE/.ui-cache.meta"
+  rm -f "$NEST_CACHE/.ui-cache.xml"
+}
+# Populated by this session, for the current generation?
+nest_dump_cache_hit() {
+  local sess gen
+  read -r sess gen < "$NEST_CACHE/.ui-cache.meta" 2>/dev/null || return 1
+  [ "$sess" = "$NEST_SESSION" ] && [ "$gen" = "$(nest_cache_generation)" ] \
+    && [ -s "$NEST_CACHE/.ui-cache.xml" ]
+}
+
+# Input events go through these, never through a bare `adb shell input`/`am`:
+# the invalidation is the whole reason the cache is safe.
+nest_input() { nest_invalidate_dump; adb shell input "$@"; }
+nest_am()    { nest_invalidate_dump; adb shell am "$@"; }
 
 nest_device_serial() {
   # any ready device: an emulator here, or a physical phone bridged from Windows
@@ -126,7 +203,7 @@ nest_probe_display() {
 # one, and you "verify" the wrong thing.
 nest_screenshot() {
   local out="${1:-$NEST_SHOTS/$(date +%H%M%S).png}"
-  local settle="${2:-${NEST_SETTLE:-2}}"
+  local settle="${2:-${NEST_SETTLE:-1}}"
   mkdir -p "$(dirname "$out")"
   sleep "$settle"
   adbt shell screencap -p /data/local/tmp/.warm.png >/dev/null 2>&1   # discard: stale
@@ -146,19 +223,26 @@ nest_screenshot() {
 # ── state assertions (text alone cannot prove a feature worked) ────────────
 # Poll until a node appears (or disappears). A fixed sleep is how flows become
 # flaky: fast enough on the dev box, too slow on a cold emulator.
+#
+# `limit` is SECONDS (every caller already assumed it was). Each attempt costs a
+# dump (~4s), so the loop checks the deadline after each attempt instead of
+# counting a fixed number of attempts — a limit of 20 means ~20s, not 4 dumps
+# (~86s) and not one attempt when the number is small.
 nest_wait_node() {
-  local want="$1" limit="${2:-10}" mode="${3:-present}" i=0
-  while [ "$i" -lt "$limit" ]; do
-    if nest_ui_dump "$NEST_UI/wait.xml" >/dev/null 2>&1; then
+  local want="$1" limit="${2:-10}" mode="${3:-present}"
+  local deadline=$(( $(date +%s) + limit ))
+  while :; do
+    if nest_ui_dump "$NEST_UI/wait.xml" 5 1 >/dev/null 2>&1; then
       if grep -qiF -- "$want" "$NEST_UI/wait.xml"; then
         [ "$mode" = present ] && return 0
       else
         [ "$mode" = absent ] && return 0
       fi
     fi
-    sleep 1; i=$((i+1))
+    # Always make one attempt: a 0/1s budget must not skip the check entirely.
+    [ "$(date +%s)" -ge "$deadline" ] && return 1
+    sleep 1
   done
-  return 1
 }
 
 # Assert a persisted value the UI cannot show: a row in the app database, a file
@@ -178,13 +262,21 @@ nest_assert_shell() {
 }
 
 # ── uiautomator dump (retries through animations) ──────────────────────────
+# `fresh` (3rd arg) forces a real capture even when the cache is warm. Polling
+# loops pass it: they exist precisely because the screen is still settling, so a
+# cached frame would re-assert the state they are waiting to leave.
 nest_ui_dump() {
-  local out="${1:-$NEST_UI/ui-$(date +%H%M%S).xml}" i=0
-  while [ "$i" -lt "${2:-5}" ]; do
+  local out="${1:-$NEST_UI/ui-$(date +%H%M%S).xml}" tries="${2:-5}" fresh="${3:-0}" i=0
+  if [ "$fresh" -eq 0 ] && nest_dump_cache_hit; then
+    cp "$NEST_CACHE/.ui-cache.xml" "$out" 2>/dev/null && { printf '%s\n' "$out"; return 0; }
+  fi
+  while [ "$i" -lt "$tries" ]; do
     i=$((i+1))
     adbt shell uiautomator dump /data/local/tmp/.ui.xml >/dev/null 2>&1
     adbt pull /data/local/tmp/.ui.xml "$out" >/dev/null 2>&1
     if [ -s "$out" ] && grep -q "<hierarchy" "$out" 2>/dev/null; then
+      cp "$out" "$NEST_CACHE/.ui-cache.xml" 2>/dev/null \
+        && printf '%s %s\n' "$NEST_SESSION" "$(nest_cache_generation)" > "$NEST_CACHE/.ui-cache.meta"
       printf '%s\n' "$out"; return 0
     fi
     sleep 1

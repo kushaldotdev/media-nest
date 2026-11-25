@@ -51,7 +51,7 @@ flow_shell() {
   # was in front before* — the launcher, or the dialer on this emulator. Requiring
   # the launcher specifically fails a correct run, so assert only that the app gave
   # up the foreground and did not crash doing it.
-  adb shell input keyevent 4 >/dev/null 2>&1
+  nest_input keyevent 4 >/dev/null 2>&1
   sleep 3
   local focus
   focus="$(adb shell dumpsys window 2>/dev/null | tr -d '\r' | grep -m1 mCurrentFocus)"

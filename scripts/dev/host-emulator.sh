@@ -11,8 +11,13 @@
 #   host-emulator.sh up       start the Windows emulator + a TCP adb server
 #   host-emulator.sh down     stop both
 #   host-emulator.sh status   what is running, and the socket WSL should use
+#   host-emulator.sh warm     is a quickboot snapshot cached, i.e. will 'up' be fast?
 #
 # Env: NEST_WIN_AVD (default nest_hw), NEST_ADB_PORT (5037)
+#
+# Speed: quickboot is left enabled on purpose. There is no `-no-snapshot-save`, so
+# the emulator writes its state on exit and the next start resumes it (~5s instead
+# of a full ~55s cold boot). `warm` reports whether that snapshot exists.
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 . "$HERE/../lib/common.sh"
@@ -48,6 +53,37 @@ ADBW="$WIN_SDK/platform-tools/adb.exe"
 
 host_ip() { ip route show default | awk '{print $3; exit}'; }
 
+# Where the host-side AVD keeps its quickboot snapshot. Same $LOCALAPPDATA the
+# SDK is found under, so this follows the same resolution order.
+HOST_AVD_DIR="$(printf '%s' "$WIN_SDK" | sed 's|/AppData/Local/Android/Sdk$|/.android/avd|')/$AVD.avd"
+HOST_SNAP="$HOST_AVD_DIR/snapshots/default_boot"
+
+# A snapshot is only usable if it finished: the emulator writes snapshot.pb plus
+# a ram.img of the guest's memory. A directory left behind by a killed emulator
+# has neither, and claiming "warm" then would be a lie.
+snap_ready() {
+  [ -d "$HOST_SNAP" ] || return 1
+  local pb
+  pb="$(find "$HOST_SNAP" -maxdepth 1 -name 'snapshot.pb' -size +1k 2>/dev/null | head -1)"
+  [ -n "$pb" ] && find "$HOST_SNAP" -maxdepth 1 -name 'ram.img' -size +10M 2>/dev/null | head -1 | grep -q .
+}
+
+# Animations off is what keeps uiautomator dumps complete: with them on, a dump
+# taken mid-transition returns a PARTIAL tree (no nav bar), which reads exactly
+# like "the control is missing". The local path in emulator.sh already does
+# this; the host path never did, and scales measured 1.0 here.
+#
+# Ordering matters for quickboot: do this BEFORE any snapshot is saved, or the
+# animation-on state is baked into the snapshot and every later boot restores
+# it — the optimisation would silently undo itself.
+host_animations_off() {
+  local s
+  for s in window transition animator; do
+    "$ADBW" -s emulator-5554 shell settings put global ${s}_animation_scale 0 >/dev/null 2>&1 || true
+  done
+  ok "animations off (window/transition/animator scale = 0)"
+}
+
 case "${1:-up}" in
   up)
     [ -x "$EMU" ] || die "no host emulator at $EMU (set NEST_WIN_SDK)"
@@ -61,13 +97,24 @@ case "${1:-up}" in
     hdr "emulator $AVD"
     if "$ADBW" devices 2>/dev/null | grep -q "emulator-.*device"; then
       ok "already running"
+      # A device that is attached but has not finished booting must still get its
+      # animation scales set before anything drives it.
+      host_animations_off
     else
-      win "Start-Process -FilePath '$(winpath "$EMU")' -ArgumentList '-avd','$AVD','-gpu','host','-no-snapshot-save','-no-audio' -WorkingDirectory '$(winpath "$WIN_SDK/emulator")'"
+      if snap_ready; then say "  quickboot snapshot present — resuming (fast)"
+      else say "  no snapshot — cold boot (first boot after creation is slowest)"; fi
+      # NOTE: no -no-snapshot-save, and no -no-snapshot-load. The emulator must be
+      # free to restore a snapshot on start and to save one on exit; suppressing
+      # either makes every boot the full ~55s. Do not add them back.
+      win "Start-Process -FilePath '$(winpath "$EMU")' -ArgumentList '-avd','$AVD','-gpu','host','-no-audio' -WorkingDirectory '$(winpath "$WIN_SDK/emulator")'"
       say "  booting (first boot after creation is slowest)..."
-      for i in $(seq 1 40); do
+      for i in $(seq 1 60); do
         [ "$("$ADBW" -s emulator-5554 shell getprop sys.boot_completed 2>/dev/null | tr -d '\r\n')" = "1" ] && { ok "booted in ~$((i*5))s"; break; }
         sleep 5
       done
+      # Only now: the guest is up, so the settings stick and the snapshot that
+      # `down` will write carries the animation-off state.
+      host_animations_off
     fi
 
     hdr "WSL side"
@@ -99,5 +146,18 @@ case "${1:-up}" in
     fi
     ;;
 
-  *) sed -n '2,19p' "$0" | sed 's/^# \{0,1\}//' ;;
+  warm)
+    hdr "host emulator quickboot"
+    say "  avd      : $AVD"
+    say "  snapshot : $HOST_SNAP"
+    if snap_ready; then
+      ok "snapshot present — the next 'up' resumes instead of cold booting (~5s not ~55s)"
+    else
+      warn "no usable snapshot — the next 'up' is a full cold boot (~55s)"
+      say "  created automatically when the emulator exits cleanly (no -no-snapshot-save)."
+      say "  force one now: adb emu avd snapshot save default_boot"
+    fi
+    ;;
+
+  *) sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//' ;;
 esac

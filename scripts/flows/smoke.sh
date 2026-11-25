@@ -18,7 +18,7 @@ flow_smoke() {
   # 1b. A fresh install sits on the POST_NOTIFICATIONS dialog; clear it so the
   #     rest of the flow sees the app, not the system prompt.
   if find_xy "Allow" >/dev/null 2>&1; then
-    adb shell input tap $(find_xy "Allow"); sleep 2
+    nest_input tap $(find_xy "Allow"); sleep 2
     ok "granted notification permission"
   fi
 
@@ -65,7 +65,7 @@ flow_smoke() {
   # 4b. BACK from the root destination legitimately exits to the launcher, so
   #    "still alive" is not the assertion. The real question is whether the
   #    exit was clean: no crash, and a sane focus target afterwards.
-  adb shell input keyevent 4 >/dev/null 2>&1
+  nest_input keyevent 4 >/dev/null 2>&1
   sleep 2
   local focus
   focus="$(adb shell dumpsys window 2>/dev/null | tr -d '\r' | grep -m1 mCurrentFocus)"

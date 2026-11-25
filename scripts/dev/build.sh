@@ -6,8 +6,9 @@
 #   scripts/dev/build.sh clean    clean then build
 #
 # Speed notes:
-#  - Uses the Gradle daemon (do NOT `--stop` here; that is what `install` does before
-#    booting the emulator, since 6GB Gradle + 3GB Kotlin + 4GB emulator oversubscribes RAM).
+#  - Keeps the Gradle daemon warm unless an emulator competes for RAM inside
+#    this VM (see the daemon section at the bottom). A cold daemon costs ~21s of
+#    JVM start + configuration-cache deserialisation on the NEXT build.
 #  - Configuration cache + build cache are already on in gradle.properties.
 #  - `--offline` when the dependency cache is warm, so a flaky network cannot stall a loop.
 set -uo pipefail
@@ -66,12 +67,18 @@ fi
 ok "built in ${dur}s → $NEST_APK ($(ls -lh "$NEST_APK" | awk '{print $5}'))"
 printf '%s' "$CUR_HASH" > "$stamp"
 
-# Only free the daemons when the emulator is competing for RAM *inside* this
-# VM. With the emulator on the host OS (ADB_SERVER_SOCKET set) there is no
-# contention, and killing the daemon makes every later run pay JVM startup.
-if [ -z "${ADB_SERVER_SOCKET:-}" ]; then
+# Only free the daemons when an emulator is competing for RAM *inside* this VM.
+# The condition is answered by nest_daemon_must_stop (lib/common.sh), because
+# the naive test — "is ADB_SERVER_SOCKET set?" — is false at this point even
+# when the emulator runs on the host: scripts/nest.sh builds BEFORE it boots,
+# so the guard used to fire on every run and cost the next build ~21s.
+#
+# The caller can state the answer up front, before any emulator exists:
+#   NEST_EMULATOR_LOCATION=host scripts/dev/build.sh   # or vm
+#   NEST_KEEP_DAEMON=1 / NEST_KILL_DAEMON=1
+if nest_daemon_must_stop; then
   ./gradlew --stop >/dev/null 2>&1 || true
-  ok "gradle daemons stopped (frees RAM for the local emulator)"
+  ok "gradle daemons stopped (frees RAM for an emulator in this VM)"
 else
-  say "  keeping gradle daemon warm (emulator runs on the host)"
+  say "  keeping gradle daemon warm (emulator is not in this VM)"
 fi

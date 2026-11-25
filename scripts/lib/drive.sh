@@ -16,6 +16,12 @@ FAILED="${FAILED:-0}"
 step() { STEP=$((STEP+1)); }
 snap_name() { printf '%02d-%s' "$STEP" "${1:-step}"; }
 
+# The screen changed but no input event caused it (an app-driven transition, a
+# download that finished, a system dialog that appeared). Say so, or the next
+# assertion reads the previous screen from the dump cache and lies.
+#   invalidate_dump; wait_for "Downloading" 30
+invalidate_dump() { nest_invalidate_dump; }
+
 # Screenshot into $ART/screens. Returns 0 and prints the path; returns 1 when the
 # framebuffer cannot be read at all (headless-WSL gfxstream limitation). Callers
 # must NOT treat the failure as "the screen looked fine".
@@ -39,8 +45,16 @@ snap() {
 # transition, so retry with a fresh dump before declaring the node absent.
 find_xy() {
   local want="$1" xml i
+  # A cache hit is not an observation, so it does not spend a retry — and a miss
+  # falls through to the same 3 REAL captures as before. Warm cache + node
+  # present is therefore free, warm cache + node absent costs nothing extra,
+  # and the failure path is untouched.
+  if nest_dump_cache_hit && xml="$(nest_ui_dump "$NEST_UI/find.xml")" \
+     && _xy_of "$xml" "$want"; then
+    return 0
+  fi
   for i in 1 2 3; do
-    xml="$(nest_ui_dump "$NEST_UI/find.xml")" || { sleep 1; continue; }
+    xml="$(nest_ui_dump "$NEST_UI/find.xml" 5 1)" || { sleep 1; continue; }
     _xy_of "$xml" "$want" && return 0
     sleep 1
   done
@@ -85,6 +99,9 @@ dump_ui() {
   local label="${1:-step}" out
   step
   out="$ART/ui/$(snap_name "$label").xml"
+  # Still writes the artifact on every call. When the cache is warm the file is
+  # the cached XML — same bytes, same evidence, no second capture. The dump that
+  # populated it is the one already written into the other step's artifact.
   nest_ui_dump "$out" >/dev/null && { printf '%s\n' "$out"; return 0; }
   bad "ui dump failed ($label)"
   return 1
@@ -94,7 +111,7 @@ tap_label() {
   local want="$1" xy
   step
   xy="$(find_xy "$want")" || { bad "no node matching \"$want\" (try: scripts/dev/poke.sh ui)"; return 1; }
-  adb shell input tap $xy
+  nest_input tap $xy
   sleep 1
   ok "tapped \"$want\" @ $xy"
 }
@@ -140,7 +157,11 @@ assert_any() {
   step
   xml="$ART/ui/$(snap_name assert-any).xml"
   while [ "$i" -lt "${limit}" ]; do
-    if nest_ui_dump "$xml" >/dev/null 2>&1; then
+    # fresh: this loop exists because the screen is still settling, so a cached
+    # frame would re-read the state it is waiting to leave. The successful
+    # capture still lands in the cache, which is what makes the dump_ui that
+    # usually follows this call free.
+    if nest_ui_dump "$xml" 5 1 >/dev/null 2>&1; then
       for want in "$@"; do
         if grep -qiF -- "$want" "$xml"; then hit="$want"; break; fi
       done
@@ -171,20 +192,20 @@ dismiss_system_dialogs() {
   grep -qiE "isn't responding|keeps stopping" "$xml" || return 0
   for label in "Wait" "Close app"; do
     if xy="$(find_xy "$label")"; then
-      adb shell input tap $xy; sleep 2
+      nest_input tap $xy; sleep 2
       ok "dismissed system dialog ('$label')"
       return 0
     fi
   done
-  adb shell input keyevent 4 >/dev/null 2>&1
+  nest_input keyevent 4 >/dev/null 2>&1
   say "  dismissed system dialog via BACK"
 }
 
 launch() {
   adb logcat -c >/dev/null 2>&1 || true
   dismiss_system_dialogs
-  adb shell am force-stop "$NEST_PKG"
-  adb shell am start -n "$NEST_PKG/$NEST_ACT" >/dev/null 2>&1
+  nest_am force-stop "$NEST_PKG"
+  nest_am start -n "$NEST_PKG/$NEST_ACT" >/dev/null 2>&1
   local i cur
   for i in $(seq 1 15); do
     # `dumpsys activity` prints the package inside ActivityRecord{...}; a
@@ -200,7 +221,7 @@ launch() {
   # A first install lands on the POST_NOTIFICATIONS dialog, not the app.
   if find_xy "Allow" >/dev/null 2>&1; then
     ok "dismissing permission dialog"
-    adb shell input tap $(find_xy "Allow") ; sleep 2
+    nest_input tap $(find_xy "Allow") ; sleep 2
     cur="$(adb shell dumpsys window 2>/dev/null | tr -d '\r' | grep -m2 -E 'mCurrentFocus|mFocusedApp')"
     case "$cur" in *"$NEST_PKG"*) ok "launched (after permission grant)"; return 0 ;; esac
   fi
