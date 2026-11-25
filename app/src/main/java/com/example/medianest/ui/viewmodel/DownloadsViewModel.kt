@@ -144,34 +144,57 @@ class DownloadsViewModel @Inject constructor(
         viewModelScope.launch {
             if (_isRefreshing.value) return@launch
             _isRefreshing.value = true
-            
             try {
-                syncManager.sync()
-            } catch (e: Exception) {
-                android.util.Log.e("DownloadsViewModel", "Failed to sync during pull-to-refresh", e)
-            }
-            
-            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                refreshPhases.forEach { phase ->
+                    when (phase) {
+                        RefreshPhase.LOCAL_RECONCILE -> reconcileLocalFiles()
+                        RefreshPhase.SYNC -> syncAfterLocalReconcile()
+                    }
+                }
+            } finally {
                 try {
-                    val allDownloads = downloadRepository.getAllDownloadsOnce()
-                    allDownloads.forEach { download ->
-                        if (download.status == DownloadStatus.COMPLETED) {
-                            val file = if (download.filePath.isNotEmpty()) File(download.filePath) else null
-                            if (file == null || !file.exists()) {
-                                downloadRepository.update(download.copy(errorMessage = "file_missing"))
-                                reconcileMissingFile(download.videoId)
-                            } else if (download.errorMessage == "file_missing") {
+                    kotlinx.coroutines.delay(800)
+                } finally {
+                    _isRefreshing.value = false
+                }
+            }
+        }
+    }
+
+    /** Disk truth first: a file that is already gone must be reported before the network is awaited. */
+    private suspend fun reconcileLocalFiles() {
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            try {
+                val allDownloads = downloadRepository.getAllDownloadsOnce()
+                allDownloads.forEach { download ->
+                    val statusIsCompleted = download.status == DownloadStatus.COMPLETED
+                    val fileExists = statusIsCompleted &&
+                        download.filePath.isNotEmpty() &&
+                        File(download.filePath).exists()
+                    when (reconcileLocalFile(statusIsCompleted, fileExists)) {
+                        LocalFileReconcile.MARK_MISSING -> {
+                            downloadRepository.update(download.copy(errorMessage = "file_missing"))
+                            reconcileMissingFile(download.videoId)
+                        }
+                        LocalFileReconcile.CLEAR_MISSING -> {
+                            if (download.errorMessage == "file_missing") {
                                 downloadRepository.update(download.copy(errorMessage = null))
                             }
                         }
+                        LocalFileReconcile.NONE -> Unit
                     }
-                } catch (e: Exception) {
-                    android.util.Log.e("DownloadsViewModel", "Error refreshing downloads on disk", e)
                 }
+            } catch (e: Exception) {
+                android.util.Log.e("DownloadsViewModel", "Error refreshing downloads on disk", e)
             }
-            
-            kotlinx.coroutines.delay(800)
-            _isRefreshing.value = false
+        }
+    }
+
+    private suspend fun syncAfterLocalReconcile() {
+        try {
+            syncManager.sync()
+        } catch (e: Exception) {
+            android.util.Log.e("DownloadsViewModel", "Failed to sync during pull-to-refresh", e)
         }
     }
 
@@ -358,6 +381,24 @@ class DownloadsViewModel @Inject constructor(
         }
         mediaController = null
     }
+}
+
+/** One step of a pull-to-refresh; the order below is the contract, local work first. */
+internal enum class RefreshPhase { LOCAL_RECONCILE, SYNC }
+
+internal val refreshPhases: List<RefreshPhase> = listOf(RefreshPhase.LOCAL_RECONCILE, RefreshPhase.SYNC)
+
+/** True when a completed download's file is gone and the row must be flagged. */
+internal fun shouldMarkMissing(statusIsCompleted: Boolean, fileExists: Boolean): Boolean =
+    statusIsCompleted && !fileExists
+
+/** What the local check requires for one download row; [NONE] leaves the row untouched. */
+internal enum class LocalFileReconcile { MARK_MISSING, CLEAR_MISSING, NONE }
+
+internal fun reconcileLocalFile(statusIsCompleted: Boolean, fileExists: Boolean): LocalFileReconcile = when {
+    shouldMarkMissing(statusIsCompleted, fileExists) -> LocalFileReconcile.MARK_MISSING
+    statusIsCompleted -> LocalFileReconcile.CLEAR_MISSING
+    else -> LocalFileReconcile.NONE
 }
 
 object PendingRestartConfirmation {
