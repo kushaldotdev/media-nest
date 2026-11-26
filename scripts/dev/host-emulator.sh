@@ -84,6 +84,44 @@ host_animations_off() {
   ok "animations off (window/transition/animator scale = 0)"
 }
 
+# Always keep the emulator window cleanly inside the left side of the primary
+# Windows monitor (DPI-aware so 125%/150% Windows scaling never clips it).
+host_position_window() {
+  win '
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public class NestWin {
+  [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+  [DllImport("user32.dll")] public static extern bool MoveWindow(IntPtr hWnd, int X, int Y, int nWidth, int nHeight, bool bRepaint);
+  [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+  public struct RECT { public int Left, Top, Right, Bottom; }
+}
+"@
+[NestWin]::SetProcessDPIAware() | Out-Null
+Add-Type -AssemblyName System.Windows.Forms
+$wa = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
+$moved = $false
+Get-Process | Where-Object { $_.ProcessName -match "qemu|emulator" -and $_.MainWindowTitle -like "*Android Emulator*" -and $_.MainWindowHandle -ne [IntPtr]::Zero } | ForEach-Object {
+  $r = New-Object NestWin+RECT
+  [NestWin]::GetWindowRect($_.MainWindowHandle, [ref]$r) | Out-Null
+  $w = $r.Right - $r.Left
+  $h = $r.Bottom - $r.Top
+  if ($w -lt 200 -or $h -lt 300) { return }
+  $maxH = [Math]::Min(920, $wa.Height - 40)
+  if ($h -gt $maxH) {
+    $w = [int]([Math]::Round($w * ($maxH / [double]$h)))
+    $h = $maxH
+  }
+  $x = $wa.Left + 16
+  $y = $wa.Top + 20
+  [NestWin]::MoveWindow($_.MainWindowHandle, $x, $y, $w, $h, $true) | Out-Null
+  $moved = $true
+}
+if (-not $moved) { exit 1 }
+'
+}
+
 case "${1:-up}" in
   up)
     [ -x "$EMU" ] || die "no host emulator at $EMU (set NEST_WIN_SDK)"
@@ -100,21 +138,34 @@ case "${1:-up}" in
       # A device that is attached but has not finished booting must still get its
       # animation scales set before anything drives it.
       host_animations_off
+      host_position_window || true
     else
       if snap_ready; then say "  quickboot snapshot present — resuming (fast)"
       else say "  no snapshot — cold boot (first boot after creation is slowest)"; fi
+      # Keep window on the left side with a scale that fits inside 1080p @ 125% DPI.
+      if [ -f "$HOST_AVD_DIR/emulator-user.ini" ]; then
+        sed -i -E 's/^window\.x = .*/window.x = 16/; s/^window\.y = .*/window.y = 20/; s/^window\.scale = .*/window.scale = 0.34/' "$HOST_AVD_DIR/emulator-user.ini" 2>/dev/null || true
+      fi
+      # Suppress the compatibility warning dialog via QSettings registry key (avoiding
+      # ANDROID_EMU_SKIP_SYSTEM_CHECKS=1 which triggers its own "checks disabled" popup).
+      win "\$reg = 'HKCU:\Software\Android Open Source Project\Emulator'; if (-not (Test-Path \$reg)) { New-Item -Path \$reg -Force | Out-Null }; Set-ItemProperty -Path \$reg -Name 'showCompatibilityWarning_$AVD' -Value 'false' -Type String"
       # NOTE: no -no-snapshot-save, and no -no-snapshot-load. The emulator must be
       # free to restore a snapshot on start and to save one on exit; suppressing
       # either makes every boot the full ~55s. Do not add them back.
-      win "Start-Process -FilePath '$(winpath "$EMU")' -ArgumentList '-avd','$AVD','-gpu','host','-no-audio' -WorkingDirectory '$(winpath "$WIN_SDK/emulator")'"
+      win "Start-Process -FilePath '$(winpath "$EMU")' -ArgumentList '-avd','$AVD','-gpu','host','-no-audio','-no-nested-warnings' -WorkingDirectory '$(winpath "$WIN_SDK/emulator")'"
       say "  booting (first boot after creation is slowest)..."
+      positioned=0
       for i in $(seq 1 60); do
+        if [ "$positioned" -eq 0 ]; then
+          host_position_window && positioned=1
+        fi
         [ "$("$ADBW" -s emulator-5554 shell getprop sys.boot_completed 2>/dev/null | tr -d '\r\n')" = "1" ] && { ok "booted in ~$((i*5))s"; break; }
         sleep 5
       done
       # Only now: the guest is up, so the settings stick and the snapshot that
       # `down` will write carries the animation-off state.
       host_animations_off
+      host_position_window || true
     fi
 
     hdr "WSL side"
@@ -126,8 +177,16 @@ case "${1:-up}" in
 
   down)
     hdr "stopping"
-    [ -x "$ADBW" ] && "$ADBW" emu kill >/dev/null 2>&1
-    win "Get-Process emulator,qemu-system-x86_64 -ErrorAction SilentlyContinue | Stop-Process -Force"
+    [ -x "$ADBW" ] && "$ADBW" -s emulator-5554 emu kill >/dev/null 2>&1 || true
+    # Wait up to 10s for a clean Qt/QEMU exit so quickboot + window prefs save.
+    win '
+$deadline = (Get-Date).AddSeconds(10)
+while ((Get-Date) -lt $deadline) {
+  if (-not (Get-Process emulator,qemu-system-x86_64 -ErrorAction SilentlyContinue)) { break }
+  Start-Sleep -Milliseconds 500
+}
+Get-Process emulator,qemu-system-x86_64 -ErrorAction SilentlyContinue | Stop-Process -Force
+'
     [ -x "$ADBW" ] && "$ADBW" kill-server >/dev/null 2>&1
     ok "stopped"
     ;;
