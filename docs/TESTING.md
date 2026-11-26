@@ -2,48 +2,31 @@
 
 This file is the contract for **any agent** (pi, Claude Code, Codex, opencode, Cursor, or a
 human) working in this repo. It is not documentation about testing — it is the procedure you
-are expected to follow, and the scripts it names are the ones you are expected to run.
+are expected to follow.
 
 "Tested" in this repo has exactly one meaning:
 
-> The app launched on a real Android emulator, a control was driven, the screen changed, the
-> screenshot was looked at, and logcat had no `FATAL`.
+> The app launched on a real Android emulator or device, real controls were driven, the screen
+> changed, the result was verified (snapshot/screenshot), and logcat had no `FATAL`.
 
 A green `assembleDebug`, a passing `testDebugUnitTest`, or a series of `adb shell input tap`
 calls that returned exit code 0 **do not meet that bar**. `adb shell input tap` returns 0
-against a crashed app. Only the screenshot and logcat settle it.
+against a crashed app. Only verified UI state/screenshots and logcat settle it.
 
 ---
 
-## 0. The one-command loop
+## 0. The loop
 
 ```bash
-scripts/verify.sh            # build + unit tests + boot emulator + install + smoke flow
-scripts/verify.sh --keep     # leave the emulator running afterwards (for interactive poking)
-scripts/verify.sh --fast     # reuse a running emulator, skip the rebuild (old name --quick still works)
+scripts/nest.sh up               # build (if changed) + boot emulator + install APK
+scripts/ad.sh launch             # open com.example.medianest.debug via agent-device (auto-bridges ADB)
 ```
 
 **Which emulator.** Under WSL, `scripts/dev/emulator.sh up` boots the AVD **on the Windows
-host** and drives it over TCP adb (`ADB_SERVER_SOCKET`), because the guest cannot read its own
-framebuffer — `screencap`, `screenrecord` and `uiautomator` all return nothing there. On a
-Linux host or a physical device the same command boots locally. `scripts/nest.sh status`
-prints which one you got.
-
-Artifacts land in `artifacts/verify-<UTC timestamp>/`:
-
-| File | What it is |
-| --- | --- |
-| `build.log` | Full Gradle output |
-| `unit-tests.log` | `testDebugUnitTest` result |
-| `screens/NN-*.png` | One screenshot per driven step, in order |
-| `run.mp4` | Video of the whole driven flow |
-| `ui/NN-*.xml` | The uiautomator tree captured at each step |
-| `logcat.txt` | Full dump, filtered copy at `logcat-crashes.txt` |
-| `RESULT.md` | Pass/fail per step, with the evidence table |
-
-`scripts/verify.sh` exits non-zero if any step fails, a screenshot is blank, or logcat
-contains a crash. **Report the exit code and attach `RESULT.md`, `run.mp4` and the
-screenshots.** Do not summarise from memory.
+host** (`scripts/dev/host-emulator.sh up`) and drives it over TCP adb (`ADB_SERVER_SOCKET`),
+because the guest cannot read its own framebuffer — `screencap`, `screenrecord` and
+`uiautomator` all return nothing there. On a Linux host or a physical device the same command
+boots locally. `scripts/nest.sh status` prints which one you got.
 
 ---
 
@@ -104,7 +87,7 @@ scripts/android-env-check.sh    # prints KVM, JDK, SDK, AVD, disk, network reach
 ```bash
 ./gradlew :app:assembleDebug
 ./gradlew --stop
-scripts/emulator-up.sh          # boots nest_api36, waits for sys.boot_completed (alias: dev/emulator.sh up)
+scripts/dev/emulator.sh up      # boots on Windows host in WSL, or nest_api36 locally on Linux
 ```
 
 If you need them concurrent, raise `memory=` in `C:\Users\<you>\.wslconfig` (14 GB is
@@ -124,32 +107,27 @@ corrupt snapshot from restoring a half-dead system.
 
 ---
 
-## 3. Driving the app
+## 3. Driving the app (`scripts/ad.sh` / `agent-device`)
 
-### Get the tree, don't guess coordinates
-
-```bash
-adb shell uiautomator dump /sdcard/ui.xml && adb pull /sdcard/ui.xml -
-```
-
-This returns the **Compose semantics tree** — `text`, `content-desc`, `bounds`. Find the
-node, take the bounds centre, tap it:
+### Drive with interactive `@refs`, don't guess coordinates
 
 ```bash
-adb shell input tap <cx> <cy>
+scripts/ad.sh launch                   # auto-bridges ADB_SERVER_SOCKET + targets booted serial
+scripts/ad.sh click @e24 --settle
+scripts/ad.sh snapshot -i
+scripts/ad.sh wait text "Downloads"
+scripts/ad.sh screenshot /tmp/screen.png
+scripts/ad.sh close
 ```
 
 Rules that save time:
 
-- `uiautomator dump` fails with **"could not get idle state"** while any animation runs.
-  Wait for the transition and retry. It is not a broken app.
-- Compose `IconButton`s frequently carry **no `text`** — match `content-desc` first, then
-  `resource-id`, and fall back to position only as a last resort.
+- Always keep `@e*` refs fresh: after any `--settle` mutation that changes the screen, use the
+  newly issued `@e*~s...` refs from the diff or run `scripts/ad.sh snapshot -i`.
+- If a system surface covers the app (e.g., `"System UI isn't responding"` or permission
+  prompt), run `scripts/ad.sh alert dismiss` (or tap `Allow`/`Wait`).
 - The bottom nav in this app uses `NavigationBarItem` with `contentDescription` from
   `ui/navigation/BottomNavItem.kt`. Read that file before inventing selectors.
-- After every tap: screenshot + logcat check. In `scripts/lib/drive.sh` these are wrapped as
-  `tap_label`, `assert_text`, `wait_for`, `wait_gone`, `assert_state`, `snap`,
-  `ck_logcat`.
 
 ### Prefer the intent over the tap where an intent exists
 
@@ -157,10 +135,8 @@ Rules that save time:
 using to jump straight to a screen:
 
 ```bash
-adb shell am start -n com.example.medianest.debug/com.example.medianest.MainActivity \
-  -a com.example.medianest.ACTION_NAVIGATE_DOWNLOADS
-adb shell am start -n com.example.medianest.debug/com.example.medianest.MainActivity \
-  -a com.example.medianest.ACTION_NAVIGATE_UPDATES
+scripts/ad.sh jump downloads
+scripts/ad.sh jump updates
 ```
 
 Note the debug applicationId suffix: the debug variant installs as
@@ -177,57 +153,32 @@ A tap that lands on a dying process is indistinguishable from success in the tap
 
 ---
 
-## 4. Watch it, and leave a recording
+## 4. Watch it, and leave evidence
 
-Taps come from `adb shell input`, so **no mouse cursor moves on screen** — the user sees
-buttons depress and screens change, nothing else. Say that before they ask.
+With `scripts/dev/host-emulator.sh up`, the **Windows host emulator window**
+(`Android Emulator - nest_hw:5554`) opens directly on your desktop so you can watch the UI
+react live as `agent-device` drives it.
 
-```bash
-scripts/watch.sh          # scrcpy window on WSLg, mirrors the headless emulator live
-```
-
-`scrcpy` draws through WSLg onto the Windows desktop. Sufficiently recent scrcpy supports
-`--no-audio`; on the Ubuntu 24.04 package (1.25) use plain `scrcpy` and ignore audio
-warnings.
-
-Always record as well, because a live window is not evidence:
+You can also capture screenshots or video when needed:
 
 ```bash
-adb shell screenrecord --time-limit 180 /sdcard/run.mp4 &
-# ... drive ...
-adb pull /sdcard/run.mp4 artifacts/run.mp4
+agent-device --platform android screenshot /tmp/step.png
+# or record with agent-device record / adb shell screenrecord
 ```
-
-Attach `run.mp4` and the named screenshots. `screenrecord` caps at 180 s per file; chain
-multiple segments for longer flows.
 
 ---
 
-## 5. Encode what you drove
+## 5. Automated regression tests
 
-Every feature needs its own flow — the smoke flow only proves the app starts and the
-bottom nav renders:
-
-```bash
-cp scripts/flows/_template.sh scripts/flows/downloads.sh   # edit flow_downloads()
-scripts/nest.sh test downloads                              # fast loop
-scripts/verify.sh --flow downloads                          # audit trail
-```
-
-The template's comments list the helpers (`wait_for`, `wait_gone`, `assert_state`,
-`assert_text`, `snap`, `ck_logcat`) and where each belongs. A flow that taps and returns 0
-verifies nothing; each claim in your report needs an assertion behind it.
-
-Once a flow works by hand, put it in `app/src/androidTest/` as Compose UI (`createAndroidComposeRule`
-+ `onNodeWithText(...).performClick()`), and add it to `scripts/verify.sh`. The dependencies
-are already declared (`androidx-compose-ui-test-junit4`, `espresso-core`, `androidx-junit`).
+Once a flow works interactively via `agent-device`, put it in `app/src/androidTest/` as
+Compose UI (`createAndroidComposeRule` + `onNodeWithText(...).performClick()`):
 
 ```bash
 ./gradlew :app:connectedDebugAndroidTest
 ```
 
 This is what makes verification repeatable without an agent in the loop. Prefer it over
-adding more one-off taps.
+maintaining custom shell driving scripts.
 
 ---
 

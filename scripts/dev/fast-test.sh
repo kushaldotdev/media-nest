@@ -12,7 +12,7 @@
 # zero tests and reports success, which is the worst possible outcome for a fast loop:
 # green, and it proved nothing. The test-count check below is what catches that.
 #
-# This is for iteration. `scripts/verify.sh` runs the FULL suite and is the gate.
+# This is for iteration. `./gradlew :app:testDebugUnitTest` runs the FULL suite.
 set -uo pipefail
 . "$(dirname "$0")/../lib/common.sh"
 cd "$NEST_ROOT" || die "cannot cd $NEST_ROOT"

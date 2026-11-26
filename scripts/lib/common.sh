@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Shared environment + fast helpers for the MediaNest dev loop.
-# Sourced by scripts/nest.sh and scripts/lib/drive.sh. Not meant to be executed.
+# Sourced by scripts/nest.sh and scripts/dev/*.sh. Not meant to be executed.
 #
 # Design goals, in order:
 #   1. A repeat run must not pay for work that has not changed (incremental build,
@@ -13,9 +13,7 @@ set -uo pipefail
 # ── paths ───────────────────────────────────────────────────────────────────
 NEST_ROOT="${NEST_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 NEST_CACHE="${NEST_CACHE:-$HOME/.cache/medianest}"
-NEST_SHOTS="$NEST_CACHE/shots"
-NEST_UI="$NEST_CACHE/ui"
-mkdir -p "$NEST_CACHE" "$NEST_SHOTS" "$NEST_UI"
+mkdir -p "$NEST_CACHE"
 
 # ── Android SDK discovery (first hit wins) ──────────────────────────────────
 nest_find_sdk() {
@@ -124,49 +122,6 @@ die()  { bad "$*"; exit 1; }
 sh_() { adb shell "$@" 2>/dev/null | tr -d '\r'; }
 adbt() { timeout "${NEST_ADB_TIMEOUT:-45}" adb "$@"; }
 
-# ── screen-dump cache: one uiautomator capture per unchanged screen ─────────
-# A uiautomator dump costs 3.3-7.7s and a repeat flow takes 4+ of them of the
-# same settled screen. Cache the last captured XML and reuse it until something
-# could have changed the screen.
-#
-# Two-part key, and both parts matter:
-#  - the SESSION id (`$$`, stable for the whole process tree, including the
-#    subshells `$(...)` creates) means a cache left by an earlier run is never
-#    reused. A screen that a *previous* script saw proves nothing about now, and
-#    no caller should have to remember to clear it.
-#  - the GENERATION bumps on every input event: `adb shell input`, `am start`,
-#    `am force-stop`, `keyevent`. Flows that change the screen with no input
-#    event (an app-driven transition) call invalidate_dump explicitly.
-# A stale tree would make every later assertion a lie, so invalidation lives in
-# one place — nest_input/nest_am — rather than in each flow's memory.
-NEST_SESSION="$$"
-nest_cache_generation() {
-  local g
-  g="$(awk '{print $2}' "$NEST_CACHE/.ui-cache.meta" 2>/dev/null)" || g=0
-  case "$g" in ''|*[!0-9]*) g=0 ;; esac
-  printf '%s\n' "$g"
-}
-nest_invalidate_dump() {
-  printf '%s %s\n' "$NEST_SESSION" "$(( $(nest_cache_generation) + 1 ))" > "$NEST_CACHE/.ui-cache.meta"
-  rm -f "$NEST_CACHE/.ui-cache.xml"
-}
-# Populated by this session, for the current generation?
-nest_dump_cache_hit() {
-  local sess gen meta="$NEST_CACHE/.ui-cache.meta"
-  # Guard on existence: a missing meta is the normal first-call state, and an
-  # unguarded `read < missing` leaks "No such file or directory" to stderr on
-  # every run (redirect ordering does not suppress it reliably inside functions).
-  [ -f "$meta" ] || return 1
-  read -r sess gen < "$meta" 2>/dev/null || return 1
-  [ "$sess" = "$NEST_SESSION" ] && [ "$gen" = "$(nest_cache_generation)" ] \
-    && [ -s "$NEST_CACHE/.ui-cache.xml" ]
-}
-
-# Input events go through these, never through a bare `adb shell input`/`am`:
-# the invalidation is the whole reason the cache is safe.
-nest_input() { nest_invalidate_dump; adb shell input "$@"; }
-nest_am()    { nest_invalidate_dump; adb shell am "$@"; }
-
 nest_device_serial() {
   # any ready device: an emulator here, or a physical phone bridged from Windows
   adb devices 2>/dev/null | awk '$2=="device"{print $1; exit}'
@@ -197,61 +152,8 @@ nest_probe_display() {
   [ "$NEST_DISPLAY_WORKS" = 1 ]
 }
 
-# ── screenshot: fast path then fallback ────────────────────────────────────
-# exec-out is fastest but corrupts binary on some adb builds; device-file+pull
-# is slower but reliable. Try both, keep whichever produces a real PNG.
-#
-# The emulator also serves a STALE composited frame if you capture immediately
-# after a tap, so settle first and keep the second capture — otherwise the
-# screenshot shows the previous screen while the UI tree already shows the new
-# one, and you "verify" the wrong thing.
-nest_screenshot() {
-  local out="${1:-$NEST_SHOTS/$(date +%H%M%S).png}"
-  local settle="${2:-${NEST_SETTLE:-1}}"
-  mkdir -p "$(dirname "$out")"
-  sleep "$settle"
-  adbt shell screencap -p /data/local/tmp/.warm.png >/dev/null 2>&1   # discard: stale
-  adbt shell screencap -p /data/local/tmp/.shot.png >/dev/null 2>&1
-  adbt pull /data/local/tmp/.shot.png "$out" >/dev/null 2>&1
-  if [ -s "$out" ] && [ "$(wc -c <"$out")" -gt 10000 ]; then
-    printf '%s\n' "$out"; return 0
-  fi
-  rm -f "$out"
-  adb exec-out screencap -p > "$out" 2>/dev/null
-  if [ -s "$out" ] && [ "$(wc -c <"$out")" -gt 10000 ]; then
-    printf '%s\n' "$out"; return 0
-  fi
-  rm -f "$out"; return 1
-}
-
-# ── state assertions (text alone cannot prove a feature worked) ────────────
-# Poll until a node appears (or disappears). A fixed sleep is how flows become
-# flaky: fast enough on the dev box, too slow on a cold emulator.
-#
-# `limit` is SECONDS (every caller already assumed it was). Each attempt costs a
-# dump (~4s), so the loop checks the deadline after each attempt instead of
-# counting a fixed number of attempts — a limit of 20 means ~20s, not 4 dumps
-# (~86s) and not one attempt when the number is small.
-nest_wait_node() {
-  local want="$1" limit="${2:-10}" mode="${3:-present}"
-  local deadline=$(( $(date +%s) + limit ))
-  while :; do
-    if nest_ui_dump "$NEST_UI/wait.xml" 5 1 >/dev/null 2>&1; then
-      if grep -qiF -- "$want" "$NEST_UI/wait.xml"; then
-        [ "$mode" = present ] && return 0
-      else
-        [ "$mode" = absent ] && return 0
-      fi
-    fi
-    # Always make one attempt: a 0/1s budget must not skip the check entirely.
-    [ "$(date +%s)" -ge "$deadline" ] && return 1
-    sleep 1
-  done
-}
-
 # Assert a persisted value the UI cannot show: a row in the app database, a file
-# on disk, a preference. Anything that survives a restart is checkable here, and
-# that is what makes "the download actually happened" provable.
+# on disk, a preference. Anything that survives a restart is checkable here.
 #   nest_assert_shell "download file exists" "ls /sdcard/Download"
 #   nest_assert_shell "db has a songs row" "sqlite3 /data/data/$NEST_PKG/databases/x.db 'select 1'"
 nest_assert_shell() {
@@ -262,29 +164,6 @@ nest_assert_shell() {
     return 0
   fi
   printf '  \033[31m✗\033[0m %s (command produced nothing)\n' "$what"
-  return 1
-}
-
-# ── uiautomator dump (retries through animations) ──────────────────────────
-# `fresh` (3rd arg) forces a real capture even when the cache is warm. Polling
-# loops pass it: they exist precisely because the screen is still settling, so a
-# cached frame would re-assert the state they are waiting to leave.
-nest_ui_dump() {
-  local out="${1:-$NEST_UI/ui-$(date +%H%M%S).xml}" tries="${2:-5}" fresh="${3:-0}" i=0
-  if [ "$fresh" -eq 0 ] && nest_dump_cache_hit; then
-    cp "$NEST_CACHE/.ui-cache.xml" "$out" 2>/dev/null && { printf '%s\n' "$out"; return 0; }
-  fi
-  while [ "$i" -lt "$tries" ]; do
-    i=$((i+1))
-    adbt shell uiautomator dump /data/local/tmp/.ui.xml >/dev/null 2>&1
-    adbt pull /data/local/tmp/.ui.xml "$out" >/dev/null 2>&1
-    if [ -s "$out" ] && grep -q "<hierarchy" "$out" 2>/dev/null; then
-      cp "$out" "$NEST_CACHE/.ui-cache.xml" 2>/dev/null \
-        && printf '%s %s\n' "$NEST_SESSION" "$(nest_cache_generation)" > "$NEST_CACHE/.ui-cache.meta"
-      printf '%s\n' "$out"; return 0
-    fi
-    sleep 1
-  done
   return 1
 }
 

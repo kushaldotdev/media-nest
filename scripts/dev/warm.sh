@@ -3,10 +3,10 @@
 #
 #   scripts/dev/warm.sh
 #
-# Brings up everything a repeat `nest.sh test` / `verify.sh` assumes is already true:
+# Brings up everything a repeat `nest.sh up` / `agent-device` session assumes is already true:
 #   1. Gradle daemon running (no JVM start on the next build)
 #   2. emulator booted (quickboot snapshot if one exists, else cold)
-#   3. animation scales at 0 (complete uiautomator dumps, no retry storms)
+#   3. animation scales at 0 (no transition flakiness during UI snapshots)
 #   4. current APK installed (no 10s push+install mid-loop)
 # ...then prints one line saying what it cost.
 #
@@ -68,6 +68,6 @@ STEPS+=("apk+install:+$(( $(date +%s) - s ))s")
 
 TOTAL=$(( $(date +%s) - T0 ))
 say ""
-ok "warm in ${TOTAL}s — next 'scripts/nest.sh test' runs only the flow"
+ok "warm in ${TOTAL}s — next run only drives the app via agent-device"
 say "  ${STEPS[*]}"
 say "  revert animations with: scripts/nest.sh clean   (or adb shell settings put global window_animation_scale 1)"

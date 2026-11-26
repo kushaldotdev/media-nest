@@ -8,8 +8,9 @@
 #   scripts/phone.sh pair <ip:port> <code>  wireless-debugging pairing step
 #   scripts/phone.sh usb                   explain/verify the USB routes
 #   scripts/phone.sh install               build (if needed) + install to the phone
-#   scripts/phone.sh test                  run the smoke flow against the phone
 #   scripts/phone.sh use <serial>          pin one device when several are attached
+#
+# Once connected and installed, drive the phone with `agent-device`.
 #
 # ── Wi-Fi (wireless debugging) ─────────────────────────────────────────────
 #   Phone: Settings → Developer options → Wireless debugging → ON
@@ -97,22 +98,6 @@ case "${1:-list}" in
     adb push "$NEST_APK" /data/local/tmp/nest.apk 2>&1 | tail -1
     adb shell pm install -r -t -d /data/local/tmp/nest.apk
     ok "installed"
-    ;;
-
-  test)
-    nest_is_booted || die "no device — see: scripts/phone.sh usb"
-    hdr "driving $(nest_device_serial)"
-    export ART="$NEST_CACHE/phone-$(date +%H%M%S)"
-    mkdir -p "$ART/screens" "$ART/ui"
-    . "$HERE/lib/drive.sh"
-    . "$HERE/flows/smoke.sh"
-    adb logcat -c >/dev/null 2>&1 || true
-    start_recording
-    flow_smoke; rc=$?
-    ck_logcat || rc=1
-    stop_recording
-    [ "$rc" -eq 0 ] && ok "PASS — artifacts in $ART" || bad "FAIL — artifacts in $ART"
-    exit "$rc"
     ;;
 
   *) sed -n '2,30p' "$0" | sed 's/^# \{0,1\}//' ;;

@@ -1,43 +1,39 @@
 # MediaNest — scripts
 
-Build, run and **actually drive** the app on an emulator. Every command is idempotent:
-running it twice skips the work already done, so the second `test` costs seconds, not minutes.
+Build, boot, and install MediaNest cleanly so it can be driven with **`agent-device`**.
+Every command is idempotent: running it twice skips the work already done.
 
 ## Quick start
 
 ```bash
-scripts/android-env-check.sh     # read-only: is this machine able to build+drive? changes nothing
+scripts/android-env-check.sh     # read-only: is this machine able to build+boot? changes nothing
 scripts/nest.sh up               # build (if changed) + boot emulator (if needed) + install (if changed)
-scripts/nest.sh test             # up, then drive the smoke flow → PASS/FAIL
+scripts/ad.sh launch             # open com.example.medianest.debug via agent-device
 ```
-
-That is the whole loop. `scripts/nest.sh test` a second time reuses the APK and the running
-emulator, so only the flow itself runs.
 
 ## Commands
 
-### `scripts/nest.sh` — the one entry point
+### `scripts/nest.sh` — the entry point
 
 | Command | What it does | Typical time |
 | --- | --- | --- |
 | `nest.sh up` | build → emulator → install, each skipped if already current | 0 s when everything is current |
-| `nest.sh test [flow]` | `up`, then run `scripts/flows/<flow>.sh` (default `smoke`) | seconds |
 | `nest.sh status` | what is built, booted, installed; display-readback health | instant |
-| `nest.sh watch` | mirror the device in a window (scrcpy via WSLg) | instant |
 | `nest.sh down` | stop the emulator | ~3 s |
 | `nest.sh clean` | stop emulator, delete build outputs | seconds |
 
-Pass `--force` through to `up`/`test` to rebuild and reinstall unconditionally.
+Pass `--force` through to `up` to rebuild and reinstall unconditionally.
 
 ### `scripts/dev/*` — the individual steps
 
 | Script | Use |
 | --- | --- |
 | `dev/emulator.sh up\|down\|snap\|status\|recreate` | emulator control. `up` is a no-op when already booted |
-| `dev/host-emulator.sh up\|down\|status` | **emulator on the host OS + TCP adb — the config that can actually be verified** |
+| `dev/host-emulator.sh up\|down\|status\|warm` | **emulator on the host OS + TCP adb — the config that can actually be verified** |
 | `dev/build.sh [--force] [clean]` | incremental build; prints `up to date` and exits 0 when nothing changed |
 | `dev/install.sh [--force] [--uninstall]` | install the APK; `--uninstall` fixes signature mismatches |
-| `dev/poke.sh <verb>` | interactive driving (below) |
+| `dev/fast-test.sh <TestClass\|pattern>` | incremental unit-test runner |
+| `dev/warm.sh` | pre-warms Gradle daemon, emulator, animation scales, and installed APK |
 
 ### `scripts/phone.sh` — a real device, from WSL
 
@@ -47,75 +43,40 @@ scripts/phone.sh usb                      # the two USB routes, explained
 scripts/phone.sh pair 192.168.1.42:37713 123456   # wireless debugging pairing
 scripts/phone.sh wifi 192.168.1.42:5555   # connect over Wi-Fi
 scripts/phone.sh install                  # build + install to the phone
-scripts/phone.sh test                     # run the smoke flow on the phone
+scripts/phone.sh use <serial>             # pin one device when several are attached
 ```
 
 Wi-Fi works directly from WSL2 (it reaches the LAN). USB needs either Windows to own the
 phone while WSL borrows its adb server (`dev/host-emulator.sh up`), or `usbipd-win` to
-forward the USB device into WSL.
+forward the USB device into WSL. Once installed, drive the phone with `agent-device`.
 
-### `scripts/dev/poke.sh` — drive the UI
+## Driving the UI (`scripts/ad.sh` / `agent-device`)
 
-```bash
-scripts/dev/poke.sh launch            # start the app, verify it reached the foreground
-scripts/dev/poke.sh ui                # dump the view tree: class, text, content-desc, bounds
-scripts/dev/poke.sh tap "Downloads"   # tap a node by text or content-desc
-scripts/dev/poke.sh tap-xy 540 2100   # tap coordinates
-scripts/dev/poke.sh see "Library"     # assert text is on screen
-scripts/dev/poke.sh shot home         # screenshot → ~/.cache/medianest/shots/home.png
-scripts/dev/poke.sh nav               # walk every bottom-nav destination
-scripts/dev/poke.sh logcat            # show crashes only
-scripts/dev/poke.sh screen            # display-readback health
-```
-
-`ui` is the one to reach for first — it lists what is actually tappable.
-
-### `scripts/verify.sh` — auditable run
-
-The slow path, for a record you can hand to someone:
+Use `scripts/ad.sh` (which auto-bridges `ADB_SERVER_SOCKET` and selects the booted Android
+serial before calling `agent-device`):
 
 ```bash
-scripts/verify.sh                  # build + unit tests + emulator + flow + report
-scripts/verify.sh --fast           # reuse the APK and the running emulator
-scripts/verify.sh --flow smoke     # choose a flow
+scripts/ad.sh launch                   # open com.example.medianest.debug --foreground
+scripts/ad.sh jump downloads           # deep-link straight to Downloads (or 'updates')
+scripts/ad.sh click @e24 --settle      # tap node and wait for UI settle
+scripts/ad.sh snapshot -i              # capture interactive UI tree with fresh @e* refs
+scripts/ad.sh wait text "Downloads"    # wait for text
+scripts/ad.sh screenshot /tmp/shot.png # capture screenshot
+scripts/ad.sh close                    # close session
 ```
-
-Writes `artifacts/verify-<UTC>/` with `RESULT.md`, screenshots, ui dumps, `run.mp4`,
-`logcat.txt`. Exit code is the verdict.
-
-### `scripts/watch.sh`
-
-Live mirror while an agent drives. Taps come from `adb shell input`, so **no cursor is
-drawn** — the UI reacts, the pointer does not move.
 
 ## What "tested" means here
 
-The app **launched, a control was driven, the screen changed, and logcat had no `FATAL`**.
+The app **launched, real controls were driven, the screen changed, and logcat had no `FATAL`**.
 
 Not a pass: `assembleDebug` succeeding, green unit tests, or `adb shell input tap` exiting
 `0` — that command returns `0` against a crashed process too.
-
-The smoke flow asserts through the **Compose semantics tree** (`uiautomator dump`), so it
-still proves something when framebuffer readback is unavailable. Screenshots are captured
-when possible and reported as unavailable when not — never silently skipped.
-
-## Adding a flow
-
-```bash
-cp scripts/flows/smoke.sh scripts/flows/myflow.sh
-# edit: rename flow_smoke -> flow_myflow
-scripts/nest.sh test myflow
-```
-
-Helpers available inside a flow (from `scripts/lib/drive.sh`): `launch`, `tap_label "X"`,
-`assert_text "X"`, `snap "name"`, `dump_ui`, `ck_logcat`, `start_recording`,
-`stop_recording`.
 
 ## Environment overrides
 
 ```bash
 NEST_AVD=nest_api36 NEST_RAM=4096 NEST_PKG=com.example.medianest.debug \
-ANDROID_HOME=$HOME/Android/Sdk scripts/nest.sh test
+ANDROID_HOME=$HOME/Android/Sdk scripts/nest.sh up
 ```
 
 ## Known host limitation (WSL2) — and the fix
@@ -135,12 +96,11 @@ Tried and failed: `-gpu swiftshader_indirect`, `-gpu swiftshader`, `-gpu off`,
 
 ```bash
 scripts/dev/host-emulator.sh up     # Windows emulator (hw.gpu.mode=host) + TCP adb server
-scripts/nest.sh test                # everything else unchanged
 ```
 
 `scripts/lib/common.sh` detects WSL, finds the host's adb server on the default gateway and
-exports `ADB_SERVER_SOCKET`, so every other script works untouched. Confirmed working:
-launch, all four bottom-nav destinations tapped, screenshots captured, logcat clean.
+exports `ADB_SERVER_SOCKET`, so every other script works untouched. Confirmed working with
+`agent-device`: launch, navigation, snapshots, screenshots, and logcat verification.
 
 This is also how a **physical phone** is driven from WSL — see `scripts/phone.sh`.
 

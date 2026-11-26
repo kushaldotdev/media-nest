@@ -63,9 +63,8 @@ ALWAYS prefer MCP graph tools over grep/glob/file-search for code discovery.
 
 ## Testing the app (read before claiming it works)
 
-If asked to **test, verify, check, or run the app**, follow
-[`.agents/TESTING_PROTOCOL.md`](.agents/TESTING_PROTOCOL.md) — full procedure in
-[`docs/TESTING.md`](docs/TESTING.md). Repo skill: `.agents/skills/medianest-app-testing/SKILL.md`.
+If asked to **test, verify, check, or run the app**, follow [`docs/TESTING.md`](docs/TESTING.md)
+and [`.agents/skills/medianest-app-testing/SKILL.md`](.agents/skills/medianest-app-testing/SKILL.md).
 
 **The bar.** "Tested" means the app **launched on an emulator, a control was driven, the screen
 changed, the screenshot was looked at, and logcat had no `FATAL`**. Not a pass:
@@ -77,17 +76,14 @@ changed, the screenshot was looked at, and logcat had no `FATAL`**. Not a pass:
 **The loop.**
 
 ```bash
-scripts/dev/host-emulator.sh up   # WSL only: emulator on the Windows host + TCP adb (see below)
-scripts/nest.sh test              # build (if changed) + emulator (if needed) + install (if changed) + drive
+scripts/nest.sh up                # build (if changed) + boot Windows host emulator + install APK
+scripts/ad.sh launch              # open com.example.medianest.debug via agent-device (auto-bridges ADB)
 ```
 
-`scripts/nest.sh test` is idempotent: the second run reuses the APK, the running emulator and
-the installed package, so it costs ~75 s instead of minutes. `--force` rebuilds.
-
-For an auditable run with a written report use `scripts/verify.sh` (build → unit tests →
-emulator → install → flow → `artifacts/verify-<UTC>/RESULT.md`). Its exit code is the verdict.
-Add flows as `scripts/flows/<name>.sh` exporting `flow_<name>()`, then
-`scripts/nest.sh test <name>`.
+`scripts/nest.sh up` is idempotent: repeat runs reuse the APK, the running emulator, and the
+installed package. `--force` rebuilds. Drive and verify UI screens using **`scripts/ad.sh`**
+(`click @e* --settle`, `snapshot -i`, `wait text "..."`, `screenshot`, `logs`, `close`), and
+check `adb logcat` for `FATAL EXCEPTION` / `ANR in com.example.medianest.debug`.
 
 **Do not run the emulator inside WSL.** Its framebuffer cannot be read back
 (`Assertion failed: !rcEnc->featureInfo()->hasReadColorBufferDma`), so `screencap`,
@@ -99,25 +95,23 @@ server on the default gateway and exports `ADB_SERVER_SOCKET`, so every other sc
 unchanged.
 
 **A real device** works the same way — `scripts/phone.sh` (Wi-Fi pairing, USB routes,
-`install`, `test`). Wi-Fi reaches the LAN from WSL2 directly; USB either lets Windows own the
+`install`). Wi-Fi reaches the LAN from WSL2 directly; USB either lets Windows own the
 phone while WSL borrows its adb server, or needs `usbipd-win`.
 
-**Driving primitives** — `. scripts/lib/drive.sh`, then:
+**Driving (`scripts/ad.sh` / `agent-device`)** — see `.agents/skills/medianest-app-testing/SKILL.md`:
 
-| Helper | Does |
+| Command | Does |
 | --- | --- |
-| `launch` | force-stop + start, asserts the app reached the foreground |
-| `tap_label "Downloads"` | dumps the Compose semantics tree, taps the node's centre, retries through animations |
-| `assert_text "Library"` | fails unless that string is in the live tree |
-| `snap "02-home"` | screenshot into `$ART/screens/`, detects blank frames |
-| `dump_ui` | raw `uiautomator` XML into `$ART/ui/` |
-| `ck_logcat` | fails on `FATAL EXCEPTION` / `ANR in <pkg>` |
-| `start_recording` / `stop_recording` | `screenrecord` → `$ART/run.mp4` |
+| `scripts/ad.sh launch` | launches app via `agent-device` and returns initial `@e*` refs |
+| `scripts/ad.sh jump downloads\|updates` | deep-links straight to Downloads or Updates |
+| `scripts/ad.sh click @e24 --settle` | taps element, waits for UI settle, prints diff |
+| `scripts/ad.sh snapshot -i` | captures interactive UI tree with fresh `@e*` refs |
+| `scripts/ad.sh wait text "Downloads"` | waits for expected text without fixed sleeps |
+| `scripts/ad.sh screenshot <path>` | captures screenshot evidence |
+| `scripts/ad.sh close` | closes the driving session |
 
-**Evidence.** `artifacts/verify-<UTC>/` — `RESULT.md`, `screens/*.png`, `ui/*.xml`, `run.mp4`,
-`logcat.txt`, `logcat-crashes.txt`. Attach the screenshots and recording; never summarise from
-memory. Live view while driving: `scripts/watch.sh` (scrcpy via WSLg). Taps come from
-`adb shell input`, so **no cursor is drawn** — the UI reacts, the pointer does not move.
+**Live view.** The Windows host emulator window (`Android Emulator - nest_hw:5554`) opens
+directly on your Windows desktop so you can watch and interact with the app in real time.
 
 **Environment facts that waste hours if rediscovered:**
 
@@ -194,46 +188,36 @@ Worktrees created by pi-subagents (`isolation: worktree`) live at
 `pi-subagents/<key>-<runid>-s0-t0`. They are **not** registered with `wt`, so `wtd` will not
 find them by branch — pass the directory, or use `git worktree remove` directly.
 
+## Codebase Map
+
+| Area | Path | Key files / responsibility |
+| --- | --- | --- |
+| App entry | `app/src/main/java/com/example/medianest/` | `MainActivity.kt` (deep links, intent routing), `MediaNestApp.kt` |
+| Navigation & shell | `.../ui/navigation/`, `.../ui/` | `AppNavigation.kt`, `BottomNavItem.kt`, `MainScreen.kt` |
+| Screens | `.../ui/screens/` | `HomeScreen.kt`, `DownloadsScreen.kt`, `LibraryScreen.kt`, `SettingsScreen.kt`, `PlayerScreen.kt`, `VideoDetailScreen.kt`, `SubscriptionsScreen.kt`, `StatisticsScreen.kt`, `NotificationsScreen.kt` |
+| ViewModels | `.../ui/viewmodel/` | `HomeViewModel.kt`, `DownloadsViewModel.kt`, `LibraryViewModel.kt`, `PlayerViewModel.kt`, `VideoDetailViewModel.kt`, `SubscriptionsViewModel.kt`, `StatisticsViewModel.kt`, `NotificationsViewModel.kt`, `ExportImportViewModel.kt` |
+| UI components & theme | `.../ui/components/`, `.../ui/theme/` | `UnifiedVideoCard.kt`, `MediaNestBottomNavigation.kt`, `Color.kt`, `Theme.kt`, `Type.kt` |
+| Data, DB & sync | `.../data/` | `local/AppDatabase.kt`, `repository/*`, `preferences/*`, `backup/*`, `sync/*` |
+| Extraction & services | `.../extraction/`, `.../service/` | `YouTubeExtractor.kt`, `DownloaderProvider.kt`, `DownloadService.kt`, `PlaybackService.kt`, `AudioExtractor.kt` |
+| Background & updates | `.../worker/`, `.../updates/`, `.../di/` | `WorkScheduler.kt`, `SyncWorker.kt`, `UpdateManager.kt`, Hilt `*Module.kt` |
+| Sync server | `sync-server/app/` | `main.py`, `database.py`, `models.py`, `schemas.py`, `routes/{devices,health,sync}.py` |
+
 ## Build & Run Commands
 
-Windows environment does not have standard `JAVA_HOME` in path. Use bundled build scripts:
-
-- **Build Debug**: `& "D:\dev\media-nest\build-debug.bat"` (or `build-debug.bat clean` for a clean build)
-- **Build Release**: `& "D:\dev\media-nest\build-release.bat"` (or `build-release.bat clean` for a clean build)
-
-These scripts set `JAVA_HOME` to Android Studio's JBR (`C:\Program Files\Android\Android Studio\jbr`) and execute `gradlew.bat`.
-Do not run `./gradlew` or `gradlew` directly unless `JAVA_HOME` is manually configured.
-
-### Running the build from WSL
-
-Build **natively in WSL**. Do not shell out to `cmd.exe`/`gradlew.bat`, and do not build from
-`/mnt/d` — it is ~126x slower for Gradle's file I/O.
+Build **natively in WSL** on ext4 (`~/projects/media-nest`). Do not shell out to
+`cmd.exe`/`gradlew.bat`, and do not build from `/mnt/d` (~126x slower for Gradle's file I/O).
 
 ```bash
-scripts/dev/build.sh            # incremental, skips Gradle when sources are unchanged
+scripts/dev/build.sh            # incremental debug APK (skips Gradle when sources are unchanged)
 scripts/dev/build.sh --force    # always run Gradle
-scripts/dev/build.sh clean      # clean build
+scripts/dev/build.sh clean      # clean then build
+scripts/dev/fast-test.sh <Test> # incremental unit test loop
 ```
 
-Requires `JAVA_HOME` = JDK 21 (installed at `/usr/lib/jvm/java-21-openjdk-amd64`) and
-`local.properties` pointing at `sdk.dir=/home/kushal/Android/Sdk`; `build.sh` sets both.
+Requires `JAVA_HOME` = JDK 21 (`/usr/lib/jvm/java-21-openjdk-amd64`) and `local.properties`
+pointing at `sdk.dir=/home/kushal/Android/Sdk`; `build.sh` sets both and writes logs to
+`~/.cache/medianest/build.log`.
 
-The `build-debug.bat` / `build-release.bat` / `publish-to-github.ps1` scripts are the **legacy
-Windows path** (they expect Android Studio's JBR). They still exist but are not the workflow
-here — do not use them unless explicitly asked.
-
-### Build logs
-
-Each workflow writes its **own** log file at the repo root (all git-ignored):
-
-| Workflow | Log file |
-| --- | --- |
-| Debug build | `D:\dev\media-nest\build-debug.log` |
-| Release build | `D:\dev\media-nest\build-release.log` |
-| Publish to GitHub | `D:\dev\media-nest\build-publish.log` |
-
-Every log has a timestamped header (start time), per-line elapsed timers (`[+mm:ss]`), and a footer with end time, total duration, and exit code. Output is streamed **live** to the terminal and to the log simultaneously.
-
-On failure the script prints the exit code and exits non-zero. The full log is always saved to the per-workflow file above (also echoed live to the terminal).
-When a build fails, **read the log file** to diagnose the actual error instead of relying on the truncated console tail — from WSL: `tail -n 100 D:/dev/media-nest/build-release.log` or `grep -n "error:\|e: \|FAILED" D:/dev/media-nest/build-release.log`.
-Note: the logs are written to the repo root and are git-ignored (see `.gitignore`).
+*(Legacy Windows scripts `build-debug.bat`, `build-release.bat`, `publish-to-github.bat`, and
+`publish-to-github.ps1` remain at the repo root for manual Windows use only; do not use them
+for WSL dev/test loops unless explicitly asked.)*
