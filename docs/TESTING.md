@@ -28,6 +28,11 @@ because the guest cannot read its own framebuffer — `screencap`, `screenrecord
 `uiautomator` all return nothing there. On a Linux host or a physical device the same command
 boots locally. `scripts/nest.sh status` prints which one you got.
 
+**What to drive, and what proves it.** Compose UI tests and `agent-device` runs are only as good as
+the recipe. Every mapped feature lives in
+[`../.agents/skills/verify-medianest/features/`](../.agents/skills/verify-medianest/features/README.md)
+— read its `.md` before tapping, and pair the UI step with a state assertion (next section).
+
 ---
 
 ## 1. Environment
@@ -126,8 +131,10 @@ Rules that save time:
   newly issued `@e*~s...` refs from the diff or run `scripts/ad.sh snapshot -i`.
 - If a system surface covers the app (e.g., `"System UI isn't responding"` or permission
   prompt), run `scripts/ad.sh alert dismiss` (or tap `Allow`/`Wait`).
-- The bottom nav in this app uses `NavigationBarItem` with `contentDescription` from
-  `ui/navigation/BottomNavItem.kt`. Read that file before inventing selectors.
+- The bottom nav in this app is `MediaNestBottomNavigation` driven by
+  `MediaNestBottomNavDefaults.Destinations` (`ui/components/MediaNestBottomNavigation.kt`), which
+  lists `Home`, `Collections`, `Downloads`, `Settings` with their `contentDescription`s. Read that
+  file (and `ui/navigation/BottomNavItem.kt` for routes) before inventing selectors.
 
 ### Prefer the intent over the tap where an intent exists
 
@@ -153,6 +160,48 @@ A tap that lands on a dying process is indistinguishable from success in the tap
 
 ---
 
+## 3b. Per-feature map and persisted state (`verify-medianest`)
+
+Driving a screen proves it renders. It does not prove the app stored anything. Two things close that
+gap, both under [`.agents/skills/verify-medianest/`](../.agents/skills/verify-medianest/SKILL.md):
+
+| Thing | Where | Answers |
+| --- | --- | --- |
+| Feature map | [`features/README.md`](../.agents/skills/verify-medianest/features/README.md) | Which controls exist, how a user reaches them, what to assert |
+| State helper | [`scripts/nest-state.sh`](../.agents/skills/verify-medianest/scripts/nest-state.sh) | Did the toggle reach DataStore, did the row reach Room |
+
+The helper reads and writes exactly what the app reads — `databases/media_nest.db` (WAL, so `.db`
++ `-wal` + `-shm` together) and `files/datastore/*.preferences_pb` — via `run-as`, which is why a
+**debug** build is mandatory:
+
+```bash
+S=.agents/skills/verify-medianest/scripts/nest-state.sh
+$S doctor                                      # run-as + DB + DataStore reachable
+$S db-count downloads "status='COMPLETED'"     # the row behind the list
+$S db-query "select id,title,status from downloads order by id desc limit 5"
+$S pref-bool collections_prefs full_titles     # a toggle that actually persisted
+$S pref-dump sync_prefs                        # every key in a store
+$S db-push-sql "delete from folders where name like 'Verify-%'"   # force-stops the app
+$S crash-check                                 # non-zero on FATAL EXCEPTION / ANR
+```
+
+Rules that matter:
+
+- `db-push-sql` **force-stops the app** (a live SQLite connection owns the file); relaunch with
+  `scripts/ad.sh launch` before driving again.
+- Room stores booleans and enums as text/int — `status='COMPLETED'`, `favorite=1`, `isRead=0`.
+  `=true` silently matches nothing.
+- DataStore files/keys are created lazily on the first `.edit`, so `pref-get`/`pref-bool` exit `3`
+  for a key that was never written. That means *default*, not broken — read the default from the
+  Kotlin file.
+- Restore any state a run changed (a flipped switch makes the next run pass for the wrong reason),
+  and never delete `artifacts/verify-*` — that is the evidence.
+
+Start a run with `ART=$($S evidence-dir <label>)` and write `RESULT.md` yourself: PASS/FAIL per step,
+with the screenshot next to the state assertion that backs it.
+
+---
+
 ## 4. Watch it, and leave evidence
 
 With `scripts/dev/host-emulator.sh up`, the **Windows host emulator window**
@@ -162,8 +211,10 @@ react live as `agent-device` drives it.
 You can also capture screenshots or video when needed:
 
 ```bash
-agent-device --platform android screenshot /tmp/step.png
-# or record with agent-device record / adb shell screenrecord
+scripts/ad.sh screenshot /tmp/step.png      # preferred: pinned serial + WSL adb bridge
+# or record the whole flow
+scripts/ad.sh record start artifacts/verify-<UTC>/run.mp4
+scripts/ad.sh record stop
 ```
 
 ---
@@ -205,11 +256,17 @@ State what was **driven**, not what was **built**:
 Flow: bottom nav smoke
   ✅ launch        foreground=com.example.medianest.debug  screens/01-launch.png
   ✅ Home          "Home" heading present                 screens/02-home.png
-  ✅ Library       tapped content-desc=Library             screens/03-library.png
+  ✅ Collections   tapped content-desc=Collections         screens/03-collections.png
   ✅ Downloads     tapped content-desc=Downloads           screens/04-downloads.png
-  ✅ Subscriptions tapped content-desc=Subscriptions       screens/05-subscriptions.png
-  ✅ Settings      tapped content-desc=Settings            screens/06-settings.png
+  ✅ Settings      tapped content-desc=Settings            screens/05-settings.png
+  ✅ state         nest-state.sh crash-check clean, pref-bool read back
   ✅ logcat        no FATAL
 ```
+
+The four bottom-nav destinations are `Home`, `Collections`, `Downloads`, `Settings` — there is no
+`Library` and no `Subscriptions` destination. The library lives in `Collections` (pills `History`,
+`Watched`, `Folders`, `Favorites`, `Playlists`, `Channels`), and `Subscriptions`, `Statistics` and
+`Notifications` are reached from inside it (`Playlists` / `Channels` pills, top-bar `Statistics` and
+bell icons) or from `Settings`.
 
 Anything you did not drive is reported as untested, never implied.

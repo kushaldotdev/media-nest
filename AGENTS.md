@@ -63,8 +63,20 @@ ALWAYS prefer MCP graph tools over grep/glob/file-search for code discovery.
 
 ## Testing the app (read before claiming it works)
 
-If asked to **test, verify, check, or run the app**, follow [`docs/TESTING.md`](docs/TESTING.md)
-and [`.agents/skills/medianest-app-testing/SKILL.md`](.agents/skills/medianest-app-testing/SKILL.md).
+If asked to **test, verify, check, or run the app**, follow [`docs/TESTING.md`](docs/TESTING.md),
+[`.agents/skills/medianest-app-testing/SKILL.md`](.agents/skills/medianest-app-testing/SKILL.md),
+and — for a real feature proof — [`verify-medianest`](.agents/skills/verify-medianest/SKILL.md):
+
+- **The loop** lives in [`.agents/skills/verify-medianest/SKILL.md`](.agents/skills/verify-medianest/SKILL.md)
+  (Launch → Doctor → Drive → Evidence → Cleanup).
+- **What to drive** lives in [`.agents/skills/verify-medianest/features/README.md`](.agents/skills/verify-medianest/features/README.md).
+  Look up the affected feature and read its `.md` *before* tapping; a feature with no file there is
+  **not driven**.
+- **Persisted state** is checked with
+  [`.agents/skills/verify-medianest/scripts/nest-state.sh`](.agents/skills/verify-medianest/scripts/nest-state.sh)
+  (`db-count`, `db-query`, `db-push-sql`, `pref-bool`, `pref-dump`, `crash-check`). A screen that
+  re-rendered is not a value that reached disk — pair every toggle with `pref-bool` and every row
+  with `db-count`.
 
 **The bar.** "Tested" means the app **launched on an emulator, a control was driven, the screen
 changed, the screenshot was looked at, and logcat had no `FATAL`**. Not a pass:
@@ -82,8 +94,16 @@ scripts/ad.sh launch              # open com.example.medianest.debug via agent-d
 
 `scripts/nest.sh up` is idempotent: repeat runs reuse the APK, the running emulator, and the
 installed package. `--force` rebuilds. Drive and verify UI screens using **`scripts/ad.sh`**
-(`click @e* --settle`, `snapshot -i`, `wait text "..."`, `screenshot`, `logs`, `close`), and
-check `adb logcat` for `FATAL EXCEPTION` / `ANR in com.example.medianest.debug`.
+(`click @e* --settle`, `snapshot -i`, `wait text "..."`, `is checked`, `screenshot`, `logs`,
+`close`), and check `adb logcat` for `FATAL EXCEPTION` / `ANR in com.example.medianest.debug`.
+
+`scripts/ad.sh` can arrive **non-executable** in a fresh worktree (git only tracks the exec bit when
+it was set): `chmod +x scripts/ad.sh`, or call it as `bash scripts/ad.sh …`. Same for
+`.agents/skills/verify-medianest/scripts/nest-state.sh`.
+
+**One emulator, one driver.** `nest_hw` is a single AVD with a single `agent-device` session. Never
+run two agents against it in parallel — they fight over the screen and both runs are invalid.
+Serialize the work, or give each lane its own device.
 
 **Do not run the emulator inside WSL.** Its framebuffer cannot be read back
 (`Assertion failed: !rcEnc->featureInfo()->hasReadColorBufferDma`), so `screencap`,

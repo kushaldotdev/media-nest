@@ -34,7 +34,7 @@ case "$1" in
       updates)   ACTION="com.example.medianest.ACTION_NAVIGATE_UPDATES" ;;
       *) die "usage: scripts/ad.sh jump {downloads|updates}" ;;
     esac
-    exec adb -s "$SERIAL" shell am start -n "$NEST_PKG/$NEST_ACT" -a "$ACTION"
+    exec adb -s "$SERIAL" shell am start --activity-single-top --activity-clear-top -n "$NEST_PKG/$NEST_ACT" -a "$ACTION"
     ;;
   *)
     exec agent-device --platform android --serial "$SERIAL" "$@"
