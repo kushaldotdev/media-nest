@@ -50,7 +50,8 @@ ART=$($S evidence-dir statistics)
 
 - **Entry A — Collections.** `scripts/ad.sh launch`, tap `Collections`, run
   `scripts/ad.sh snapshot -i`, and tap `[button] "Statistics"` via its `@eN` ref
-  (`scripts/ad.sh click @eN --settle`) or `scripts/ad.sh click 'role=button label="Statistics"' --settle`.
+  (`scripts/ad.sh click @eN --settle`) or `scripts/ad.sh click 'label="Statistics"' --settle`
+  (do **not** use `role=button label="Statistics"`, which fails on Compose `Role.Button` nodes).
   `LibraryScreen` sets `contentDescription = "Statistics"` on `MediaNestIconButton` and `null` on
   the inner `Icon`, so `snapshot -i` exposes a single `[button] "Statistics"` node. Assert
   `App Statistics` within 10 s.
@@ -116,8 +117,8 @@ ART=$($S evidence-dir statistics)
 - **The `Statistics` top-bar icon is a single `[button] "Statistics"` node.** `LibraryScreen` sets
   `contentDescription = "Statistics"` on `MediaNestIconButton` (exposed via
   `semantics.contentDescription`) and `null` on the inner `Icon`, so `snapshot -i` shows one
-  `[button] "Statistics"` node and both `click 'role=button label="Statistics"'` and `@eN` ref work
-  cleanly.
+  `[button] "Statistics"` node and both `click 'label="Statistics"'` and `@eN` ref work cleanly
+  (whereas `role=button label="Statistics"` matches zero nodes on Compose `Role.Button` containers).
 - **`Statistics` is not a bottom-nav destination.** Four destinations only: `Home`, `Collections`,
   `Downloads`, `Settings`. Statistics is a top-bar action plus a Settings card.
 - **Three sections are conditional.** `By Resolution`, `By Channel` and `By Folder` are wrapped in
