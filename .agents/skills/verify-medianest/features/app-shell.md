@@ -92,11 +92,15 @@ Preconditions:
 
   Expect the Downloads destination plus the `Restart Download` dialog
   (`Are you sure you want to restart downloading "…"? This will start downloading from scratch.`
-  with `Restart` / `Cancel`), and that row flipped to `PAUSED`. Two preconditions: the row must be
+  with `Restart` / `Cancel`), and that row flipped to `PAUSED`. Three preconditions: the row must be
   present in the collected list — `DownloadsScreen` waits for the id to match a loaded `downloads`
-  row, so a bogus id navigates and shows nothing — and `MainActivity` calls
+  row, so a bogus id navigates and shows nothing — `MainActivity` calls
   `DownloadService.ACTION_PAUSE` before the dialog, so only a row that can be paused (`QUEUED`,
-  `DOWNLOADING`, `PAUSED`) is meaningful; a `COMPLETED` row is rewritten to `PAUSED` by that call.
+  `DOWNLOADING`, `PAUSED`) is meaningful (a `COMPLETED` row is rewritten to `PAUSED` by that call),
+  and `MediaNestApp.onCreate` runs `videoDao.deleteSearchedOrphans()` at startup, so if you seed a
+  `downloads` row for `ACTION_CONFIRM_RESTART`, its parent `videos` row must set `favorite = 1` (or
+  a non-null `lastPlayedAt` / non-empty `localFilePath`) or the orphan cleaner will cascade-delete
+  both rows on launch.
 - **Mini-player.** Load playback first (see [playback-and-player](playback-and-player.md) and
   [video-detail](video-detail.md)), then navigate back to Home and run `scripts/ad.sh snapshot -i`.
   The bar carries `Play`/`Pause`, `Close` and a progress strip that is **two stacked**

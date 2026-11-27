@@ -11,11 +11,11 @@ created, opened, renamed, moved into and deleted.
 - `lib-toolbar` — top bar `Collections`; `Switch to list view` / `Switch to grid view`,
   `Statistics`, Notifications, plus the search field and a session-local `Full titles` switch.
 - `lib-root-folders` — root `Folders` tab: `N Folders` header, `New Folder`, `No Folders Yet` when
-  empty, `N folders` stats line, per-folder `N items`, and a `More options` menu.
+  empty, `N folders` stats line, per-folder `N items`, and a `Folder options` menu.
 - `lib-folder-create` — `New Folder` → `Create` dialog (title `New Subfolder` inside a folder).
 - `lib-folder-open` — open a folder: title becomes the folder name, subtitle `Folder collection`,
   breadcrumbs, `Folder is Empty`, `Subfolders`, `Videos (N)`.
-- `lib-folder-rename` — `More options` → `Rename` → `Rename Folder` dialog.
+- `lib-folder-rename` — `Folder options` → `Rename` → `Rename Folder` dialog.
 - `lib-folder-duplicate` — an exact-case **and** a different-case duplicate are refused with
   `A folder with that name already exists here`, the dialog stays open and no row is inserted.
 - `lib-folder-delete` — `Delete Folder?` confirmation, optional
@@ -64,9 +64,9 @@ S=.agents/skills/verify-medianest/scripts/nest-state.sh
   `History` → `No Watch History` (empty) or rows; `Watched` → `No Watched Videos`;
   `Favorites` → `No Favorites Yet`; `Folders` → `No Folders Yet` or `N Folders`;
   `Playlists` and `Channels` render the subscription list — assert only that the pill switched.
-- **Toolbar + persisted view mode.** The top bar exposes `"Switch to list view"` /
-  `"Switch to grid view"` (the label flips with the current mode, after the companion accessibility
-  fix; take its `@eN` ref from `snapshot -i` or match by `label=`), `Statistics`, and the
+- **Toolbar + persisted view mode.** The top bar exposes `[button] "Switch to list view"` /
+  `[button] "Switch to grid view"` directly (the label flips with the current mode; take its
+  `@eN` ref from `snapshot -i` or match by `label=`), `Statistics`, and the
   Notifications bell. Tap the view toggle and prove it persisted:
   `$S pref-get collections_prefs view_mode` → `LIST` or `GRID`, and the cards change shape
   (single column vs two). This is the only Collections preference this screen writes — see the
@@ -91,21 +91,19 @@ S=.agents/skills/verify-medianest/scripts/nest-state.sh
   `[text]` node. Pick the card's `[group] "<N> items"` `@eN` ref from `snapshot -i` and run
   `scripts/ad.sh click @eN --settle`. Then assert the `Folder collection` subtitle plus
   `Folder is Empty` (or `Videos (N)`), and `Subfolders` when children exist.
-- **Leave the folder.** Run `scripts/ad.sh snapshot -i` and tap the breadcrumb `Back` `@eN` ref (the
-  first `[button] "Back"`, or the breadcrumb `[text] "Folders"` ref) with
-  `scripts/ad.sh click @eN --settle`, and assert the `N folders` stats line is back. (The
-  top-bar back button exposes `[button] "Back"` in `snapshot -i` because `MediaNestIconButton`
-  places its outer label on `onClickLabel` rather than `contentDescription`, so use `[button] "Back"`
-  or breadcrumb `"Folders"`.) Do not use `scripts/ad.sh back`: the screen intercepts BACK to leave
-  the folder, clear the selection or clear the search, so it never exits the screen and proves
-  nothing about navigation.
+- **Leave the folder.** Run `scripts/ad.sh snapshot -i` and tap `[button] "Back to folders"` (the
+  top-bar back button, matching `MediaNestIconButton(contentDescription = "Back to folders")`),
+  `[button] "Back"` (in the breadcrumb row), or the breadcrumb `[text] "Folders"` ref with
+  `scripts/ad.sh click @eN --settle`, and assert the `N folders` stats line is back. Do not use
+  `scripts/ad.sh back`: the screen intercepts BACK to leave the folder, clear the selection or
+  clear the search, so it never exits the screen and proves nothing about navigation.
 - **Rename — grid vs list.** In GRID the folder card carries an overflow button rendered in
-  `snapshot -i` as `[button] "More options"` (the inner `Icon` holds `content-desc "More options"`,
-  while `MediaNestIconButton` puts `"Folder options"` on `onClickLabel`) whose menu holds `Rename`
-  and `Delete`. In LIST mode the `FolderRow` exposes the two actions directly as icon buttons with
-  `content-desc "Rename folder"` and `content-desc "Delete folder"`. Pick whichever matches the
-  current view mode — the grid dropdown does not exist in list mode and vice versa.
-- **Rename.** Open the menu (`click @e<more-options> --settle`), run `scripts/ad.sh snapshot -i`,
+  `snapshot -i` as `[button] "Folder options"` (matching `MediaNestIconButton(contentDescription = "Folder options")`
+  with `Icon(contentDescription = null)`) whose menu holds `Rename` and `Delete`. In LIST mode the
+  `FolderRow` exposes the two actions directly as icon buttons with `content-desc "Rename folder"`
+  and `content-desc "Delete folder"`. Pick whichever matches the current view mode — the grid
+  dropdown does not exist in list mode and vice versa.
+- **Rename.** Open the menu (`click @e<folder-options> --settle`), run `scripts/ad.sh snapshot -i`,
   and tap the menu item's `@eN` ref for `Rename` — do **not** run `click 'label="Rename"'`, which
   fails with `AMBIGUOUS_MATCH` (`[group] "Rename"` + `[text] "Rename"`). Assert the `Rename Folder`
   dialog. The field is **pre-filled** with the current name, so
@@ -146,7 +144,7 @@ S=.agents/skills/verify-medianest/scripts/nest-state.sh
   `Are you sure you want to remove the selected videos from your library?`, the checkbox
   `Delete downloaded files from storage`, and `Delete` / `Cancel`. Confirm and prove both the
   `videos` rows and the `video_folder_join` rows disappear.
-- **Delete a folder.** In grid mode, open `[button] "More options"`, run `scripts/ad.sh snapshot -i`,
+- **Delete a folder.** In grid mode, open `[button] "Folder options"`, run `scripts/ad.sh snapshot -i`,
   and tap the menu item's `@eN` ref for `Delete` (do **not** run `click 'label="Delete"'`, which
   fails with `AMBIGUOUS_MATCH` against `[group] "Delete"` + `[text] "Delete"`); in list mode tap
   the `Delete folder` icon. Assert `Delete Folder?` with
@@ -203,14 +201,15 @@ S=.agents/skills/verify-medianest/scripts/nest-state.sh
   instead of the card and the folder does not open. In Grid mode, tap the card's
   `[group] "<N> items"` `@eN` ref from `snapshot -i` (not `"<Name>, <N> items"`).
 - **Grid and list expose folder actions differently.** Grid has one overflow button
-  (`[button] "More options"` in `snapshot -i`, whose dropdown items `Rename` / `Delete` each have
+  (`[button] "Folder options"` in `snapshot -i`, matching `MediaNestIconButton(contentDescription = "Folder options")`
+  with `Icon(contentDescription = null)`, whose dropdown items `Rename` / `Delete` each have
   both `[group]` and `[text]` nodes so bare `label="Rename"` / `label="Delete"` fails with
   `AMBIGUOUS_MATCH` — always take the `@eN` ref); list has two direct icon buttons (`Rename folder` /
   `Delete folder`). `Rename`/`Delete` also exist inside the open dialog, so take dialog `@eN` refs too.
-- **Leaving a folder uses `[button] "Back"` or breadcrumb `"Folders"`.** `MediaNestIconButton`
-  puts the top-bar back action's outer label on `onClickLabel`, so the accessible nodes visible in
-  `snapshot -i` are `[button] "Back"` (breadcrumb arrow + empty-state button) and breadcrumb
-  `[text] "Folders"`.
+- **Leaving a folder uses `[button] "Back to folders"`, `[button] "Back"`, or breadcrumb `"Folders"`.**
+  Now that `MediaNestIconButton` sets `semantics.contentDescription`, the top-bar back button
+  exposes `[button] "Back to folders"` directly, alongside `[button] "Back"` in the breadcrumb row
+  and breadcrumb `[text] "Folders"`.
 - **`N Selected` and `N selected` are different nodes.** The top-bar title is capitalised, the
   bottom batch bar is lowercase. Asserting one where the other lives fails for a cosmetic reason.
 - **`Full titles` on this screen writes nothing either.** The header toggle only changes local
@@ -242,9 +241,9 @@ S=.agents/skills/verify-medianest/scripts/nest-state.sh
   `PillTabRow` and filter chips render in `snapshot -i` as `[group]`, never as a tab role. Swipe
   horizontally (`scripts/ad.sh swipe 950 288 150 288` — no `--settle`, no 5th duration arg) to
   bring `Playlists` / `Channels` into view, then re-run `snapshot -i` and tap the pill's `@eN` ref.
-- **`Collections` view toggle exposes `"Switch to list view"` / `"Switch to grid view"`.** After
-  the companion accessibility fix on `Collections`, the top-bar view-mode button surfaces those
-  labels directly (and can always be clicked via its `@eN` ref from `snapshot -i`).
+- **`Collections` view toggle exposes `[button] "Switch to list view"` / `"Switch to grid view"`.**
+  The top-bar view-mode button surfaces those labels directly (so both `label=` matching and its
+  `@eN` ref from `snapshot -i` work).
 - **`Playlists` and `Channels` are not folder content.** They render the subscription list; a
   verdict on their content belongs to the subscriptions recipe — assert the tab switch only.
 - **Folder deletion cascades in the schema, not in the seeder.** Join rows are cascade-deleted by
