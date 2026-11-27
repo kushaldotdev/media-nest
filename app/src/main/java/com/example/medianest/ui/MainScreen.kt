@@ -76,8 +76,20 @@ import com.example.medianest.ui.theme.MediaNestTheme
 import com.example.medianest.ui.viewmodel.PendingRestartConfirmation
 import com.example.medianest.ui.screens.PlayerQueueItem
 import com.example.medianest.ui.viewmodel.PlayerViewModel
-import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
+
+private fun androidx.navigation.NavHostController.navigateToNotificationTab(targetRoute: String) {
+    val currentRoute = currentBackStackEntry?.destination?.route
+    if (currentRoute != targetRoute) {
+        navigate(targetRoute) {
+            popUpTo(graph.findStartDestination().id) {
+                saveState = false
+            }
+            launchSingleTop = true
+            restoreState = false
+        }
+    }
+}
 
 private fun android.content.Context.findActivity(): androidx.activity.ComponentActivity? {
     var context = this
@@ -102,48 +114,25 @@ fun MainScreen() {
         val playerViewModel: PlayerViewModel = hiltViewModel(activity)
         val playerUiState by playerViewModel.uiState.collectAsStateWithLifecycle()
 
-        LaunchedEffect(Unit) {
-            launch {
-                PendingRestartConfirmation.pendingDownloadId.collect { id ->
-                    val currentRoute = navController.currentBackStackEntry?.destination?.route
-                    if (currentRoute != BottomNavItem.Downloads.route) {
-                        navController.navigate(BottomNavItem.Downloads.route) {
-                            popUpTo(navController.graph.findStartDestination().id) {
-                                saveState = false
-                            }
-                            launchSingleTop = true
-                            restoreState = false
-                        }
-                    }
-                }
+        val pendingRestart by PendingRestartConfirmation.pendingRestart.collectAsStateWithLifecycle()
+        val pendingNavigateToDownloads by PendingRestartConfirmation.navigateToDownloads.collectAsStateWithLifecycle()
+        val pendingNavigateToUpdates by PendingRestartConfirmation.navigateToUpdates.collectAsStateWithLifecycle()
+
+        LaunchedEffect(pendingRestart) {
+            if (pendingRestart != null) {
+                navController.navigateToNotificationTab(BottomNavItem.Downloads.route)
             }
-            launch {
-                PendingRestartConfirmation.navigateToDownloads.collect {
-                    val currentRoute = navController.currentBackStackEntry?.destination?.route
-                    if (currentRoute != BottomNavItem.Downloads.route) {
-                        navController.navigate(BottomNavItem.Downloads.route) {
-                            popUpTo(navController.graph.findStartDestination().id) {
-                                saveState = false
-                            }
-                            launchSingleTop = true
-                            restoreState = false
-                        }
-                    }
-                }
+        }
+        LaunchedEffect(pendingNavigateToDownloads) {
+            if (pendingNavigateToDownloads) {
+                navController.navigateToNotificationTab(BottomNavItem.Downloads.route)
+                PendingRestartConfirmation.consumeNavigateToDownloads()
             }
-            launch {
-                PendingRestartConfirmation.navigateToUpdates.collect {
-                    val currentRoute = navController.currentBackStackEntry?.destination?.route
-                    if (currentRoute != BottomNavItem.Settings.route) {
-                        navController.navigate(BottomNavItem.Settings.route) {
-                            popUpTo(navController.graph.findStartDestination().id) {
-                                saveState = false
-                            }
-                            launchSingleTop = true
-                            restoreState = false
-                        }
-                    }
-                }
+        }
+        LaunchedEffect(pendingNavigateToUpdates) {
+            if (pendingNavigateToUpdates) {
+                navController.navigateToNotificationTab(BottomNavItem.Settings.route)
+                PendingRestartConfirmation.consumeNavigateToUpdates()
             }
         }
 

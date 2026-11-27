@@ -29,14 +29,15 @@ import com.example.medianest.service.PlaybackService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
+import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 
 data class DownloadsUiState(
@@ -401,8 +402,64 @@ internal fun reconcileLocalFile(statusIsCompleted: Boolean, fileExists: Boolean)
     else -> LocalFileReconcile.NONE
 }
 
+/**
+ * Sticky restart request payload. A monotonic [sequence] ensures re-tapping a restart
+ * notification for the same [downloadId] still produces a distinct state emission.
+ */
+data class PendingRestartRequest(
+    val downloadId: Long,
+    val sequence: Long
+)
+
+/** Holds sticky notification navigation and restart-confirmation requests across recompositions. */
 object PendingRestartConfirmation {
-    val pendingDownloadId = kotlinx.coroutines.flow.MutableSharedFlow<Long>(extraBufferCapacity = 1)
-    val navigateToDownloads = kotlinx.coroutines.flow.MutableSharedFlow<Unit>(extraBufferCapacity = 1)
-    val navigateToUpdates = kotlinx.coroutines.flow.MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    private val nextSequence = AtomicLong(0L)
+
+    private val _pendingRestart = MutableStateFlow<PendingRestartRequest?>(null)
+    val pendingRestart: StateFlow<PendingRestartRequest?> = _pendingRestart.asStateFlow()
+
+    private val _navigateToDownloads = MutableStateFlow(false)
+    val navigateToDownloads: StateFlow<Boolean> = _navigateToDownloads.asStateFlow()
+
+    private val _navigateToUpdates = MutableStateFlow(false)
+    val navigateToUpdates: StateFlow<Boolean> = _navigateToUpdates.asStateFlow()
+
+    fun requestRestart(downloadId: Long) {
+        _pendingRestart.value = PendingRestartRequest(
+            downloadId = downloadId,
+            sequence = nextSequence.incrementAndGet()
+        )
+    }
+
+    fun consumePendingRestart(request: PendingRestartRequest) {
+        _pendingRestart.update { current ->
+            if (current == request) null else current
+        }
+    }
+
+    fun consumePendingRestart(downloadId: Long) {
+        _pendingRestart.update { current ->
+            if (current?.downloadId == downloadId) null else current
+        }
+    }
+
+    fun clearPendingRestart() {
+        _pendingRestart.value = null
+    }
+
+    fun requestNavigateToDownloads() {
+        _navigateToDownloads.value = true
+    }
+
+    fun consumeNavigateToDownloads() {
+        _navigateToDownloads.value = false
+    }
+
+    fun requestNavigateToUpdates() {
+        _navigateToUpdates.value = true
+    }
+
+    fun consumeNavigateToUpdates() {
+        _navigateToUpdates.value = false
+    }
 }

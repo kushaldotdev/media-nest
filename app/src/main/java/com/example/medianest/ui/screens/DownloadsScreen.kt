@@ -599,7 +599,7 @@ fun DownloadsScreen(
     // Dialog and interactive states
     var showDeleteDialogFor by remember { mutableStateOf<DownloadEntity?>(null) }
     var showRestartDialogFor by remember { mutableStateOf<DownloadEntity?>(null) }
-    var pendingDialogId by remember { mutableStateOf<Long?>(null) }
+    val pendingRestart by PendingRestartConfirmation.pendingRestart.collectAsStateWithLifecycle()
     var showBatchDeleteDialog by remember { mutableStateOf(false) }
     var showMaxConcurrentDialog by remember { mutableStateOf(false) }
     var showSortBottomSheet by remember { mutableStateOf(false) }
@@ -632,22 +632,14 @@ fun DownloadsScreen(
         }
     }
 
-    LaunchedEffect(Unit) {
-        PendingRestartConfirmation.pendingDownloadId.collect { id ->
-            pendingDialogId = id
+    LaunchedEffect(downloads, pendingRestart) {
+        val request = pendingRestart ?: return@LaunchedEffect
+        val currentDownloads = downloads ?: return@LaunchedEffect
+        val download = currentDownloads.find { it.id == request.downloadId }
+        if (download != null) {
+            showRestartDialogFor = download
         }
-    }
-
-    LaunchedEffect(downloads, pendingDialogId) {
-        val id = pendingDialogId
-        val currentDownloads = downloads
-        if (id != null && !currentDownloads.isNullOrEmpty()) {
-            val download = currentDownloads.find { it.id == id }
-            if (download != null) {
-                showRestartDialogFor = download
-                pendingDialogId = null
-            }
-        }
+        PendingRestartConfirmation.consumePendingRestart(request)
     }
 
     Column(

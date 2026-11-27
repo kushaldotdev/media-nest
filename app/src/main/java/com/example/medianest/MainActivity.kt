@@ -48,14 +48,14 @@ class MainActivity : ComponentActivity() {
                 } catch (e: Exception) {
                     android.util.Log.e("MainActivity", "Failed to pause download before confirmation dialog", e)
                 }
-                PendingRestartConfirmation.pendingDownloadId.tryEmit(id)
+                PendingRestartConfirmation.requestRestart(id)
                 intent.action = null
             }
         } else if (intent?.action == "com.example.medianest.ACTION_NAVIGATE_DOWNLOADS") {
-            PendingRestartConfirmation.navigateToDownloads.tryEmit(Unit)
+            PendingRestartConfirmation.requestNavigateToDownloads()
             intent.action = null
         } else if (intent?.action == "com.example.medianest.ACTION_NAVIGATE_UPDATES") {
-            PendingRestartConfirmation.navigateToUpdates.tryEmit(Unit)
+            PendingRestartConfirmation.requestNavigateToUpdates()
             intent.action = null
         }
     }
