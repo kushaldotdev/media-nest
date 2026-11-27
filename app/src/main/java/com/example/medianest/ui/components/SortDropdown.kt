@@ -207,7 +207,7 @@ fun MediaNestSortBottomSheet(
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.ic_mn_close),
-                        contentDescription = "Close",
+                        contentDescription = null,
                         modifier = Modifier.size(16.dp)
                     )
                 }

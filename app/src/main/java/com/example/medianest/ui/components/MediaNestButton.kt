@@ -19,6 +19,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -306,6 +308,11 @@ fun MediaNestIconButton(
     Box(
         modifier = modifier
             .defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
+            .semantics {
+                if (contentDescription != null) {
+                    this.contentDescription = contentDescription
+                }
+            }
             .clickable(
                 interactionSource = interactionSource,
                 indication = ripple(bounded = false, radius = (size.visualSize / 2) + 4.dp),
@@ -391,7 +398,7 @@ fun MediaNestIconButton(
     ) {
         Icon(
             imageVector = imageVector,
-            contentDescription = contentDescription,
+            contentDescription = null,
             modifier = Modifier.size(size.iconSize)
         )
     }

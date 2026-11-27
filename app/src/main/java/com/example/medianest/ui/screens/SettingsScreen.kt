@@ -2268,7 +2268,7 @@ fun SettingsScreen(
                             ) {
                                 Icon(
                                     painter = painterResource(R.drawable.ic_mn_copy),
-                                    contentDescription = "Copy",
+                                    contentDescription = null,
                                     tint = MediaNestColors.Accent,
                                     modifier = Modifier.size(16.dp)
                                 )

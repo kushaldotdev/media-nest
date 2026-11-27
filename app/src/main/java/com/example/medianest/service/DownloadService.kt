@@ -67,6 +67,18 @@ fun sanitizeFileName(name: String): String {
     return if (sanitized.isEmpty()) "media" else sanitized
 }
 
+internal fun <V : Any> ConcurrentHashMap<String, V>.getCachedThumbnail(url: String?): V? {
+    val key = url?.takeIf { it.isNotBlank() } ?: return null
+    return this[key]
+}
+
+internal fun <V : Any> ConcurrentHashMap<String, V>.putCachedThumbnail(url: String?, value: V?) {
+    val key = url?.takeIf { it.isNotBlank() } ?: return
+    if (value != null) {
+        this[key] = value
+    }
+}
+
 @AndroidEntryPoint
 class DownloadService : Service() {
 
@@ -1625,18 +1637,18 @@ class DownloadService : Service() {
       }
 
       private suspend fun loadThumbnail(thumbnailUrl: String?): Bitmap? {
-          if (thumbnailUrl.isNullOrBlank()) return null
+          val key = thumbnailUrl?.takeIf { it.isNotBlank() } ?: return null
           // Cache hit: return synchronously - never blocks the caller
-          thumbnailCache[thumbnailUrl]?.let { return it }
+          thumbnailCache.getCachedThumbnail(key)?.let { return it }
           return withContext(Dispatchers.IO) {
               try {
-                  val request = Request.Builder().url(thumbnailUrl).build()
+                  val request = Request.Builder().url(key).build()
                   val response = okHttpClient.newCall(request).execute()
                   response.use {
                       if (!it.isSuccessful || it.body == null) return@withContext null
                       it.body!!.byteStream().use { stream ->
                           val bitmap = BitmapFactory.decodeStream(stream)
-                          if (bitmap != null) thumbnailCache[thumbnailUrl] = bitmap
+                          thumbnailCache.putCachedThumbnail(key, bitmap)
                           bitmap
                       }
                   }
@@ -2006,7 +2018,7 @@ class DownloadService : Service() {
          // Non-suspend cache read: showPausedNotification is not a suspend fun,
          // so we cannot call suspend loadThumbnail() here. The cache is pre-warmed
          // when the download starts and populated by the suspend updateNotification() path.
-         thumbnailCache[thumbnailUrl]?.let { bitmap ->
+         thumbnailCache.getCachedThumbnail(thumbnailUrl)?.let { bitmap ->
              builder.setLargeIcon(bitmap)
              builder.setStyle(NotificationCompat.BigPictureStyle().bigPicture(bitmap).setBigContentTitle(title))
          }

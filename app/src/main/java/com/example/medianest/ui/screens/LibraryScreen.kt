@@ -263,7 +263,7 @@ fun LibraryScreen(
                                 ) {
                                     Icon(
                                         painter = painterResource(R.drawable.ic_mn_close),
-                                        contentDescription = "Cancel selection",
+                                        contentDescription = null,
                                         tint = MediaNestColors.TextPrimary,
                                         modifier = Modifier.size(20.dp)
                                     )
@@ -278,7 +278,7 @@ fun LibraryScreen(
                                 ) {
                                     Icon(
                                         painter = painterResource(R.drawable.ic_mn_back),
-                                        contentDescription = "Back",
+                                        contentDescription = null,
                                         tint = MediaNestColors.TextPrimary,
                                         modifier = Modifier.size(20.dp)
                                     )
@@ -308,7 +308,7 @@ fun LibraryScreen(
                             ) {
                                 Icon(
                                     painter = painterResource(R.drawable.ic_mn_chart),
-                                    contentDescription = "Statistics",
+                                    contentDescription = null,
                                     tint = MediaNestColors.TextPrimary,
                                     modifier = Modifier.size(20.dp)
                                 )
@@ -1615,7 +1615,7 @@ private fun LibrarySearchBar(
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.ic_mn_close),
-                        contentDescription = "Clear search",
+                        contentDescription = null,
                         tint = MediaNestColors.TextSecondary,
                         modifier = Modifier.size(14.dp)
                     )
@@ -1715,7 +1715,7 @@ private fun BatchSelectionBar(
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.ic_mn_trash),
-                        contentDescription = "Delete",
+                        contentDescription = null,
                         tint = if (selectedCount > 0) MediaNestColors.Destructive else MediaNestColors.Destructive.copy(alpha = 0.4f),
                         modifier = Modifier.size(16.dp)
                     )
@@ -1729,7 +1729,7 @@ private fun BatchSelectionBar(
                 ) {
                     Icon(
                         painter = painterResource(R.drawable.ic_mn_close),
-                        contentDescription = "Cancel",
+                        contentDescription = null,
                         tint = MediaNestColors.TextSecondary,
                         modifier = Modifier.size(16.dp)
                     )
@@ -1763,7 +1763,7 @@ private fun FolderBreadcrumbs(
         ) {
             Icon(
                 painter = painterResource(R.drawable.ic_mn_back),
-                contentDescription = "Back",
+                contentDescription = null,
                 tint = MediaNestColors.TextPrimary,
                 modifier = Modifier.size(16.dp)
             )
@@ -1816,7 +1816,7 @@ private fun FolderBreadcrumbs(
         ) {
             Icon(
                 painter = painterResource(R.drawable.ic_mn_folder_add),
-                contentDescription = "New subfolder",
+                contentDescription = null,
                 tint = MediaNestColors.Accent,
                 modifier = Modifier.size(18.dp)
             )
@@ -2817,7 +2817,7 @@ private fun FolderCard(
                     ) {
                         Icon(
                             painter = painterResource(R.drawable.ic_mn_more),
-                            contentDescription = "More options",
+                            contentDescription = null,
                             tint = MediaNestColors.TextSecondary,
                             modifier = Modifier.size(16.dp)
                         )
@@ -2982,7 +2982,7 @@ private fun FolderRow(
             ) {
                 Icon(
                     painter = painterResource(R.drawable.ic_mn_edit),
-                    contentDescription = "Rename",
+                    contentDescription = null,
                     tint = MediaNestColors.TextSecondary,
                     modifier = Modifier.size(18.dp)
                 )
@@ -2995,7 +2995,7 @@ private fun FolderRow(
             ) {
                 Icon(
                     painter = painterResource(R.drawable.ic_mn_trash),
-                    contentDescription = "Delete",
+                    contentDescription = null,
                     tint = MediaNestColors.Destructive,
                     modifier = Modifier.size(18.dp)
                 )

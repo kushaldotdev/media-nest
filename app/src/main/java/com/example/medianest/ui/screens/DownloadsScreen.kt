@@ -928,11 +928,12 @@ fun DownloadsScreen(
                                 },
                                 size = MediaNestIconButtonSize.Small,
                                 tint = if (isBatchMode) MediaNestColors.Accent else MediaNestColors.TextSecondary,
-                                containerColor = if (isBatchMode) MediaNestColors.Raised else Color.Transparent
+                                containerColor = if (isBatchMode) MediaNestColors.Raised else Color.Transparent,
+                                contentDescription = "Batch Select Mode"
                             ) {
                                 Icon(
                                     painter = painterResource(R.drawable.ic_mn_checkbox),
-                                    contentDescription = "Batch Select Mode",
+                                    contentDescription = null,
                                     modifier = Modifier.size(18.dp)
                                 )
                             }
@@ -2299,11 +2300,12 @@ private fun CompletedDownloadCard(
                     MediaNestIconButton(
                         onClick = { onDeleteClick(download) },
                         size = MediaNestIconButtonSize.Small,
-                        tint = MediaNestColors.Destructive
+                        tint = MediaNestColors.Destructive,
+                        contentDescription = "Delete"
                     ) {
                         Icon(
                             painter = painterResource(R.drawable.ic_mn_trash),
-                            contentDescription = "Delete",
+                            contentDescription = null,
                             modifier = Modifier.size(16.dp)
                         )
                     }
