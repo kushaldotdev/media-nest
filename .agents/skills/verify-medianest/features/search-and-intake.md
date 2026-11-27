@@ -71,15 +71,20 @@ Preconditions:
   `Search or paste URL...` is a sibling placeholder `Text`, so `fill 'label="Search or paste URL..."'`
   does not find a field. Fill by ref (`scripts/ad.sh fill @eN "https://…" --settle`) or by
   `editable=true`; Home has exactly one editable field, so that selector is unambiguous here.
-- **Paste from the clipboard.** Deterministic and typo-proof:
-  `scripts/ad.sh clipboard write "https://www.youtube.com/watch?v=dQw4w9WgXcQ"`, then
-  `scripts/ad.sh click 'label="Paste"' --settle`, then
-  `scripts/ad.sh is visible 'label="Clear"'` — the `Clear` icon only renders when the field is
-  non-empty, which is the proof the paste landed.
-- **Clear the field.** Take the icon's ref from `snapshot -i` and `scripts/ad.sh click @eN --settle`, then
-  `snapshot -i` no longer lists it. Do **not** use a bare `label="Clear"`: the small `Clear` link under
-  the panel is a second node with the same text, so the selector returns `AMBIGUOUS_MATCH` whenever that
-  link is visible (`urlInput.isNotEmpty() || uiState !is HomeUiState.Idle`).
+- **Fill, paste, and clear the field.** Deterministic and typo-proof: run
+  `scripts/ad.sh fill 'editable=true' "https://www.youtube.com/watch?v=dQw4w9WgXcQ" --settle`, then
+  `scripts/ad.sh snapshot -i` and confirm `[button] "Clear"` is listed — the `Clear` icon only
+  renders when the field is non-empty, which proves the input landed. (Do **not** use
+  `agent-device`'s shell clipboard command: it returns `UNSUPPORTED_OPERATION` on this emulator
+  because there is no shell implementation for the clipboard service. To exercise `Paste` against
+  the real device clipboard, tap a `History` row's URL/badge area — not its title `Text`, which
+  expands truncation — to copy its link, clear the field, then click `Paste`.)
+- **Clear the field.** From `snapshot -i`, take the pill icon's `@eN` ref (`[button] "Clear"`,
+  distinct from the small `[group] "Clear"` link below the hero panel) and run
+  `scripts/ad.sh click @eN --settle`, then confirm `snapshot -i` no longer lists the `Clear` icon.
+  Do **not** use a bare `label="Clear"`: the small `Clear` link under the panel shares the string,
+  so `label="Clear"` returns `AMBIGUOUS_MATCH` whenever that link is visible
+  (`urlInput.isNotEmpty() || uiState !is HomeUiState.Idle`).
 - **Blank submission (network-free).** With the field empty, `scripts/ad.sh click 'label="Extract"'`
   and `scripts/ad.sh wait text "Extraction Error" 5000`. The message under the heading reads
   `Please enter a URL` (`HomeUiState.Error`). This path needs no network and is the cheapest proof
@@ -155,12 +160,14 @@ Preconditions:
   Only `READY` items are enqueued; an all-unavailable playlist enqueues nothing and only toasts
   `All selected videos are already in the queue or downloaded`.
 - **Full titles.** The hero panel renders the label `Full titles` **twice** — once as the visible
-  `Text` and once as the switch's `contentDescription` — so scope the selector:
-  `scripts/ad.sh is checked 'role=switch label="Full titles"'`, then
-  `scripts/ad.sh click 'role=switch label="Full titles"' --settle`. `false` is the default
-  (`CollectionsPreferences.DEFAULT_FULL_TITLES`). Beware the persistence caveat: the Home toggle only
-  updates local `fullTitlesHome` state, and `setFullTitles` is only called from
-  `Settings → Always Show Full Titles`, so after a Home toggle
+  `Text` and once on the Compose `Switch` (`@eN [group] "Full titles" [checked|unchecked]`). Run
+  `scripts/ad.sh snapshot -i`, locate the outer switch `@eN` ref (which holds `[checked]` or
+  `[unchecked]`, whereas its inner child `[group]` holds `label="Full titles"` with `checked=false`),
+  and run `scripts/ad.sh click @eN --settle`; verify the `- [unchecked] / + [checked]` diff (or
+  re-run `snapshot -i`). Do not use switch-role selectors, `is checked 'role=group label="Full titles"'`,
+  or `is checked @eN`. `false` is the default (`CollectionsPreferences.DEFAULT_FULL_TITLES`). Beware
+  the persistence caveat: the Home toggle only updates local `fullTitlesHome` state, and
+  `setFullTitles` is only called from `Settings → Always Show Full Titles`, so after a Home toggle
   `$S pref-bool collections_prefs full_titles` may still read `false`. To verify
   the persisted bit, flip it in Settings (that row *does* write), then relaunch and read the pref.
 - **Continue watching.** Present only when a `playback_history` row sits between 1% and 98% of the
@@ -206,8 +213,16 @@ Preconditions:
 - **`label="Audio"` / `label="Video"` are ambiguous on Home.** The media-type badge on every card and
   every history row carries `contentDescription` `Audio` or `Video` (chosen from the row's
   `mediaType` / `format`), so the pill and the badges collide. Take pill refs from `snapshot -i`.
-- **`Full titles` matches two nodes.** Visible label plus switch `contentDescription`; always
-  qualify with `role=switch`.
+- **`Full titles` matches two nodes and surfaces as a `[group]` switch.** Visible label plus the
+  Compose `Switch` (`@eN [group] "Full titles" [checked|unchecked]`); take the switch `@eN` ref from
+  `snapshot -i`, `click @eN --settle`, and read the `- [checked] / + [unchecked]` diff.
+- **The pill's `[button] "Clear"` and the panel's `[group] "Clear"` are different controls.** The
+  icon button clears the text box only; the small link under the panel calls `resetState()` and also
+  drops the extraction result. Take the desired `@eN` ref from `snapshot -i` rather than bare
+  `label="Clear"`.
+- **Tapping a `History` row's title expands truncation instead of copying.** Tap the URL/type-badge
+  area (or the outer row ref) to copy to the clipboard (`Link copied to clipboard`); tapping the title
+  `Text` only toggles title expansion.
 - **The Home `Full titles` toggle is not persisted.** `onFullTitlesChange` in `HomeScreen` only sets
   the screen-local `fullTitlesHome`; `CollectionsPreferences.setFullTitles` is called exclusively
   from the Settings row `Always Show Full Titles`. So `pref-bool collections_prefs full_titles`

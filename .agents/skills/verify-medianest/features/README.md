@@ -31,8 +31,10 @@ user-facing feature; each one says what it is, how a user reaches it, how to dri
   `snapshot -i` only when the diff lacks the next target.
 - Prefer `wait text "…"` / `wait '<selector>'` over fixed sleeps; animations make a snapshot
   partial and refs stale.
-- Use `is` to read a control's state (`is checked 'role=switch label="X"'`) instead of inferring
-  it from pixels.
+- Read Compose `Switch` state from `snapshot -i` (`@eN [group] "<label>" [checked|unchecked]`) and
+  from the `- [checked] / + [unchecked]` diff returned by `click @eN --settle` instead of inferring
+  it from pixels. Reserve `is` (`is visible '<selector>'`) for selector-based checks — `is` does
+  not accept `@ref`, and `is checked 'role=group label="X"'` reads the inner child's `checked=false`.
 - The first install lands on the POST_NOTIFICATIONS dialog; `scripts/dev/install.sh` grants the
   permission, and `scripts/ad.sh alert dismiss` clears anything left over.
 - A `back` from a root destination exits to the launcher; that is expected, not a crash.

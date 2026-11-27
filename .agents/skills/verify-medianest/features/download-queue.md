@@ -58,11 +58,12 @@ S=.agents/skills/verify-medianest/scripts/nest-state.sh
   `scripts/ad.sh wait text "No downloads yet" 5000`. That string is the empty-queue marker;
   `Active Queue` does **not** render when nothing is active, and `Completed Downloads` does not
   render when nothing is completed.
-- **Toolbar.** `scripts/ad.sh snapshot -i`. The toolbar is always present: a category button whose
-  text is the current sort (`Date` by default), a `Max: N` button (default `Max: 2`) whose
-  `content-desc` is `Max concurrent`, and a `Full titles` switch.
-- **Sort.** Tap the category button (`label="Date"`, `label="Progress"`, `label="Size"` or
-  `label="Status"`; only the leading icon carries `content-desc "Sort"`):
+- **Toolbar.** `scripts/ad.sh snapshot -i`. The toolbar is always present: a sort button rendered as
+  `[button] "Sort, Date"` (the second part is the current sort category, `Date` by default), a
+  concurrency button rendered as `[button] "Max concurrent, Max: N"` (default `Max: 2`), and a
+  `Full titles` switch (`[group] "Full titles" [checked|unchecked]`).
+- **Sort.** Tap the category button (by its `@eN` ref from `snapshot -i`, or `label="Date"`,
+  `label="Progress"`, `label="Size"`, `label="Status"` which taps the inner text cleanly):
   `scripts/ad.sh click 'label="Date"' --settle`. The `Sort By` sheet opens with a `Close` icon,
   then `SORT BY` (`Date Added`, `Progress`, `File Size`, `Download Status`), then `ORDER` with
   `Descending (↓)` / `Ascending (↑)`, then the `Full titles` switch, then `Cancel` / `Apply`.
@@ -76,14 +77,15 @@ S=.agents/skills/verify-medianest/scripts/nest-state.sh
   Tap `scripts/ad.sh click 'label="4 concurrent downloads"' --settle`, then assert
   `$S pref-get download_prefs max_concurrent` → `4` and the button reads `Max: 4`. The dialog
   dismisses itself on selection; `Close` is only for backing out.
-- **Full titles — session-local.** Read the switch with
-  `scripts/ad.sh is checked 'role=switch label="Full titles"'`, flip it with
-  `scripts/ad.sh click 'role=switch label="Full titles"' --settle`, and read it again. The
-  observable result is **row rendering**: with it off, a long title is one truncated line on the
-  cards; with it on, the title wraps. Do **not** assert a DataStore value — this toggle is local
-  screen state and writes nothing, so `$S pref-bool collections_prefs full_titles` stays at the
-  last value Settings wrote regardless of what the card shows. Reopening the screen resets the
-  switch to the global value.
+- **Full titles — session-local.** Run `scripts/ad.sh snapshot -i`, take the toolbar's
+  `[group] "Full titles" [checked|unchecked]` `@eN` ref (do **not** use switch-role selectors,
+  `is checked 'role=group label="Full titles"'`, or `is checked @eN`), flip it with
+  `scripts/ad.sh click @eN --settle`, and assert the `- [checked] / + [unchecked]` diff (or
+  re-snapshot `-i`). The observable result is **row rendering**: with it off, a long title is one
+  truncated line on the cards; with it on, the title wraps. Do **not** assert a DataStore value —
+  this toggle is local screen state and writes nothing, so `$S pref-bool collections_prefs full_titles`
+  stays at the last value Settings wrote regardless of what the card shows. Reopening the screen
+  resets the switch to the global value.
 - **Active queue states.** With rows in `QUEUED` / `DOWNLOADING`, assert `Active Queue` plus the
   per-card actions read from source: `Pause` + `Cancel` (queued/downloading), `Resume` +
   `Restart` + `Delete` (paused), `Retry` + `Delete` (failed), `Restart` + `Delete` (canceled),
@@ -99,9 +101,12 @@ S=.agents/skills/verify-medianest/scripts/nest-state.sh
   `$S db-count downloads "status='PAUSED'"`. A missing button with no matching rows is correct
   behaviour, and a tap on an empty queue proves nothing.
 - **Batch select.** With at least one completed row, tap the `Batch Select Mode` icon
-  (its `content-desc`), then assert the `Select All` (or `Deselect All`) toggle, `<n> selected`,
-  and `Delete`. `Select All` selects only the rows passing the current chip filter. `Delete` opens
-  a dialog titled `Delete 1 Download` (plural `Delete N Downloads`) offering `List Only` /
+  (its `@eN` ref or `label="Batch Select Mode"`), then assert the `Select All` (or `Deselect All`)
+  toggle, `<n> selected`, and `Delete`. `Select All` selects only the rows passing the current chip
+  filter. Run `scripts/ad.sh snapshot -i` to take the batch bar's `Delete` `@eN` ref and run
+  `scripts/ad.sh click @eN --settle` — do **not** run `click 'label="Delete"'`, which fails with
+  `AMBIGUOUS_MATCH` against the per-card `Delete` icons. It opens a dialog titled
+  `Delete 1 Download` (plural `Delete N Downloads`) offering `List Only` /
   `Delete Files & List` / `Cancel`; `List Only` removes rows and keeps the files,
   `Delete Files & List` removes both. Prove the row is gone:
   `$S db-count downloads "id=<id>"` → `0`.
@@ -198,12 +203,19 @@ S=.agents/skills/verify-medianest/scripts/nest-state.sh
   Settings screen writes the global preference. It seeds from that global value each time the
   screen is composed, so "my toggle was forgotten after navigating away and back" is the designed
   behaviour and a `pref-get`/`pref-bool` check can only ever report the Settings value.
-- **Two `Full titles` switches, one label.** One sits on the toolbar, one inside the `Sort By`
-  sheet. With the sheet open, `role=switch label="Full titles"` is ambiguous; close the sheet
-  first or take a snapshot ref. Neither one persists anything from this screen.
-- **The sort button is labelled with the category, not "Sort".** Default is `Date`; only the icon
-  carries `content-desc "Sort"`. Sheet options are longer (`Date Added`, `File Size`), so a
-  whole-field `label="Date"` is unambiguous, but do not look for a button named `Sort`.
+- **Two `Full titles` switches, one label — both surface as `[group]`.** One sits on the toolbar,
+  one inside the `Sort By` sheet. Close the sheet first or take the target `@eN` ref from
+  `snapshot -i` (and read the `- [checked] / + [unchecked]` diff from `click @eN --settle` instead
+  of switch-role or `is checked` selectors). Neither one persists anything from this screen.
+- **Toolbar buttons combine icon + text in `snapshot -i`.** The sort and concurrency buttons appear
+  as `[button] "Sort, Date"` (category varies) and `[button] "Max concurrent, Max: N"`. `label="Date"`
+  taps the inner text cleanly, or take the button's `@eN` ref from `snapshot -i`.
+- **Batch `Delete` collides with per-card `Delete` icons.** In batch select mode, `click 'label="Delete"'`
+  fails with `AMBIGUOUS_MATCH` (`3`+ actionable elements). Always take the batch bar `Delete` `@eN`
+  ref from `snapshot -i`.
+- **`scroll top --settle` fails at the bottom of Downloads.** It reports `"Already at top; no hidden
+  content above detected"` without scrolling back up; use `scripts/ad.sh scroll up --until 'label="Downloads"' --settle`
+  (or target `Batch Select Mode` / `Date`) instead.
 - **Sort order persists, drag order does not.** `sort_mode` in `download_prefs` survives a
   relaunch; reordering with the `Reorder Drag Handle` only changes in-memory queue order and is
   dropped on restart. "Order survived" is only a valid claim for the stored sort mode.

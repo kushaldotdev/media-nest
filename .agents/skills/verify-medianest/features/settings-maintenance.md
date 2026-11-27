@@ -52,21 +52,25 @@ ART=$($S evidence-dir settings)
 - **Section presence.** `scripts/ad.sh snapshot -i` after scrolling; assert each header in order:
   `Downloads & Network`, `Preferences`, `Data Management & Storage`, `About & Updates`,
   `VPS Sync & Cloud`. `scripts/ad.sh scroll bottom --settle` reaches the last one; then
-  `scripts/ad.sh scroll top --settle` to start over.
+  `scripts/ad.sh scroll up --until 'label="Downloads & Network"' --settle` to start over.
 - **Download rules.** The quality field is labelled `Quality Preset` and the concurrency field
   `Concurrency Limit` (their *row titles* are `Default Download Quality` and
   `Max Concurrent Downloads` — two different strings, match the row title to scroll, the field to
   interact). Pick a value, then prove it on disk:
   `$S pref-get download_prefs default_resolution` and `$S pref-get download_prefs max_concurrent`.
   Restore the previous values.
-- **Switch state, by name.** `MediaNestSwitch` puts `contentDescription = label` on the `Switch`
-  node; the visible row title is a **separate sibling** `TextView`. So the name appears twice and
-  only the `Switch` carries `checked`. Always scope the selector to the role:
+- **Switch state, via snapshot ref.** `MediaNestSwitch` surfaces in `agent-device` as an outer
+  clickable `[group]` holding `[checked]` / `[unchecked]` with no label, wrapping an inner child
+  `[group]` holding `label="<label>"` (`checked=false`). Neither switch-role selectors nor
+  `is checked 'role=group label="X"'` nor `is checked @eN` work (`is` requires a selector
+  expression, and `group label=` reads the inner child's `checked=false`). Take the outer
+  switch's `@eN` ref from `snapshot -i`, click `@eN --settle`, and read the resulting
+  `- [checked] / + [unchecked]` diff:
 
   ```bash
-  scripts/ad.sh is checked 'role=switch label="Always Show Full Titles"'
-  scripts/ad.sh click 'role=switch label="Always Show Full Titles"' --settle
-  scripts/ad.sh is checked 'role=switch label="Always Show Full Titles"'
+  scripts/ad.sh snapshot -i                  # locate @eN [group] "Always Show Full Titles" [unchecked]
+  scripts/ad.sh click @eN --settle           # diff prints - [unchecked] / + [checked]
+  scripts/ad.sh snapshot -i                  # confirm updated state if needed
   ```
 
 - **Switch state, on disk.** The tap is not proof. `Always Show Full Titles` is the good probe
@@ -151,10 +155,12 @@ ART=$($S evidence-dir settings)
 
 ## Gotchas
 
-- **The switch name is on the switch, not on the row.** `MediaNestSwitch` applies
-  `Modifier.semantics { contentDescription = label }`, so `role=switch label="X"` hits the control
-  and `label="X"` alone can hit the sibling `Text`. An unscoped match can be `AMBIGUOUS_MATCH`, and
-  a `TextView` has no `checked` attribute to read.
+- **Switches surface as `[group] "<label>" [checked|unchecked]`, never as a switch role.** The
+  outer clickable `[group]` holds `[checked|unchecked]` while an inner child `[group]` holds
+  `label="<label>"` (`checked=false`), and the visible row title is a separate `Text`. Always take
+  the outer switch's `@eN` ref from `snapshot -i`, run `click @eN --settle`, and assert the
+  `- [checked] / + [unchecked]` diff (never switch-role selectors, `is checked 'role=group label="X"'`,
+  or `is checked @eN`).
 - **`pref-bool` exits 3 for a key that was never written.** DataStore only creates
   `files/datastore/<name>.preferences_pb` and its keys on the first `.edit`, so "unset" means
   *default*, not *broken*. Read the default from the Kotlin file (`DEFAULT_FULL_TITLES=false`,

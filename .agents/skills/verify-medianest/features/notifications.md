@@ -59,11 +59,13 @@ $S db-count app_notifications "isRead=0"            # starting unread count -> b
 - **Badge ↔ unread count.** The badge is `unreadCount` capped at `99+`; the subtitle is
   `N unread`. Both read `$S db-count app_notifications "isRead=0"`. If they disagree, the UI or the
   flow is stale, not the DB.
-- **Filter chips.** They are `role=tab`:
-  `scripts/ad.sh click 'role=tab label="Downloads"' --settle`,
-  then `$S db-count app_notifications "type='DOWNLOAD'"` must equal the visible card count and the
-  `Showing N of M` line. `ALL` is the only chip that shows every row; the other four map to
-  `DOWNLOAD`, `SUBSCRIPTION`, `SYSTEM`, `SYNC` case-insensitively.
+- **Filter chips.** Filter chips (`All`, `Downloads`, `Subscriptions`, `System`, `Sync`) surface in
+  `snapshot -i` as `[group]` nodes, never as a tab role — and bare `label="Downloads"` collides
+  (`AMBIGUOUS_MATCH`: chip text plus the bottom-nav `Downloads` group/text). Run
+  `scripts/ad.sh snapshot -i`, select the desired chip's `@eN` ref, and run
+  `scripts/ad.sh click @eN --settle`; then `$S db-count app_notifications "type='DOWNLOAD'"` must
+  equal the visible card count and the `Showing N of M` line. `ALL` is the only chip that shows
+  every row; the other four map to `DOWNLOAD`, `SUBSCRIPTION`, `SYSTEM`, `SYNC` case-insensitively.
 - **Mark all read.** `scripts/ad.sh click 'label="Mark all read"' --settle`, then prove the DB:
   `$S db-count app_notifications "isRead=0"` → `0`, the subtitle disappears and no unread dot
   remains. This is the cheapest full round-trip proof and it is reversible only by seeding.
@@ -116,10 +118,12 @@ $S db-count app_notifications "isRead=0"            # starting unread count -> b
   `AppNotificationEntity` holds exactly the four `TYPE_*` constants. A row whose `type` is anything
   else is invisible under every chip except `All` — a hand-written INSERT with `type='downloads'`
   looks like a broken filter and is actually bad seed data. Use upper-case enum values.
-- **The chip row scrolls.** It is a `MediaNestFilterRow` (`horizontalScroll`), so `Sync` can be off
-  screen on a narrow viewport. `scroll` does not move it horizontally — use
-  `scripts/ad.sh click 'role=tab label="Sync"'` and let the framework bring it into view, or
-  `snapshot -i` first to confirm it is composed.
+- **The chip row scrolls, chips surface as `[group]` nodes, and `Downloads` collides.**
+  `MediaNestFilterRow` (`horizontalScroll`) can leave `Sync` off-screen on a narrow viewport (use
+  `scripts/ad.sh swipe` horizontally — no `--settle`, no 5th duration arg — if it is out of view),
+  and filter chips surface as `[group]`, never as a tab role. Always select chips by their `@eN` ref
+  from `snapshot -i`; a bare `label="Downloads"` returns `AMBIGUOUS_MATCH` against the bottom-nav
+  `Downloads` item.
 - **`Mark all read` and `Clear all` are icons, not text.** `content-desc` is `Mark all read` /
   `Clear all`; the dialog buttons are the text `Clear All` (confirm) and `Cancel`. Case matters when
   you copy a string from one place to the other.

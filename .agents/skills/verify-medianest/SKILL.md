@@ -96,7 +96,7 @@ scripts/ad.sh fill 'label="Search or paste URL..."' "https://youtu.be/…" --set
 scripts/ad.sh scroll bottom --settle     # or: scroll down 0.5 --settle (amount = viewport fraction, ≤0.8)
                                         # pixels: scroll down --pixels 400 --settle
 scripts/ad.sh wait text "Active Queue"   # named expectation instead of a sleep
-scripts/ad.sh is checked 'role=switch label="Always Show Full Titles"'
+scripts/ad.sh is visible 'label="Offline Media Hub"'
 scripts/ad.sh back --settle              # back from a root destination exits to the launcher
 scripts/ad.sh jump downloads             # deep link; also: jump updates
 scripts/ad.sh screenshot artifacts/.../screens/01-home.png
@@ -112,7 +112,9 @@ Selector rules that cost runs when ignored:
   only when the diff lacks the next target.
 - Text matches the **whole** field, case- and whitespace-insensitive: `label="sign in"` does not
   match `Sign In Now`. Use `find text "Sign" click` for partials.
-- Compose `IconButton`s often carry no `text` — match `content-desc` (it surfaces as `label=`) first.
+- Compose `IconButton`s often carry no `text` — match `content-desc` (it surfaces as `label=`) first, or use the `@eN` ref from `snapshot -i`.
+- Compose `Switch` controls surface in `snapshot -i` as `@eN [group] "<label>" [checked|unchecked]`: an outer clickable `[group]` holds `[checked]` / `[unchecked]` while a child `[group]` holds `label="<label>"` (`checked=false`). Neither switch-role selectors nor `is checked 'role=group label="X"'` nor `is checked @eN` work (`is` requires a selector expression). Take the switch's `@eN` ref from `snapshot -i`, run `click @eN --settle`, and read the `- [checked] / + [unchecked]` diff (or re-snapshot `-i`).
+- `PillTabRow` tabs and `FilterChip` pills surface as `[group]` nodes rather than a tab role; select them by `@eN` ref from `snapshot -i` (and bring off-screen pills into view with `scripts/ad.sh swipe 950 288 150 288` — no `--settle` and no 5th duration arg, both return `INVALID_ARGS`).
 - Deep links beat taps where they exist: `MainActivity` handles
   `com.example.medianest.ACTION_NAVIGATE_DOWNLOADS` and `…ACTION_NAVIGATE_UPDATES` (`scripts/ad.sh jump`).
 

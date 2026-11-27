@@ -51,34 +51,41 @@ Preconditions:
   A library with **no** subscriptions can still verify the list's empty state and the `Show Shorts`
   preference; the per-row and detail recipes are then **not driven**.
 
-- **Land on the tabs.** `scripts/ad.sh launch`, tap `Collections`, then
-  `scripts/ad.sh click 'role=tab label="Playlists"' --settle` /
-  `'role=tab label="Channels"' --settle`. Assert the pill selection; the content area is the same
-  composable with a different `sourceType`.
+- **Land on the tabs.** `scripts/ad.sh launch`, tap `Collections` (`@eN` ref from `snapshot -i`),
+  swipe the pill row horizontally with `scripts/ad.sh swipe 950 288 150 288` (no `--settle` and no
+  5th duration arg — both return `INVALID_ARGS`) because `Playlists` and `Channels` start off-screen
+  in the `HorizontalScrollView`, run `scripts/ad.sh snapshot -i`, and tap the `[group] "Playlists"` or
+  `[group] "Channels"` `@eN` ref with `scripts/ad.sh click @eN --settle` (never tab-role selectors).
+  Assert the pill selection; the content area is the same composable with a different `sourceType`.
 - **Empty vs populated.** With zero playlist rows the tab shows `No subscriptions yet` (or
   `No results found` when the tab search box has text) and still renders `Show Shorts`. Otherwise
   one `GlassCard` per row. Never force the empty state — assert whichever is true and report it.
-- **Show Shorts (list).** Scope to the role, because the row label is a sibling text node:
+- **Show Shorts (list).** Compose `Switch` surfaces in `snapshot -i` as
+  `@eN [group] "Show Shorts" [checked|unchecked]` (an outer `[group]` holding `[checked|unchecked]`
+  around an inner `[group]` holding `label="Show Shorts"` with `checked=false`):
 
   ```bash
-  scripts/ad.sh is checked 'role=switch label="Show Shorts"'
-  scripts/ad.sh click 'role=switch label="Show Shorts"' --settle
+  scripts/ad.sh snapshot -i                  # locate @eN [group] "Show Shorts" [checked|unchecked]
+  scripts/ad.sh click @eN --settle           # read the - [checked] / + [unchecked] diff
   $S pref-bool subscriptions_prefs show_shorts
   ```
 
+  Do not use switch-role selectors, `is checked 'role=group label="Show Shorts"'`, or `is checked @eN`.
   Both tabs and both detail headers write the same `subscriptions_prefs` key through
   `SubscriptionsPreferences.setShowShorts`, so flipping it on `Channels` must change the value read
   on `Playlists`. Restore the starting value at the end.
-- **Per-row Auto-download.** Tap the row's `Auto-download` switch:
-  `scripts/ad.sh click 'role=switch label="Auto-download"' --settle`. The snackbar names the row
-  (`Auto-download enabled for <name>`), and the row is the read-only second view:
+- **Per-row Auto-download.** Run `scripts/ad.sh snapshot -i`, locate the row's
+  `[group] "Auto-download" [checked|unchecked]` `@eN` ref, and run
+  `scripts/ad.sh click @eN --settle` (check the `- [checked] / + [unchecked]` diff). The snackbar
+  names the row (`Auto-download enabled for <name>`), and the row is the read-only second view:
 
   ```bash
   $S db-count subscriptions "autoDownload=1 and id=<id>"
   ```
 
   `autoDownload` is stored by Room as **0/1**, so use `=1` / `=0`, not `=true`.
-- **Per-row Audio only.** Same pattern with `role=switch label="Audio only"` and
+- **Per-row Audio only.** Same pattern: take the row's `[group] "Audio only" [checked|unchecked]`
+  `@eN` ref from `snapshot -i`, run `scripts/ad.sh click @eN --settle`, and assert
   `audioOnly=1`. Note this switch is independent in the DB but the UI calls
   `updateAutoDownload(id, autoDownload, audioOnly)` with the *other* current value, so toggling one
   must never flip the other — assert both columns, not just the one you tapped.
@@ -127,16 +134,18 @@ Preconditions:
 - **There is no bottom-nav `Subscriptions` destination.** It is a pill tab inside `Collections`
   (`Playlists` / `Channels`). Old docs and old flows that tap a `Subscriptions` nav item fail with
   `Activity not found`-style confusion; the top bar on `Collections` reads `Collections`, and the
-  pills are `role=tab`.
+  pills surface in `snapshot -i` as `[group]` nodes after swiping horizontally
+  (`scripts/ad.sh swipe 950 288 150 288` — no `--settle`, no 5th duration arg).
 - **`Show Shorts` is one preference, not per list.** `SubscriptionsScreen` and
   `InlineSubscriptionScreen` both read `SubscriptionsPreferences.showShorts`; the switch on one
   surface must move the other. Assert `subscriptions_prefs.show_shorts`, not the widget alone.
 - **Three `Show Shorts` call sites, one on screen at a time.** The list toolbar, the playlist header
   and the channel header share the label, but `InlineSubscriptionScreen` *replaces*
   `LibraryScreen`, that screen mounts one tab at a time, and the two detail headers are mutually
-  exclusive — so a well-formed run never has two mounted together. Still scope with
-  `role=switch label="Show Shorts"`, because the visible `Text("Show Shorts")` beside it is a
-  sibling node with no `checked` state; an unscoped tap can hit the label instead of the control.
+  exclusive — so a well-formed run never has two mounted together. Always pick the switch's outer
+  `@eN [group] "Show Shorts" [checked|unchecked]` ref from `snapshot -i` (the visible
+  `Text("Show Shorts")` is a sibling node with no checked state, the inner child `[group]` reports
+  `checked=false`, and switch-role selectors match nothing).
 - **Full titles is a list toggle, not a subscription setting — and it does not persist there.**
   `CollectionsPreferences.setFullTitles` is called only from `SettingsScreen`. On `Collections`,
   `LibraryScreen` keeps `fullTitles` in a local `remember` (`onFullTitlesChange` just assigns), and
@@ -170,8 +179,9 @@ Preconditions:
   uploads. Toggling the switch proves the *configuration*; it does not queue a download, and a run
   must not report it as one.
 - **Every row lives in one scroll container.** `snapshot -i` shows only what is on screen; use
-  `scripts/ad.sh scroll down --until 'role=switch label="Auto-download"'` (amount is a viewport
-  fraction — `scroll down 0.5` or `--pixels 400`) rather than a fixed count of swipes.
+  `scripts/ad.sh scroll down --until 'label="Auto-download"'` (amount is a viewport fraction —
+  `scroll down 0.5` or `--pixels 400`) and then `snapshot -i` to grab the row's switch `@eN` ref,
+  rather than a fixed count of swipes.
 - **`UpdateSubscription` keeps both flags consistent.** Tapping one switch sends the other's current
   value with it; a row that flips both when you tapped one is a real bug, so assert the untouched
   column too.

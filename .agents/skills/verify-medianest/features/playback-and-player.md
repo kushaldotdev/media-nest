@@ -122,10 +122,13 @@ S=.agents/skills/verify-medianest/scripts/nest-state.sh
   is picked up by the one-second position tracker rather than by the drag itself; either way the
   stored value never goes **down**, so a rewind leaves the old, larger position in the database.
   Assertions must be `>=`, never `==`.
-- **Speed.** The `Playback Speed` segment advances one step **per tap** (0.25 → 0.5 → 0.75 → 1.0 →
-  1.25 → 1.5 → 2.0, wrapping) and persists immediately; a long-press opens the full menu.
-  Tap `scripts/ad.sh click @e<speed-segment> --settle` twice from `1.0x` and assert the segment
-  reads `1.5x`, then `$S pref-get playback_prefs playback_speed` → `1.5`. For a specific value use
+- **Speed.** The `Playback Speed` segment surfaces in `snapshot -i` as
+  `@eN [group] "Playback Speed, 1.0x"` (reflecting the active speed); it advances one step **per tap**
+  (0.25 → 0.5 → 0.75 → 1.0 → 1.25 → 1.5 → 2.0, wrapping) and persists immediately; a long-press
+  opens the full menu.
+  Take `@e<speed-segment>` from `snapshot -i`, tap `scripts/ad.sh click @e<speed-segment> --settle`
+  twice from `1.0x` and assert the segment reads `1.5x`, then
+  `$S pref-get playback_prefs playback_speed` → `1.5`. For a specific value use
   `scripts/ad.sh longpress @e<speed-segment> --settle` then
   `scripts/ad.sh click 'label="0.5x"' --settle`. Restoring `1.0x` keeps the next run's baseline
   sane.
@@ -141,10 +144,12 @@ S=.agents/skills/verify-medianest/scripts/nest-state.sh
   Folders open Video detail and seed nothing. So: `Collections` → `Playlists` → open a playlist →
   press play on an item, then
   `scripts/ad.sh click 'label="Up Next queue"' --settle`. The sheet shows `Up Next`, the item
-  count, a `Full titles` switch, `Autoplay` with a `role=switch label="Autoplay"` control,
+  count, a `Full titles` switch, `Autoplay` (`@eN [group] "Autoplay" [checked|unchecked]`),
   `NOW PLAYING` on the current row, and per-row `Move Up`, `Move Down`, `Remove from Queue`.
-  Prove the toggle: `scripts/ad.sh is checked 'role=switch label="Autoplay"'`, flip it, read it
-  again. Removing the last item leaves `Nothing in the queue`. Playing a single item from Downloads
+  Prove the toggle: run `scripts/ad.sh snapshot -i`, locate the `Autoplay` switch `@eN` ref (not a
+  switch-role selector, and not `is checked` on `group label=` or `@eN`), flip it with
+  `scripts/ad.sh click @eN --settle`, and assert the `- [checked] / + [unchecked]` diff (or
+  re-snapshot `-i`). Removing the last item leaves `Nothing in the queue`. Playing a single item from Downloads
   has no queue context at all, which is why the control is absent there — record that as the
   correct result for that entry point.
 - **Resume banner.** It renders only when the saved position is between 5 s and
@@ -180,7 +185,11 @@ S=.agents/skills/verify-medianest/scripts/nest-state.sh
   re-snapshot. The overlay carries `Back` (which exits fullscreen, not the player), the title and
   watch count, the quality chip, `Exit Fullscreen`, and a larger transport row — but **no segment
   bar**: `Playback Speed`, `Video Quality` and the queue control do not render in fullscreen.
-  Change speed or quality in portrait, then enter fullscreen.
+  Change speed or quality in portrait, then enter fullscreen. To leave via `Exit Fullscreen`, run
+  `scripts/ad.sh snapshot -i` (tap the video first if the overlay faded), pick one of the two
+  `[button] "Exit Fullscreen"` `@eN` refs (top-right and bottom-right both render that label, so
+  `click 'label="Exit Fullscreen"'` fails with `AMBIGUOUS_MATCH`), and run
+  `scripts/ad.sh click @eN --settle`.
 - **MiniPlayer.** With media loaded, tap the portrait top-bar `Back`
   (`scripts/ad.sh click @e<top-bar-back> --settle`) to return to the previous route. The bar
   renders at the bottom of whatever route you landed on (above the bottom navigation where that
@@ -252,9 +261,15 @@ S=.agents/skills/verify-medianest/scripts/nest-state.sh
   `click` pauses the media and invalidates every following assertion.
 - **Fullscreen rotates the device.** Entry requests landscape and hides the system bars, exit
   restores both. Refs do not survive the rotation — snapshot again after every enter/exit.
-- **Two different `Back` controls.** In portrait the top-bar back leaves the player; in fullscreen
-  the overlay's `Back` only exits fullscreen, and `Exit Fullscreen` does the same. `scripts/ad.sh
-  back` sends a system BACK, which pops the route — a third, different behaviour.
+- **Two different `Back` controls, and two `Exit Fullscreen` buttons.** In portrait the top-bar back
+  leaves the player; in fullscreen the overlay's `Back` only exits fullscreen, and `Exit Fullscreen`
+  does the same. Fullscreen renders **two** `[button] "Exit Fullscreen"` nodes (top-right and
+  bottom-right), so `click 'label="Exit Fullscreen"'` returns `AMBIGUOUS_MATCH` — pick one `@eN` ref
+  from `snapshot -i`. `scripts/ad.sh back` sends a system BACK, which pops the route — a third,
+  different behaviour.
+- **Switches in `Up Next` surface as `[group]` nodes.** `Autoplay` and `Full titles` render as
+  `@eN [group] "<label>" [checked|unchecked]`; select by `@eN` ref from `snapshot -i`, `click @eN --settle`,
+  and check the `- [checked] / + [unchecked]` diff.
 - **`Play` and `Pause` are the same node.** The label flips with state, so after a tap wait for the
   *other* label instead of trusting the tap's exit code.
 - **`Previous Track` / `Next Track` are conditional.** They render only with a non-empty queue and

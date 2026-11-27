@@ -72,8 +72,13 @@ Follow this order:
    $S crash-check                                   # non-zero on FATAL / ANR
    ```
 
-   A toggle assertion needs both halves: `scripts/ad.sh is checked 'role=switch label="X"'` **and**
-   `$S pref-bool <store> <key>`. A screen that re-rendered is not a value that persisted.
+   A toggle assertion needs both halves: take the switch's `@eN` ref from `snapshot -i` (which
+   prints `[checked]` or `[unchecked]`), run `scripts/ad.sh click @eN --settle` and verify the
+   `- [checked] / + [unchecked]` diff (or re-run `snapshot -i`), **and** check
+   `$S pref-bool <store> <key>`. (Do not use switch-role selectors, `is checked 'role=group label="X"'`,
+   or `is checked @eN` — Compose `Switch` surfaces as an outer `[group]` holding `[checked|unchecked]`
+   around an inner child `[group]` with `checked=false`, and `is` rejects `@ref` handles.) A screen
+   that re-rendered is not a value that persisted.
 4. **Look at the screenshots, then clean up.** Open the images with your file-reading tool — a
    passing `snapshot -i` with a black or wrong-screen PNG is a failed run. Allocate evidence with
    `ART=$($S evidence-dir <label>)` (`artifacts/verify-<UTC>-<label>/{screens,snapshots,db,logs}`),

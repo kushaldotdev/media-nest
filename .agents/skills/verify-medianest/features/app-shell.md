@@ -125,10 +125,11 @@ Preconditions:
 
 ## Gotchas
 
-- **The bottom nav carries no `role=tab`.** `MediaNestBottomNavigationItemView` uses
-  `Modifier.clickable(interactionSource, indication, onClick)` with no `Role`, so `role=tab`
-  matches nothing in the bar. (It does match the Collections pill row and the filter chips, which
-  set `Role.Tab` in `PillTabRow` / `FilterChip`.) Select the nav item by its `@ref`.
+- **Bottom nav items, Collections pills, and filter chips surface as `[group]` nodes.**
+  `MediaNestBottomNavigationItemView` uses `Modifier.clickable(interactionSource, indication, onClick)`
+  with no `Role`, and even `PillTabRow` / `FilterChip` surface in `agent-device` snapshots as
+  `[group]`, never as a tab role. Select nav items, pills, and filter chips by their `@ref` from
+  `snapshot -i`.
 - **Titles duplicate nav labels.** `Downloads` is both the top-bar title and the nav label,
   `Collections` likewise, `Settings` likewise. An unscoped `label=` selector returns
   `AMBIGUOUS_MATCH`; pick the ref.

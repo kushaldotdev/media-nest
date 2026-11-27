@@ -48,11 +48,12 @@ S=.agents/skills/verify-medianest/scripts/nest-state.sh
 ART=$($S evidence-dir statistics)
 ```
 
-- **Entry A — Collections.** `scripts/ad.sh launch`, tap `Collections`, then
-  `scripts/ad.sh click 'label="Statistics"' --settle` (or take the `@ref` from `snapshot -i`).
-  Note: `MediaNestIconButton` renders an unlabeled `[button]` parent around an inner `[group] "Statistics"`
-  `Icon`, so `'role=button label="Statistics"'` matches zero nodes while `'label="Statistics"'`
-  taps the icon and bubbles cleanly to the button. Assert `App Statistics` within 10 s.
+- **Entry A — Collections.** `scripts/ad.sh launch`, tap `Collections`, run
+  `scripts/ad.sh snapshot -i`, and click the `Statistics` icon's `@eN` ref
+  (`scripts/ad.sh click @eN --settle`). Note: `LibraryScreen` passes `contentDescription = "Statistics"`
+  to both `MediaNestIconButton` (`onClickLabel` unless explicitly exposed as `contentDescription`) and
+  the inner `Icon`, so taking the `@eN` ref from `snapshot -i` works reliably regardless of whether the
+  outer `[button]` or inner `[group]` carries `"Statistics"`. Assert `App Statistics` within 10 s.
 - **Entry B — Settings.** `scripts/ad.sh launch`, tap `Settings`, then
   `scripts/ad.sh scroll down --until 'label="App Statistics"'`, `click` it, and assert the same
   title. Both paths must be driven; proving one is incomplete.
@@ -112,10 +113,12 @@ ART=$($S evidence-dir statistics)
 
 ## Gotchas
 
-- **The top-bar icon's accessible name appears twice.** `LibraryScreen` passes
-  `contentDescription = "Statistics"` to both `MediaNestIconButton` (→ `onClickLabel`) and the inner
-  `Icon`. Match `role=button label="Statistics"` or take the ref; a bare `label="Statistics"` can
-  return two candidates.
+- **The `Statistics` top-bar icon's accessible tree depends on `MediaNestIconButton`.**
+  `LibraryScreen` passes `contentDescription = "Statistics"` to both `MediaNestIconButton`
+  (`onClickLabel` unless exposed as `contentDescription`) and the inner `Icon`. Take the `@eN` ref
+  from `snapshot -i` rather than relying on `'role=button label="Statistics"'` (which returns zero
+  nodes when `MediaNestIconButton` only sets `onClickLabel`) or bare `label="Statistics"` (which
+  returns two candidates if both button and icon expose `contentDescription`).
 - **`Statistics` is not a bottom-nav destination.** Four destinations only: `Home`, `Collections`,
   `Downloads`, `Settings`. Statistics is a top-bar action plus a Settings card.
 - **Three sections are conditional.** `By Resolution`, `By Channel` and `By Folder` are wrapped in

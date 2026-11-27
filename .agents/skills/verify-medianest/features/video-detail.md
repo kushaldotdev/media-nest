@@ -85,10 +85,10 @@ Preconditions:
   (the tab label and the top-bar title are both `Collections`, so a bare `label=` is
   `AMBIGUOUS_MATCH`) and `scripts/ad.sh click @eN --settle`, then switch to the `Favorites` pill
   (`SELECT * FROM videos WHERE favorite = 1`), which is where the seed above lands. Stamp
-  `lastPlayedAt` in the seed as well if you want it under `History` instead. Then tap the card:
-  `scripts/ad.sh find text "Verify Detail Fixture" click --first`, which needs no `--settle`
-  (`find` is not a settle-capable action). The card's thumbnail also carries
-  `contentDescription = title`, so the title matches twice — `--first` is required. Wait for the
+  `lastPlayedAt` in the seed as well if you want it under `History` instead. Then run
+  `scripts/ad.sh snapshot -i`, pick the card's `@eN [group]` ref (`"Verify Detail Fixture, …"` —
+  **not** `find text "Verify Detail Fixture" click --first`, which taps the `[text]` title node
+  and only toggles title truncation!), and run `scripts/ad.sh click @eN --settle`. Wait for the
   screen with `scripts/ad.sh wait text "Details" 10000`.
 - **Confirm the screen, not just the title.** `Details` is the top-bar title; assert something only
   this screen renders: `scripts/ad.sh is visible 'label="Play Video"'`.
@@ -192,7 +192,9 @@ Preconditions:
   must read `0` afterwards — the row is updated, not deleted.
 - **Available streams.** `scripts/ad.sh scroll down --until 'label="Available streams:"' --settle`.
   (`scroll bottom` cannot take `--until` — `agent-device` answers `INVALID_ARGS` because it already
-  scrolls to the edge; the directional form is the only one that accepts a target.)
+  scrolls to the edge; and `scroll top --settle` inside `VideoDetailScreen`'s nested `LazyColumn`
+  reports `"Already at top; no hidden content above detected"` without scrolling back up, so use
+  `scripts/ad.sh scroll up --until 'label="Play Video"' --settle` to return to the top.)
   Resolution headers (`1080p`, `720p`, …) group the video streams, then `Audio Only` groups the audio
   ones. Each row's label is `"<typeLabel> • <CODEC>"` when the stream has a codec and the bare
   `typeLabel` when it does not, where `typeLabel` is the quality for video and
@@ -212,10 +214,12 @@ Preconditions:
   or a `Downloaded` + `Saved` pair. Only `FAILED`/`CANCELED` brings the `Download` icon back, and
   re-enqueueing a duplicate by another path toasts `Download already exists in queue` and writes
   nothing — the unique `(videoId, format, quality)` index would reject it anyway.
-- **YouTube.** `scripts/ad.sh click 'label="YouTube"' --settle` fires `ACTION_VIEW` for
-  `https://www.youtube.com/watch?v=<videoId>`; `scripts/ad.sh appstate` should no longer name
-  MediaNest. Come back with `scripts/ad.sh launch`. On an emulator without a browser this can raise
-  `Unable to open YouTube link` instead — record which happened.
+- **YouTube.** Run `scripts/ad.sh snapshot -i`, take the `@eN` ref for `[button] "YouTube Logo, YouTube"`
+  (the `Button` merges `Icon(contentDescription = "YouTube Logo")` and `Text("YouTube")`, so a bare
+  `label="YouTube"` can fail to match the button), and run `scripts/ad.sh click @eN --settle`. It
+  fires `ACTION_VIEW` for `https://www.youtube.com/watch?v=<videoId>`; `scripts/ad.sh appstate` should
+  no longer name MediaNest. Come back with `scripts/ad.sh launch`. On an emulator without a browser
+  this can raise `Unable to open YouTube link` instead — record which happened.
 - **Crash gate.** `$S crash-check`.
 - **Proof.** `ART=$($S evidence-dir video-detail)`, one
   `scripts/ad.sh screenshot "$ART/screens/0N-<state>.png"` per state (hero, downloaded versions,
@@ -258,6 +262,12 @@ Preconditions:
 - **`Play` and `Delete` are not unique labels.** The downloaded-versions rows, the stream ladder and
   the hero all expose `Play`; `Delete` appears on each downloaded row. Use refs from the settled
   snapshot instead of a bare `label=`.
+- **Opening the video card, scrolling back up, and the `YouTube` button all need specific handles.**
+  On `Collections`, tapping `[text] "<title>"` (or `find text ... click --first`) only toggles title
+  truncation — click the card's `@eN [group]` ref from `snapshot -i`. Inside `VideoDetailScreen`,
+  `scroll top --settle` reports `"Already at top; no hidden content above detected"` without
+  scrolling up; use `scroll up --until 'label="Play Video"' --settle`. And the `YouTube` button
+  surfaces as `[button] "YouTube Logo, YouTube"`, so click its `@eN` ref from `snapshot -i`.
 - **The description body is not a stable assertion target.** It is rendered by an `AndroidView`
   `TextView` from `HtmlCompat.fromHtml`, so it is HTML-flattened, line-clamped to 3 lines until
   expanded, and its exact text belongs to YouTube, not to the app. Assert `Description` and
